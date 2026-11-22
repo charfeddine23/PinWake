@@ -32,6 +32,7 @@ import com.example.databinding.ActivityMapPickerBinding
 import com.example.service.PinWakeService
 import com.example.util.DarkMapTileSource
 import com.example.util.DistanceFormatter
+import com.example.util.FreeMapStyle
 import com.example.util.LanguageManager
 import com.example.util.PermissionHelper
 import kotlinx.coroutines.launch
@@ -123,8 +124,9 @@ class MapPickerActivity : AppCompatActivity() {
     }
 
     private fun setupMap() {
+        val initialStyle = DarkMapTileSource.getSavedStyle(this)
         binding.mapView.apply {
-            setTileSource(DarkMapTileSource.CARTO_DARK_MATTER)
+            setTileSource(DarkMapTileSource.tileSourceFor(initialStyle))
             setMultiTouchControls(true)
             isTilesScaledToDpi = true
             zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
@@ -138,6 +140,7 @@ class MapPickerActivity : AppCompatActivity() {
             outlinePaint.strokeWidth = 3f * resources.displayMetrics.density
         }
         binding.mapView.overlays.add(geofencePolygon)
+        highlightSelectedMapStyle(initialStyle)
 
         if (hasLocationPermission()) {
             enableMyLocationOverlay()
@@ -210,6 +213,16 @@ class MapPickerActivity : AppCompatActivity() {
 
     private fun setupControls() {
         binding.btnMapBack.setOnClickListener { finish() }
+
+        binding.fabMapStyle.setOnClickListener {
+            binding.cardMapStyleMenu.visibility =
+                if (binding.cardMapStyleMenu.visibility == View.VISIBLE) View.GONE else View.VISIBLE
+        }
+
+        binding.optMapVoyager.setOnClickListener { applyMapStyle(FreeMapStyle.VOYAGER) }
+        binding.optMapDark.setOnClickListener { applyMapStyle(FreeMapStyle.DARK) }
+        binding.optMapStreets.setOnClickListener { applyMapStyle(FreeMapStyle.STREETS) }
+        binding.optMapSatellite.setOnClickListener { applyMapStyle(FreeMapStyle.SATELLITE) }
 
         binding.fabMyLocation.setOnClickListener {
             if (hasLocationPermission()) {
@@ -322,6 +335,32 @@ class MapPickerActivity : AppCompatActivity() {
         val center = GeoPoint(lat, lon)
         geofencePolygon.points = Polygon.pointsAsCircle(center, radiusMeters.toDouble())
         binding.mapView.invalidate()
+    }
+
+    private fun applyMapStyle(style: FreeMapStyle) {
+        DarkMapTileSource.saveStyle(this, style)
+        binding.mapView.setTileSource(DarkMapTileSource.tileSourceFor(style))
+        highlightSelectedMapStyle(style)
+        binding.cardMapStyleMenu.visibility = View.GONE
+        binding.mapView.invalidate()
+    }
+
+    private fun highlightSelectedMapStyle(active: FreeMapStyle) {
+        val options = listOf(
+            binding.optMapVoyager to FreeMapStyle.VOYAGER,
+            binding.optMapDark to FreeMapStyle.DARK,
+            binding.optMapStreets to FreeMapStyle.STREETS,
+            binding.optMapSatellite to FreeMapStyle.SATELLITE
+        )
+        options.forEach { (view, style) ->
+            if (style == active) {
+                view.setBackgroundResource(R.drawable.bg_badge_cyan)
+                view.setTextColor(ContextCompat.getColor(this, R.color.accent_cyan_glow))
+            } else {
+                view.background = null
+                view.setTextColor(ContextCompat.getColor(this, R.color.text_primary))
+            }
+        }
     }
 
     private fun moveCameraTo(lat: Double, lon: Double, zoom: Double? = null) {

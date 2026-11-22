@@ -112,4 +112,11 @@
     <string name="update_check_failed">Could not check updates. Tap GitHub to view releases.</string>
     <string name="update_install_perm_msg">Allow Pin Wake to install app updates in Android settings to finish updating.</string>
     <string name="cd_check_updates">Check for app updates on GitHub</string>
+
+    <!-- Free Map Styles -->
+    <string name="cd_map_layers">Switch free map layer</string>
+    <string name="map_style_dark">Dark Matter</string>
+    <string name="map_style_voyager">Voyager (Classic)</string>
+    <string name="map_style_streets">OSM Streets</string>
+    <string name="map_style_satellite">Satellite</string>
 </resources>

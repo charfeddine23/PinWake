@@ -35,6 +35,91 @@
             android:elevation="6dp"
             android:src="@drawable/ic_crosshair_pin" />
 
+        <!-- Map Layer Switcher FAB -->
+        <ImageButton
+            android:id="@+id/fabMapStyle"
+            android:layout_width="52dp"
+            android:layout_height="52dp"
+            android:layout_gravity="bottom|end"
+            android:layout_marginEnd="16dp"
+            android:layout_marginBottom="80dp"
+            android:background="@drawable/bg_liquid_glass_pill"
+            android:contentDescription="@string/cd_map_layers"
+            android:elevation="6dp"
+            android:padding="13dp"
+            android:src="@drawable/ic_layers" />
+
+        <!-- Floating Free Map Style Selector Card -->
+        <LinearLayout
+            android:id="@+id/cardMapStyleMenu"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|end"
+            android:layout_marginEnd="78dp"
+            android:layout_marginBottom="80dp"
+            android:background="@drawable/bg_liquid_glass_search"
+            android:elevation="8dp"
+            android:orientation="vertical"
+            android:padding="8dp"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/optMapVoyager"
+                android:layout_width="172dp"
+                android:layout_height="48dp"
+                android:clickable="true"
+                android:focusable="true"
+                android:foreground="?attr/selectableItemBackground"
+                android:gravity="center_vertical"
+                android:paddingHorizontal="14dp"
+                android:text="@string/map_style_voyager"
+                android:textColor="@color/text_primary"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/optMapDark"
+                android:layout_width="172dp"
+                android:layout_height="48dp"
+                android:clickable="true"
+                android:focusable="true"
+                android:foreground="?attr/selectableItemBackground"
+                android:gravity="center_vertical"
+                android:paddingHorizontal="14dp"
+                android:text="@string/map_style_dark"
+                android:textColor="@color/text_primary"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/optMapStreets"
+                android:layout_width="172dp"
+                android:layout_height="48dp"
+                android:clickable="true"
+                android:focusable="true"
+                android:foreground="?attr/selectableItemBackground"
+                android:gravity="center_vertical"
+                android:paddingHorizontal="14dp"
+                android:text="@string/map_style_streets"
+                android:textColor="@color/text_primary"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/optMapSatellite"
+                android:layout_width="172dp"
+                android:layout_height="48dp"
+                android:clickable="true"
+                android:focusable="true"
+                android:foreground="?attr/selectableItemBackground"
+                android:gravity="center_vertical"
+                android:paddingHorizontal="14dp"
+                android:text="@string/map_style_satellite"
+                android:textColor="@color/text_primary"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
         <!-- Current Location FAB -->
         <ImageButton
             android:id="@+id/fabMyLocation"
