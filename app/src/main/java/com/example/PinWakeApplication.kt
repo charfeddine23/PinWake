@@ -5,11 +5,10 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.media.AudioAttributes
 import android.media.RingtoneManager
-import com.example.data.remote.NominatimApiService
+import android.os.Build
 import com.example.di.AppContainer
 import com.example.util.LanguageManager
-import org.osmdroid.config.Configuration
-import java.io.File
+import org.maplibre.android.MapLibre
 
 class PinWakeApplication : Application() {
 
@@ -18,21 +17,12 @@ class PinWakeApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        if (!"robolectric".equals(Build.FINGERPRINT, ignoreCase = true)) {
+            MapLibre.getInstance(this)
+        }
         container = AppContainer(this)
         LanguageManager.applySavedLanguage(this)
-        configureOsmDroid()
         createNotificationChannels()
-    }
-
-    private fun configureOsmDroid() {
-        val osmConfig = Configuration.getInstance()
-        osmConfig.userAgentValue = NominatimApiService.USER_AGENT
-        val cacheDir = File(cacheDir, "osmdroid")
-        if (!cacheDir.exists()) cacheDir.mkdirs()
-        osmConfig.osmdroidBasePath = cacheDir
-        osmConfig.osmdroidTileCache = File(cacheDir, "tiles").apply {
-            if (!exists()) mkdirs()
-        }
     }
 
     private fun createNotificationChannels() {

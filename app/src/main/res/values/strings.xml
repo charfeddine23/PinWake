@@ -113,10 +113,10 @@
     <string name="update_install_perm_msg">Allow Pin Wake to install app updates in Android settings to finish updating.</string>
     <string name="cd_check_updates">Check for app updates on GitHub</string>
 
-    <!-- Free Map Styles -->
-    <string name="cd_map_layers">Switch free map layer</string>
-    <string name="map_style_dark">Dark Mode</string>
-    <string name="map_style_voyager">Classic Streets</string>
-    <string name="map_style_streets">OSM Streets</string>
-    <string name="map_style_satellite">Satellite</string>
+    <!-- Free Vector Map Styles (OpenFreeMap) -->
+    <string name="cd_map_layers">Switch free vector map style</string>
+    <string name="map_style_dark">Dark Matter</string>
+    <string name="map_style_fiord">Midnight Fiord</string>
+    <string name="map_style_liberty">Liberty Classic</string>
+    <string name="map_style_positron">Positron Light</string>
 </resources>

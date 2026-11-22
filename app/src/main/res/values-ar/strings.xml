@@ -113,10 +113,10 @@
     <string name="update_install_perm_msg">اسمح لتطبيق Pin Wake بتثبيت التحديثات من إعدادات أندرويد لإكمال التحديث.</string>
     <string name="cd_check_updates">التحقق من تحديثات التطبيق على GitHub</string>
 
-    <!-- Free Map Styles -->
-    <string name="cd_map_layers">تغيير نمط الخريطة المجانية</string>
+    <!-- Free Vector Map Styles (OpenFreeMap) -->
+    <string name="cd_map_layers">تغيير نمط الخريطة المتجهة</string>
     <string name="map_style_dark">داكن (Dark)</string>
-    <string name="map_style_voyager">كلاسيكي (شوارع)</string>
-    <string name="map_style_streets">شوارع (OSM)</string>
-    <string name="map_style_satellite">قمر صناعي (Satellite)</string>
+    <string name="map_style_fiord">أزرق ليلي (Fiord)</string>
+    <string name="map_style_liberty">كلاسيكي (Liberty)</string>
+    <string name="map_style_positron">فاتح (Positron)</string>
 </resources>

@@ -105,8 +105,8 @@ dependencies {
   implementation(libs.kotlinx.coroutines.core)
   implementation(libs.kotlinx.coroutines.android)
 
-  // Free Open-Source Map Engine (OSMDroid)
-  implementation(libs.osmdroid.android)
+  // Free Open-Source Vector Map Engine (MapLibre + OpenFreeMap)
+  implementation(libs.maplibre.android.sdk)
 
   // Testing
   testImplementation(libs.junit)
