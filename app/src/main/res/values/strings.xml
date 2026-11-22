@@ -97,4 +97,19 @@
     <string name="cd_delete_alarm">Delete alarm</string>
     <string name="cd_clear_search">Clear search query</string>
     <string name="cd_favorite_icon">Favorite location icon</string>
+
+    <!-- In-App GitHub Update -->
+    <string name="update_pill_version">v%1$s</string>
+    <string name="update_card_badge">UPDATE AVAILABLE</string>
+    <string name="update_card_title">Pin Wake v%1$s Ready</string>
+    <string name="update_card_subtitle_size">Size: %1$.1f MB · Direct in-place update</string>
+    <string name="update_btn_download">Download &amp; Update</string>
+    <string name="update_btn_install">Install Update</string>
+    <string name="update_btn_github">GitHub</string>
+    <string name="update_downloading">Downloading update… %1$d%% (%2$.1f / %3$.1f MB)</string>
+    <string name="update_checking">Checking GitHub Releases…</string>
+    <string name="update_up_to_date">You are on the latest version (v%1$s)</string>
+    <string name="update_check_failed">Could not check updates. Tap GitHub to view releases.</string>
+    <string name="update_install_perm_msg">Allow Pin Wake to install app updates in Android settings to finish updating.</string>
+    <string name="cd_check_updates">Check for app updates on GitHub</string>
 </resources>

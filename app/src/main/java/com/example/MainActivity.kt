@@ -2,10 +2,12 @@ package com.example
 
 import android.Manifest
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.view.View
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
@@ -20,6 +22,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.data.local.entity.FavoriteCategory
 import com.example.data.local.entity.GeoAlarmEntity
+import com.example.data.remote.GitHubReleaseApiService
 import com.example.data.repository.PollingTier
 import com.example.databinding.ActivityMainBinding
 import com.example.service.PinWakeService
@@ -27,22 +30,32 @@ import com.example.ui.dashboard.AlarmAdapter
 import com.example.ui.dashboard.DashboardUiState
 import com.example.ui.dashboard.DashboardViewModel
 import com.example.ui.dashboard.TripHistoryAdapter
+import com.example.ui.dashboard.UpdateCheckEvent
+import com.example.ui.dashboard.UpdateUiState
 import com.example.ui.map.MapPickerActivity
+import com.example.util.ApkUpdateManager
 import com.example.util.DistanceFormatter
 import com.example.util.LanguageManager
 import com.example.util.PermissionHelper
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlinx.coroutines.launch
+import java.io.File
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
+    private val apkUpdateManager: ApkUpdateManager by lazy {
+        (application as PinWakeApplication).container.apkUpdateManager
+    }
+
     private val viewModel: DashboardViewModel by viewModels {
-        DashboardViewModel.Factory((application as PinWakeApplication).container.repository)
+        val container = (application as PinWakeApplication).container
+        DashboardViewModel.Factory(container.repository, container.apkUpdateManager)
     }
 
     private lateinit var alarmAdapter: AlarmAdapter
     private lateinit var historyAdapter: TripHistoryAdapter
+    private var pendingInstallApk: File? = null
 
     private val fineLocationLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -66,11 +79,24 @@ class MainActivity : AppCompatActivity() {
         refreshPermissionCard()
     }
 
+    private val installPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        val pending = pendingInstallApk
+        if (pending != null && apkUpdateManager.canRequestPackageInstalls()) {
+            pendingInstallApk = null
+            launchApkInstaller(pending)
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        binding.tvAppVersionPill.text =
+            getString(R.string.update_pill_version, BuildConfig.VERSION_NAME)
 
         applyEdgeToEdgeInsets()
         setupRecyclerViews()
@@ -150,6 +176,25 @@ class MainActivity : AppCompatActivity() {
             LanguageManager.toggleLanguage(this)
         }
 
+        binding.btnCheckUpdates.setOnClickListener {
+            Toast.makeText(this, R.string.update_checking, Toast.LENGTH_SHORT).show()
+            viewModel.checkForUpdates(manual = true)
+        }
+
+        binding.btnDownloadUpdate.setOnClickListener {
+            viewModel.startInAppDownload { apkFile ->
+                installDownloadedApk(apkFile)
+            }
+        }
+
+        binding.btnOpenGithubRelease.setOnClickListener {
+            val url = viewModel.updateState.value.availableUpdate?.releasePageUrl
+                ?: GitHubReleaseApiService.REPO_RELEASES_URL
+            runCatching {
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+            }
+        }
+
         binding.btnClearHistory.setOnClickListener {
             viewModel.clearHistory()
         }
@@ -168,10 +213,116 @@ class MainActivity : AppCompatActivity() {
     private fun observeDashboard() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                viewModel.uiState.collect { state ->
-                    renderState(state)
+                launch {
+                    viewModel.uiState.collect { state ->
+                        renderState(state)
+                    }
+                }
+                launch {
+                    viewModel.updateState.collect { update ->
+                        renderUpdateState(update)
+                    }
+                }
+                launch {
+                    viewModel.updateEvent.collect { event ->
+                        when (event) {
+                            is UpdateCheckEvent.UpToDate -> {
+                                Toast.makeText(
+                                    this@MainActivity,
+                                    getString(R.string.update_up_to_date, BuildConfig.VERSION_NAME),
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                                viewModel.consumeUpdateEvent()
+                            }
+                            is UpdateCheckEvent.Failed -> {
+                                Toast.makeText(
+                                    this@MainActivity,
+                                    R.string.update_check_failed,
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                                viewModel.consumeUpdateEvent()
+                            }
+                            is UpdateCheckEvent.UpdateFound -> {
+                                viewModel.consumeUpdateEvent()
+                            }
+                            null -> Unit
+                        }
+                    }
                 }
             }
+        }
+    }
+
+    private fun renderUpdateState(update: UpdateUiState) {
+        val info = update.availableUpdate
+        if (info == null) {
+            binding.cardUpdateAvailable.visibility = View.GONE
+            return
+        }
+
+        binding.cardUpdateAvailable.visibility = View.VISIBLE
+        binding.tvUpdateTagMono.text = info.tagName
+        binding.tvUpdateTitle.text = getString(R.string.update_card_title, info.versionName)
+
+        val sizeMb = info.apkAsset.size / (1024.0 * 1024.0)
+        binding.tvUpdateSubtitle.text = getString(R.string.update_card_subtitle_size, sizeMb)
+
+        if (info.releaseNotes.isNotBlank()) {
+            binding.tvUpdateNotes.visibility = View.VISIBLE
+            binding.tvUpdateNotes.text = info.releaseNotes
+        } else {
+            binding.tvUpdateNotes.visibility = View.GONE
+        }
+
+        if (update.isDownloading) {
+            binding.progressUpdateDownload.visibility = View.VISIBLE
+            binding.progressUpdateDownload.isIndeterminate = update.downloadPercent == 0
+            binding.progressUpdateDownload.setProgressCompat(update.downloadPercent, true)
+            binding.tvUpdateProgress.visibility = View.VISIBLE
+            binding.tvUpdateProgress.text = getString(
+                R.string.update_downloading,
+                update.downloadPercent,
+                update.downloadedMb,
+                update.totalMb
+            )
+            binding.btnDownloadUpdate.isEnabled = false
+            binding.btnDownloadUpdate.alpha = 0.65f
+        } else {
+            binding.progressUpdateDownload.visibility = View.GONE
+            binding.tvUpdateProgress.visibility = if (update.errorMessage != null) View.VISIBLE else View.GONE
+            if (update.errorMessage != null) {
+                binding.tvUpdateProgress.text = update.errorMessage
+            }
+            binding.btnDownloadUpdate.isEnabled = true
+            binding.btnDownloadUpdate.alpha = 1f
+            binding.btnDownloadUpdate.setText(
+                if (update.downloadedApkFile != null) R.string.update_btn_install
+                else R.string.update_btn_download
+            )
+        }
+    }
+
+    private fun installDownloadedApk(apkFile: File) {
+        if (!apkUpdateManager.canRequestPackageInstalls()) {
+            pendingInstallApk = apkFile
+            MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.update_btn_install)
+                .setMessage(R.string.update_install_perm_msg)
+                .setPositiveButton(R.string.perm_open_settings) { _, _ ->
+                    installPermissionLauncher.launch(apkUpdateManager.buildInstallPermissionIntent())
+                }
+                .setNegativeButton(android.R.string.cancel, null)
+                .show()
+            return
+        }
+        launchApkInstaller(apkFile)
+    }
+
+    private fun launchApkInstaller(apkFile: File) {
+        runCatching {
+            startActivity(apkUpdateManager.buildInstallApkIntent(apkFile))
+        }.onFailure {
+            Toast.makeText(this, R.string.update_check_failed, Toast.LENGTH_SHORT).show()
         }
     }
 

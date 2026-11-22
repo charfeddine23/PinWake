@@ -97,4 +97,19 @@
     <string name="cd_delete_alarm">حذف المنبه</string>
     <string name="cd_clear_search">مسح البحث</string>
     <string name="cd_favorite_icon">أيقونة المكان المفضل</string>
+
+    <!-- In-App GitHub Update -->
+    <string name="update_pill_version">v%1$s</string>
+    <string name="update_card_badge">تحديث متوفر</string>
+    <string name="update_card_title">تحديث Pin Wake v%1$s جاهز</string>
+    <string name="update_card_subtitle_size">الحجم: %1$.1f م.ب · تثبيت مباشر فوق النسخة الحالية</string>
+    <string name="update_btn_download">تحميل وتحديث</string>
+    <string name="update_btn_install">تثبيت التحديث</string>
+    <string name="update_btn_github">GitHub</string>
+    <string name="update_downloading">جاري تحميل التحديث… %1$d%% (%2$.1f / %3$.1f م.ب)</string>
+    <string name="update_checking">جاري التحقق من تحديثات GitHub…</string>
+    <string name="update_up_to_date">لديك أحدث إصدار بالفعل (v%1$s)</string>
+    <string name="update_check_failed">تعذّر التحقق من التحديثات. افتح GitHub للمتابعة.</string>
+    <string name="update_install_perm_msg">اسمح لتطبيق Pin Wake بتثبيت التحديثات من إعدادات أندرويد لإكمال التحديث.</string>
+    <string name="cd_check_updates">التحقق من تحديثات التطبيق على GitHub</string>
 </resources>
