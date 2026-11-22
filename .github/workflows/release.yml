@@ -12,6 +12,7 @@ concurrency:
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   release:
@@ -126,7 +127,7 @@ jobs:
       - name: Extract & auto-increment version without duplicate tags
         id: version
         run: |
-          git fetch --tags --force
+          git fetch --tags --prune --prune-tags --force
 
           LATEST_TAG=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' | sort -V | tail -n 1 || true)
 
@@ -137,7 +138,9 @@ jobs:
           else
             CLEAN_LATEST="${LATEST_TAG#v}"
             IFS='.' read -r MAJOR MINOR PATCH <<< "${CLEAN_LATEST}"
-            PATCH=$((PATCH + 1))
+            MAJOR=$((10#${MAJOR}))
+            MINOR=$((10#${MINOR}))
+            PATCH=$((10#${PATCH} + 1))
             VERSION_NAME="${MAJOR}.${MINOR}.${PATCH}"
           fi
 
@@ -200,7 +203,7 @@ jobs:
 
           RAW_APP_NAME=$(sed -n 's/.*<string name="app_name">\([^<]*\)<\/string>.*/\1/p' app/src/main/res/values/strings.xml | head -n 1)
           SAFE_APP_NAME=$(echo "${RAW_APP_NAME:-PinWake}" | tr -d '[:space:]')
-          RENAMED_APK="app/build/outputs/apk/release/${SAFE_APP_NAME}-v${VERSION_NAME}.apk"
+          RENAMED_APK="app/build/outputs/apk/release/${SAFE_APP_NAME}.v${VERSION_NAME}.apk"
           cp "${SIGNED_APK}" "${RENAMED_APK}"
 
           APK_BYTES=$(stat -c%s "${RENAMED_APK}")
@@ -219,6 +222,31 @@ jobs:
             --title "Pin Wake ${TAG_NAME}" \
             --notes "${RELEASE_NOTES}" \
             --latest
+
+      - name: Delete old releases & clean up Actions history
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          CURRENT_TAG="${{ steps.version.outputs.tag_name }}"
+
+          echo "Removing older GitHub releases (keeping only ${CURRENT_TAG})..."
+          gh api --paginate "repos/${{ github.repository }}/releases?per_page=100" \
+            --jq ".[] | select(.tag_name != \"${CURRENT_TAG}\") | .tag_name" | while read -r old_tag; do
+            [[ -n "${old_tag}" ]] || continue
+            echo "Deleting old release & tag: ${old_tag}"
+            gh release delete "${old_tag}" \
+              --repo "${{ github.repository }}" \
+              --yes \
+              --cleanup-tag || true
+          done
+
+          echo "Cleaning up completed GitHub Actions workflow runs (keeping run ${{ github.run_id }})..."
+          gh api --paginate "repos/${{ github.repository }}/actions/runs?per_page=100" \
+            --jq ".workflow_runs[] | select((.id | tostring) != \"${{ github.run_id }}\" and .status == \"completed\") | .id" | while read -r run_id; do
+            [[ -n "${run_id}" ]] || continue
+            echo "Deleting old workflow run: ${run_id}"
+            gh api -X DELETE "repos/${{ github.repository }}/actions/runs/${run_id}" >/dev/null || true
+          done
 
       - name: Clean up Keystore
         if: always()
