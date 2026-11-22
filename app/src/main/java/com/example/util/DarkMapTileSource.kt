@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.ColorFilter
 import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
+import com.example.BuildConfig
 import org.osmdroid.tileprovider.tilesource.ITileSource
 import org.osmdroid.tileprovider.tilesource.OnlineTileSourceBase
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
@@ -20,6 +21,56 @@ object DarkMapTileSource {
 
     private const val PREFS_NAME = "pin_wake_prefs"
     private const val KEY_MAP_STYLE = "free_map_style"
+    private const val PLACEHOLDER_CARTO_KEY = "YOUR_CARTO_API_KEY"
+
+    private fun activeCartoKey(): String? {
+        val key = BuildConfig.CARTO_API_KEY.trim()
+        return key.takeIf { it.isNotEmpty() && it != PLACEHOLDER_CARTO_KEY }
+    }
+
+    private fun createCartoVoyager(apiKey: String): OnlineTileSourceBase = object : OnlineTileSourceBase(
+        "CartoVoyager",
+        0,
+        19,
+        256,
+        ".png",
+        arrayOf(
+            "https://a.basemaps.cartocdn.com/rastertiles/voyager/",
+            "https://b.basemaps.cartocdn.com/rastertiles/voyager/",
+            "https://c.basemaps.cartocdn.com/rastertiles/voyager/",
+            "https://d.basemaps.cartocdn.com/rastertiles/voyager/"
+        ),
+        "© OpenStreetMap contributors © CARTO"
+    ) {
+        override fun getTileURLString(pMapTileIndex: Long): String {
+            val zoom = MapTileIndex.getZoom(pMapTileIndex)
+            val x = MapTileIndex.getX(pMapTileIndex)
+            val y = MapTileIndex.getY(pMapTileIndex)
+            return "${baseUrl}$zoom/$x/$y$mImageFilenameEnding?key=$apiKey"
+        }
+    }
+
+    private fun createCartoDarkMatter(apiKey: String): OnlineTileSourceBase = object : OnlineTileSourceBase(
+        "CartoDarkMatter",
+        0,
+        19,
+        256,
+        ".png",
+        arrayOf(
+            "https://a.basemaps.cartocdn.com/dark_all/",
+            "https://b.basemaps.cartocdn.com/dark_all/",
+            "https://c.basemaps.cartocdn.com/dark_all/",
+            "https://d.basemaps.cartocdn.com/dark_all/"
+        ),
+        "© OpenStreetMap contributors © CARTO"
+    ) {
+        override fun getTileURLString(pMapTileIndex: Long): String {
+            val zoom = MapTileIndex.getZoom(pMapTileIndex)
+            val x = MapTileIndex.getX(pMapTileIndex)
+            val y = MapTileIndex.getY(pMapTileIndex)
+            return "${baseUrl}$zoom/$x/$y$mImageFilenameEnding?key=$apiKey"
+        }
+    }
 
     val ESRI_WORLD_STREETS: OnlineTileSourceBase = object : OnlineTileSourceBase(
         "EsriWorldStreets",
@@ -78,16 +129,21 @@ object DarkMapTileSource {
     }
 
     fun tileSourceFor(style: FreeMapStyle): ITileSource {
+        val cartoKey = activeCartoKey()
         return when (style) {
-            FreeMapStyle.VOYAGER -> ESRI_WORLD_STREETS
-            FreeMapStyle.DARK -> TileSourceFactory.MAPNIK
+            FreeMapStyle.VOYAGER -> cartoKey?.let(::createCartoVoyager) ?: ESRI_WORLD_STREETS
+            FreeMapStyle.DARK -> cartoKey?.let(::createCartoDarkMatter) ?: TileSourceFactory.MAPNIK
             FreeMapStyle.STREETS -> TileSourceFactory.MAPNIK
             FreeMapStyle.SATELLITE -> ESRI_SATELLITE
         }
     }
 
     fun colorFilterFor(style: FreeMapStyle): ColorFilter? {
-        return if (style == FreeMapStyle.DARK) DARK_OSM_COLOR_FILTER else null
+        return if (style == FreeMapStyle.DARK && activeCartoKey() == null) {
+            DARK_OSM_COLOR_FILTER
+        } else {
+            null
+        }
     }
 
     fun getSavedStyle(context: Context): FreeMapStyle {

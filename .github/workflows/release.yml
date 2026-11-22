@@ -167,12 +167,18 @@ jobs:
           KEY_PASSWORD: ${{ env.SIGNING_KEY_PASSWORD }}
           APP_VERSION_NAME: ${{ steps.version.outputs.version_name }}
           APP_VERSION_CODE: ${{ steps.version.outputs.version_code }}
+          CARTO_API_KEY: ${{ secrets.CARTO_API_KEY }}
         run: |
+          if [[ -n "${CARTO_API_KEY}" ]]; then
+            echo "::add-mask::${CARTO_API_KEY}"
+            printf 'CARTO_API_KEY=%s\n' "${CARTO_API_KEY}" > "${{ github.workspace }}/.env"
+          fi
           ./gradlew assembleRelease --no-daemon \
             -Pandroid.injected.signing.store.file="${{ github.workspace }}/app/release-keystore.jks" \
             -Pandroid.injected.signing.store.password="${{ env.SIGNING_STORE_PASSWORD }}" \
             -Pandroid.injected.signing.key.alias="${{ env.SIGNING_KEY_ALIAS }}" \
             -Pandroid.injected.signing.key.password="${{ env.SIGNING_KEY_PASSWORD }}"
+          rm -f "${{ github.workspace }}/.env"
 
       - name: Verify APK signature & Create GitHub Release
         env:
