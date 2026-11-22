@@ -116,7 +116,7 @@
     <!-- Free Map Styles -->
     <string name="cd_map_layers">تغيير نمط الخريطة المجانية</string>
     <string name="map_style_dark">داكن (Dark)</string>
-    <string name="map_style_voyager">كلاسيكي (Voyager)</string>
+    <string name="map_style_voyager">كلاسيكي (شوارع)</string>
     <string name="map_style_streets">شوارع (OSM)</string>
     <string name="map_style_satellite">قمر صناعي (Satellite)</string>
 </resources>

@@ -127,6 +127,7 @@ class MapPickerActivity : AppCompatActivity() {
         val initialStyle = DarkMapTileSource.getSavedStyle(this)
         binding.mapView.apply {
             setTileSource(DarkMapTileSource.tileSourceFor(initialStyle))
+            overlayManager.tilesOverlay.setColorFilter(DarkMapTileSource.colorFilterFor(initialStyle))
             setMultiTouchControls(true)
             isTilesScaledToDpi = true
             zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
@@ -340,6 +341,7 @@ class MapPickerActivity : AppCompatActivity() {
     private fun applyMapStyle(style: FreeMapStyle) {
         DarkMapTileSource.saveStyle(this, style)
         binding.mapView.setTileSource(DarkMapTileSource.tileSourceFor(style))
+        binding.mapView.overlayManager.tilesOverlay.setColorFilter(DarkMapTileSource.colorFilterFor(style))
         highlightSelectedMapStyle(style)
         binding.cardMapStyleMenu.visibility = View.GONE
         binding.mapView.invalidate()

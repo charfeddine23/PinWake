@@ -1,6 +1,9 @@
 package com.example.util
 
 import android.content.Context
+import android.graphics.ColorFilter
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
 import org.osmdroid.tileprovider.tilesource.ITileSource
 import org.osmdroid.tileprovider.tilesource.OnlineTileSourceBase
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
@@ -10,9 +13,7 @@ enum class FreeMapStyle {
     DARK,
     VOYAGER,
     STREETS,
-    SATELLITE;
-
-    fun isLightBackground(): Boolean = this == VOYAGER || this == STREETS
+    SATELLITE
 }
 
 object DarkMapTileSource {
@@ -20,57 +21,13 @@ object DarkMapTileSource {
     private const val PREFS_NAME = "pin_wake_prefs"
     private const val KEY_MAP_STYLE = "free_map_style"
 
-    val CARTO_DARK_MATTER: OnlineTileSourceBase = object : OnlineTileSourceBase(
-        "CartoDarkMatter",
+    val ESRI_WORLD_STREETS: OnlineTileSourceBase = object : OnlineTileSourceBase(
+        "EsriWorldStreets",
         0,
         19,
-        256,
-        ".png",
-        arrayOf(
-            "https://a.basemaps.cartocdn.com/dark_all/",
-            "https://b.basemaps.cartocdn.com/dark_all/",
-            "https://c.basemaps.cartocdn.com/dark_all/",
-            "https://d.basemaps.cartocdn.com/dark_all/"
-        ),
-        "© OpenStreetMap contributors © CARTO"
-    ) {
-        override fun getTileURLString(pMapTileIndex: Long): String {
-            val zoom = MapTileIndex.getZoom(pMapTileIndex)
-            val x = MapTileIndex.getX(pMapTileIndex)
-            val y = MapTileIndex.getY(pMapTileIndex)
-            return "${baseUrl}$zoom/$x/$y$mImageFilenameEnding"
-        }
-    }
-
-    val CARTO_VOYAGER: OnlineTileSourceBase = object : OnlineTileSourceBase(
-        "CartoVoyager",
-        0,
-        19,
-        256,
-        ".png",
-        arrayOf(
-            "https://a.basemaps.cartocdn.com/rastertiles/voyager/",
-            "https://b.basemaps.cartocdn.com/rastertiles/voyager/",
-            "https://c.basemaps.cartocdn.com/rastertiles/voyager/",
-            "https://d.basemaps.cartocdn.com/rastertiles/voyager/"
-        ),
-        "© OpenStreetMap contributors © CARTO"
-    ) {
-        override fun getTileURLString(pMapTileIndex: Long): String {
-            val zoom = MapTileIndex.getZoom(pMapTileIndex)
-            val x = MapTileIndex.getX(pMapTileIndex)
-            val y = MapTileIndex.getY(pMapTileIndex)
-            return "${baseUrl}$zoom/$x/$y$mImageFilenameEnding"
-        }
-    }
-
-    val ESRI_SATELLITE: OnlineTileSourceBase = object : OnlineTileSourceBase(
-        "EsriWorldImagery",
-        0,
-        18,
         256,
         "",
-        arrayOf("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/"),
+        arrayOf("https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/"),
         "Tiles © Esri"
     ) {
         override fun getTileURLString(pMapTileIndex: Long): String {
@@ -81,13 +38,56 @@ object DarkMapTileSource {
         }
     }
 
+    val ESRI_SATELLITE: OnlineTileSourceBase = object : OnlineTileSourceBase(
+        "EsriWorldImagery",
+        0,
+        18,
+        256,
+        "",
+        arrayOf("https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/"),
+        "Tiles © Esri"
+    ) {
+        override fun getTileURLString(pMapTileIndex: Long): String {
+            val zoom = MapTileIndex.getZoom(pMapTileIndex)
+            val x = MapTileIndex.getX(pMapTileIndex)
+            val y = MapTileIndex.getY(pMapTileIndex)
+            return "${baseUrl}$zoom/$y/$x"
+        }
+    }
+
+    private val DARK_OSM_COLOR_FILTER: ColorFilter by lazy {
+        val invertMatrix = ColorMatrix(
+            floatArrayOf(
+                -1f, 0f, 0f, 0f, 255f,
+                0f, -1f, 0f, 0f, 255f,
+                0f, 0f, -1f, 0f, 255f,
+                0f, 0f, 0f, 1f, 0f
+            )
+        )
+        // Hue-rotate 180 deg so oceans stay deep blue and parks stay dark green after inversion
+        val hueRotate180 = ColorMatrix(
+            floatArrayOf(
+                -0.574f, 1.430f, 0.144f, 0f, 0f,
+                0.426f, 0.430f, 0.144f, 0f, 0f,
+                0.426f, 1.430f, -0.856f, 0f, 0f,
+                0f, 0f, 0f, 1f, 0f
+            )
+        )
+        invertMatrix.postConcat(hueRotate180)
+        ColorMatrixColorFilter(invertMatrix)
+    }
+
     fun tileSourceFor(style: FreeMapStyle): ITileSource {
         return when (style) {
-            FreeMapStyle.DARK -> CARTO_DARK_MATTER
-            FreeMapStyle.VOYAGER -> CARTO_VOYAGER
+            FreeMapStyle.VOYAGER -> ESRI_WORLD_STREETS
+            FreeMapStyle.DARK -> TileSourceFactory.MAPNIK
             FreeMapStyle.STREETS -> TileSourceFactory.MAPNIK
             FreeMapStyle.SATELLITE -> ESRI_SATELLITE
         }
+    }
+
+    fun colorFilterFor(style: FreeMapStyle): ColorFilter? {
+        return if (style == FreeMapStyle.DARK) DARK_OSM_COLOR_FILTER else null
     }
 
     fun getSavedStyle(context: Context): FreeMapStyle {

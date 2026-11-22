@@ -115,8 +115,8 @@
 
     <!-- Free Map Styles -->
     <string name="cd_map_layers">Switch free map layer</string>
-    <string name="map_style_dark">Dark Matter</string>
-    <string name="map_style_voyager">Voyager (Classic)</string>
+    <string name="map_style_dark">Dark Mode</string>
+    <string name="map_style_voyager">Classic Streets</string>
     <string name="map_style_streets">OSM Streets</string>
     <string name="map_style_satellite">Satellite</string>
 </resources>
