@@ -7,15 +7,15 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: write
 
 jobs:
   release:
-    name: Build & Publish Signed Release APK
+    name: Build, Verify & Publish Signed Release APK
     runs-on: ubuntu-latest
 
     steps:
@@ -79,19 +79,41 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          missing=()
-          [[ -z "${KEYSTORE_BASE64}" ]] && missing+=("KEYSTORE_BASE64")
-          [[ -z "${KEYSTORE_PASSWORD}" ]] && missing+=("KEYSTORE_PASSWORD")
-          [[ -z "${KEY_ALIAS}" ]] && missing+=("KEY_ALIAS")
-          [[ -z "${KEY_PASSWORD}" ]] && missing+=("KEY_PASSWORD")
+          KEYSTORE_OUT="${{ github.workspace }}/app/release-keystore.jks"
 
-          if (( ${#missing[@]} > 0 )); then
-            echo "::error::Missing required GitHub Secrets: ${missing[*]}"
-            exit 1
+          if [[ -z "${KEYSTORE_BASE64}" && -z "${KEYSTORE_PASSWORD}" && -z "${KEY_ALIAS}" && -z "${KEY_PASSWORD}" ]]; then
+            echo "::notice::Custom release signing secrets are not configured yet. Falling back to consistent repository debug.keystore.base64 so builds succeed and updates install in-place."
+            base64 --decode "${{ github.workspace }}/debug.keystore.base64" > "${KEYSTORE_OUT}"
+            keytool -changealias -keystore "${KEYSTORE_OUT}" -storepass "android" -alias "androiddebugkey" -destalias "upload" -keypass "android"
+            chmod 600 "${KEYSTORE_OUT}"
+
+            echo "SIGNING_STORE_PASSWORD=android" >> "$GITHUB_ENV"
+            echo "SIGNING_KEY_ALIAS=upload" >> "$GITHUB_ENV"
+            echo "SIGNING_KEY_PASSWORD=android" >> "$GITHUB_ENV"
+          else
+            missing=()
+            [[ -z "${KEYSTORE_BASE64}" ]] && missing+=("KEYSTORE_BASE64")
+            [[ -z "${KEYSTORE_PASSWORD}" ]] && missing+=("KEYSTORE_PASSWORD")
+            [[ -z "${KEY_ALIAS}" ]] && missing+=("KEY_ALIAS")
+            [[ -z "${KEY_PASSWORD}" ]] && missing+=("KEY_PASSWORD")
+
+            if (( ${#missing[@]} > 0 )); then
+              echo "::error::Partial signing configuration detected. Missing GitHub Secrets: ${missing[*]}"
+              exit 1
+            fi
+
+            echo "${KEYSTORE_BASE64}" | tr -d '[:space:]' | base64 --decode > "${KEYSTORE_OUT}"
+            if [[ "${KEY_ALIAS}" != "upload" ]]; then
+              keytool -changealias -keystore "${KEYSTORE_OUT}" -storepass "${KEYSTORE_PASSWORD}" -alias "${KEY_ALIAS}" -destalias "upload" -keypass "${KEY_PASSWORD}"
+            fi
+            chmod 600 "${KEYSTORE_OUT}"
+
+            echo "::add-mask::${KEYSTORE_PASSWORD}"
+            echo "::add-mask::${KEY_PASSWORD}"
+            echo "SIGNING_STORE_PASSWORD=${KEYSTORE_PASSWORD}" >> "$GITHUB_ENV"
+            echo "SIGNING_KEY_ALIAS=upload" >> "$GITHUB_ENV"
+            echo "SIGNING_KEY_PASSWORD=${KEY_PASSWORD}" >> "$GITHUB_ENV"
           fi
-
-          echo "${KEYSTORE_BASE64}" | tr -d '[:space:]' | base64 --decode > "${{ github.workspace }}/app/release-keystore.jks"
-          chmod 600 "${{ github.workspace }}/app/release-keystore.jks"
 
       - name: Extract & auto-increment version without duplicate tags
         id: version
@@ -133,18 +155,18 @@ jobs:
       - name: Build signed Release APK
         env:
           KEYSTORE_PATH: ${{ github.workspace }}/app/release-keystore.jks
-          STORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          STORE_PASSWORD: ${{ env.SIGNING_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ env.SIGNING_KEY_PASSWORD }}
           APP_VERSION_NAME: ${{ steps.version.outputs.version_name }}
           APP_VERSION_CODE: ${{ steps.version.outputs.version_code }}
         run: |
           ./gradlew assembleRelease --no-daemon \
             -Pandroid.injected.signing.store.file="${{ github.workspace }}/app/release-keystore.jks" \
-            -Pandroid.injected.signing.store.password="${{ secrets.KEYSTORE_PASSWORD }}" \
-            -Pandroid.injected.signing.key.alias="${{ secrets.KEY_ALIAS }}" \
-            -Pandroid.injected.signing.key.password="${{ secrets.KEY_PASSWORD }}"
+            -Pandroid.injected.signing.store.password="${{ env.SIGNING_STORE_PASSWORD }}" \
+            -Pandroid.injected.signing.key.alias="${{ env.SIGNING_KEY_ALIAS }}" \
+            -Pandroid.injected.signing.key.password="${{ env.SIGNING_KEY_PASSWORD }}"
 
-      - name: Create GitHub Release & upload APK
+      - name: Verify APK signature & Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -152,24 +174,53 @@ jobs:
           VERSION_NAME="${{ steps.version.outputs.version_name }}"
           VERSION_CODE="${{ steps.version.outputs.version_code }}"
 
-          SIGNED_APK=$(find app/build/outputs/apk/release -maxdepth 1 -type f -name "*.apk" | head -n 1)
+          SIGNED_APK=$(find app/build/outputs/apk/release -maxdepth 2 -type f -name "*.apk" ! -name "*unsigned*" ! -name "*unaligned*" | head -n 1)
           if [[ -z "${SIGNED_APK}" || ! -f "${SIGNED_APK}" ]]; then
             echo "::error::Signed Release APK not found under app/build/outputs/apk/release/"
             exit 1
           fi
+
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          APKSIGNER=$(find "${SDK_ROOT}/build-tools" -maxdepth 2 -type f -name "apksigner" | sort -V | tail -n 1)
+          if [[ -z "${APKSIGNER}" || ! -x "${APKSIGNER}" ]]; then
+            echo "::error::apksigner executable not found under ${SDK_ROOT}/build-tools"
+            exit 1
+          fi
+
+          echo "Verifying APK signature with ${APKSIGNER}..."
+          "${APKSIGNER}" verify --print-certs "${SIGNED_APK}"
 
           RAW_APP_NAME=$(sed -n 's/.*<string name="app_name">\([^<]*\)<\/string>.*/\1/p' app/src/main/res/values/strings.xml | head -n 1)
           SAFE_APP_NAME=$(echo "${RAW_APP_NAME:-PinWake}" | tr -d '[:space:]')
           RENAMED_APK="app/build/outputs/apk/release/${SAFE_APP_NAME}-v${VERSION_NAME}.apk"
           cp "${SIGNED_APK}" "${RENAMED_APK}"
 
+          APK_BYTES=$(stat -c%s "${RENAMED_APK}")
+          APK_SIZE_MB=$(awk -v bytes="${APK_BYTES}" 'BEGIN { printf "%.2f MB", bytes / (1024 * 1024) }')
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag -a "${TAG_NAME}" -m "Release ${TAG_NAME}"
           git push origin "${TAG_NAME}"
 
+          RELEASE_NOTES=$(printf "Signed Release APK for **Pin Wake** (\`%s\`).\n\n- **Version:** \`%s\` (\`versionCode %s\`)\n- **Branch:** \`%s\`\n- **Commit SHA:** \`%s\`\n- **APK File Size:** \`%s\` (\`%s\` bytes)\n" \
+            "${TAG_NAME}" "${VERSION_NAME}" "${VERSION_CODE}" "${{ github.ref_name }}" "${{ github.sha }}" "${APK_SIZE_MB}" "${APK_BYTES}")
+
           gh release create "${TAG_NAME}" "${RENAMED_APK}" \
             --repo "${{ github.repository }}" \
             --title "Pin Wake ${TAG_NAME}" \
-            --notes "Signed Release APK for **Pin Wake** (\`v${VERSION_NAME}\`, \`versionCode ${VERSION_CODE}\`). Built from commit \`${GITHUB_SHA}\`." \
+            --notes "${RELEASE_NOTES}" \
             --latest
+
+      - name: Clean up Keystore
+        if: always()
+        run: |
+          KEYSTORE_FILE="${{ github.workspace }}/app/release-keystore.jks"
+          if [[ -f "${KEYSTORE_FILE}" ]]; then
+            if command -v shred >/dev/null 2>&1; then
+              shred -u "${KEYSTORE_FILE}"
+            else
+              rm -f "${KEYSTORE_FILE}"
+            fi
+            echo "Cleaned up ${KEYSTORE_FILE}"
+          fi
