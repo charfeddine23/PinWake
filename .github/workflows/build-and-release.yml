@@ -1,0 +1,157 @@
+name: Build & Release Pin Wake APK
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle 9.3.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
+
+      - name: Compute next version & APK name
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Extract app_name from strings.xml (fallback to Pin Wake)
+          APP_NAME=$(sed -n 's/.*<string name="app_name">\([^<]*\)<\/string>.*/\1/p' app/src/main/res/values/strings.xml | head -n 1)
+          APP_NAME="${APP_NAME:-Pin Wake}"
+
+          # Determine highest version sequence from existing releases to guarantee monotonic increments
+          LAST_SEQ=0
+          EXISTING_TAGS=$(gh release list --repo "${{ github.repository }}" --limit 100 --json tagName -q '.[].tagName' || true)
+          for tag in $EXISTING_TAGS; do
+            if [[ "$tag" =~ ^v1\.([0-9]+)\.([0-9]+)$ ]]; then
+              TAG_MINOR="${BASH_REMATCH[1]}"
+              TAG_PATCH="${BASH_REMATCH[2]}"
+              TAG_SEQ=$((TAG_MINOR * 10 + TAG_PATCH))
+              if (( TAG_SEQ > LAST_SEQ )); then
+                LAST_SEQ=$TAG_SEQ
+              fi
+            fi
+          done
+
+          RUN_NUM=${{ github.run_number }}
+          NEXT_SEQ=$RUN_NUM
+          if (( LAST_SEQ + 1 > NEXT_SEQ )); then
+            NEXT_SEQ=$((LAST_SEQ + 1))
+          fi
+
+          # versionCode starts at 2 so it updates cleanly over the initial local 1.0.0 (versionCode=1) build
+          VERSION_CODE=$((NEXT_SEQ + 1))
+          MINOR=$((NEXT_SEQ / 10))
+          PATCH=$((NEXT_SEQ % 10))
+          VERSION_NAME="1.${MINOR}.${PATCH}"
+          TAG_NAME="v${VERSION_NAME}"
+          APK_FILENAME="${APP_NAME}.v${VERSION_NAME}.apk"
+
+          echo "app_name=${APP_NAME}" >> "$GITHUB_OUTPUT"
+          echo "version_code=${VERSION_CODE}" >> "$GITHUB_OUTPUT"
+          echo "version_name=${VERSION_NAME}" >> "$GITHUB_OUTPUT"
+          echo "tag_name=${TAG_NAME}" >> "$GITHUB_OUTPUT"
+          echo "apk_filename=${APK_FILENAME}" >> "$GITHUB_OUTPUT"
+
+          echo "Computed ${TAG_NAME} (versionCode=${VERSION_CODE}) -> ${APK_FILENAME}"
+
+      - name: Prepare consistent signing & build APK
+        id: build_apk
+        env:
+          APP_VERSION_CODE: ${{ steps.version.outputs.version_code }}
+          APP_VERSION_NAME: ${{ steps.version.outputs.version_name }}
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [[ -n "${RELEASE_KEYSTORE_BASE64}" && -n "${STORE_PASSWORD}" && -n "${KEY_PASSWORD}" ]]; then
+            echo "Building release APK signed with repository RELEASE_KEYSTORE_BASE64 secret..."
+            echo "${RELEASE_KEYSTORE_BASE64}" | base64 -d > "${{ github.workspace }}/my-upload-key.jks"
+            export KEYSTORE_PATH="${{ github.workspace }}/my-upload-key.jks"
+            gradle assembleRelease --no-daemon
+            BUILT_APK="app/build/outputs/apk/release/app-release.apk"
+          else
+            echo "Building APK signed with consistent repo debug.keystore.base64..."
+            base64 -d "${{ github.workspace }}/debug.keystore.base64" > "${{ github.workspace }}/debug.keystore"
+            gradle assembleDebug --no-daemon
+            BUILT_APK="app/build/outputs/apk/debug/app-debug.apk"
+          fi
+
+          if [[ ! -f "${BUILT_APK}" ]]; then
+            echo "Expected APK not found at ${BUILT_APK}"
+            exit 1
+          fi
+
+          mkdir -p "${{ github.workspace }}/release-artifacts"
+          TARGET_APK="${{ github.workspace }}/release-artifacts/${{ steps.version.outputs.apk_filename }}"
+          cp "${BUILT_APK}" "${TARGET_APK}"
+          echo "apk_path=${TARGET_APK}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish latest GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.version.outputs.tag_name }}"
+          APK_PATH="${{ steps.build_apk.outputs.apk_path }}"
+          TITLE="${{ steps.version.outputs.app_name }} ${TAG}"
+          NOTES="Automated build from commit \`${GITHUB_SHA::7}\` (${{ steps.version.outputs.version_name }}, versionCode ${{ steps.version.outputs.version_code }}). Direct in-place update supported."
+
+          # Replace tag if it already exists, then create the fresh latest release
+          gh release delete "${TAG}" --repo "${{ github.repository }}" --yes --cleanup-tag 2>/dev/null || true
+          gh release create "${TAG}" "${APK_PATH}" \
+            --repo "${{ github.repository }}" \
+            --title "${TITLE}" \
+            --notes "${NOTES}" \
+            --latest
+
+      - name: Delete old GitHub Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          CURRENT_TAG="${{ steps.version.outputs.tag_name }}"
+          gh release list --repo "${{ github.repository }}" --limit 100 --json tagName -q '.[].tagName' | while read -r old_tag; do
+            if [[ -n "${old_tag}" && "${old_tag}" != "${CURRENT_TAG}" ]]; then
+              echo "Deleting old release and tag: ${old_tag}"
+              gh release delete "${old_tag}" --repo "${{ github.repository }}" --yes --cleanup-tag || true
+            fi
+          done
+
+      - name: Clean up old GitHub Actions workflow runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          CURRENT_RUN_ID="${{ github.run_id }}"
+          gh api "repos/${{ github.repository }}/actions/runs?per_page=100" --paginate \
+            --jq ".workflow_runs[] | select(.id != ${CURRENT_RUN_ID} and .status == \"completed\") | .id" | while read -r run_id; do
+              if [[ -n "${run_id}" ]]; then
+                echo "Deleting old workflow run: ${run_id}"
+                gh api -X DELETE "repos/${{ github.repository }}/actions/runs/${run_id}" || true
+              fi
+          done
