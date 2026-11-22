@@ -1,7 +1,10 @@
 package com.example
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.location.LocationManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -36,10 +39,35 @@ import com.example.ui.map.MapPickerActivity
 import com.example.util.ApkUpdateManager
 import com.example.util.DistanceFormatter
 import com.example.util.LanguageManager
+import com.example.util.OpenFreeMapStyle
+import com.example.util.OpenFreeMapStyles
 import com.example.util.PermissionHelper
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlinx.coroutines.launch
+import org.maplibre.android.MapLibre
+import org.maplibre.android.camera.CameraPosition
+import org.maplibre.android.camera.CameraUpdateFactory
+import org.maplibre.android.geometry.LatLng
+import org.maplibre.android.location.LocationComponentActivationOptions
+import org.maplibre.android.location.LocationComponentOptions
+import org.maplibre.android.location.modes.CameraMode
+import org.maplibre.android.location.modes.RenderMode
+import org.maplibre.android.maps.MapLibreMap
+import org.maplibre.android.maps.Style
+import org.maplibre.android.style.layers.BackgroundLayer
+import org.maplibre.android.style.layers.FillLayer
+import org.maplibre.android.style.layers.LineLayer
+import org.maplibre.android.style.layers.PropertyFactory
+import org.maplibre.android.style.sources.GeoJsonSource
+import org.maplibre.geojson.Feature
+import org.maplibre.geojson.FeatureCollection
+import org.maplibre.geojson.Point
+import org.maplibre.geojson.Polygon
 import java.io.File
+import kotlin.math.asin
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.sin
 
 class MainActivity : AppCompatActivity() {
 
@@ -56,12 +84,18 @@ class MainActivity : AppCompatActivity() {
     private lateinit var alarmAdapter: AlarmAdapter
     private lateinit var historyAdapter: TripHistoryAdapter
     private var pendingInstallApk: File? = null
+    private var heroMap: MapLibreMap? = null
+    private var loadedHeroStyle: OpenFreeMapStyle? = null
 
     private val fineLocationLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) {
         refreshPermissionCard()
         syncTrackingServiceIfPossible()
+        heroMap?.style?.let { style ->
+            if (style.isFullyLoaded) enableHeroLocationPuck(style)
+        }
+        updateHeroMapViewport(viewModel.uiState.value)
     }
 
     private val backgroundLocationLauncher = registerForActivityResult(
@@ -91,34 +125,87 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (!isRobolectric()) {
+            MapLibre.getInstance(this)
+        }
         enableEdgeToEdge()
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        binding.dashboardMapView.onCreate(savedInstanceState)
         binding.tvAppVersionPill.text =
             getString(R.string.update_pill_version, BuildConfig.VERSION_NAME)
 
         applyEdgeToEdgeInsets()
+        setupHeroMap()
         setupRecyclerViews()
         setupClicks()
         observeDashboard()
     }
 
+    override fun onStart() {
+        super.onStart()
+        binding.dashboardMapView.onStart()
+    }
+
     override fun onResume() {
         super.onResume()
+        binding.dashboardMapView.onResume()
         refreshPermissionCard()
         syncTrackingServiceIfPossible()
+
+        val savedStyle = OpenFreeMapStyles.getSavedStyle(this)
+        if (heroMap != null && loadedHeroStyle != savedStyle) {
+            applyHeroMapStyle(savedStyle)
+        } else {
+            updateHeroMapViewport(viewModel.uiState.value)
+        }
+    }
+
+    override fun onPause() {
+        binding.dashboardMapView.onPause()
+        super.onPause()
+    }
+
+    override fun onStop() {
+        binding.dashboardMapView.onStop()
+        super.onStop()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        binding.dashboardMapView.onSaveInstanceState(outState)
+    }
+
+    override fun onLowMemory() {
+        super.onLowMemory()
+        binding.dashboardMapView.onLowMemory()
+    }
+
+    override fun onDestroy() {
+        binding.dashboardMapView.onDestroy()
+        super.onDestroy()
     }
 
     private fun applyEdgeToEdgeInsets() {
-        val baseTop = binding.contentContainer.paddingTop
-        val baseBottom = binding.scrollDashboard.paddingBottom
-        val fabBaseMargin = (20f * resources.displayMetrics.density).toInt()
+        val density = resources.displayMetrics.density
+        val baseTopPad = binding.topFloatingBar.paddingTop
+        val baseScrollBottom = binding.scrollDashboard.paddingBottom
+        val fabBaseMargin = (20f * density).toInt()
+        val baseHeroHeight = (268f * density).toInt()
+        val baseMinHeroHeight = (84f * density).toInt()
 
         ViewCompat.setOnApplyWindowInsetsListener(binding.rootCoordinator) { _, insets ->
             val sysBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            binding.contentContainer.updatePadding(top = baseTop + sysBars.top)
-            binding.scrollDashboard.updatePadding(bottom = baseBottom + sysBars.bottom)
+
+            binding.topFloatingBar.updatePadding(top = baseTopPad + sysBars.top)
+
+            val collapseParams = binding.collapsingDashboard.layoutParams
+            collapseParams.height = baseHeroHeight + sysBars.top
+            binding.collapsingDashboard.layoutParams = collapseParams
+            binding.collapsingDashboard.minimumHeight = baseMinHeroHeight + sysBars.top
+
+            binding.scrollDashboard.updatePadding(bottom = baseScrollBottom + sysBars.bottom)
 
             val fabParams = binding.fabPinAlarm.layoutParams as
                 androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams
@@ -126,6 +213,167 @@ class MainActivity : AppCompatActivity() {
             binding.fabPinAlarm.layoutParams = fabParams
             insets
         }
+    }
+
+    private fun setupHeroMap() {
+        if (isRobolectric()) return
+        binding.dashboardMapView.getMapAsync { map ->
+            heroMap = map
+            map.uiSettings.apply {
+                isCompassEnabled = false
+                isLogoEnabled = false
+                isAttributionEnabled = false
+                setAllGesturesEnabled(false)
+            }
+            applyHeroMapStyle(OpenFreeMapStyles.getSavedStyle(this))
+        }
+    }
+
+    private fun applyHeroMapStyle(styleOption: OpenFreeMapStyle) {
+        val map = heroMap ?: return
+        loadedHeroStyle = styleOption
+        map.setStyle(Style.Builder().fromUri(styleOption.styleUrl)) { loadedStyle ->
+            if (styleOption == OpenFreeMapStyle.DARK) {
+                loadedStyle.getLayerAs<BackgroundLayer>("background")?.setProperties(
+                    PropertyFactory.backgroundColor("#090D16")
+                )
+            }
+            ensureHeroGeofenceLayers(loadedStyle)
+            enableHeroLocationPuck(loadedStyle)
+            updateHeroMapViewport(viewModel.uiState.value)
+        }
+    }
+
+    private fun ensureHeroGeofenceLayers(style: Style) {
+        if (style.getSourceAs<GeoJsonSource>(HERO_GEOFENCE_SOURCE_ID) == null) {
+            style.addSource(GeoJsonSource(HERO_GEOFENCE_SOURCE_ID, FeatureCollection.fromFeatures(emptyArray())))
+        }
+        if (style.getLayer(HERO_GEOFENCE_FILL_ID) == null) {
+            style.addLayer(
+                FillLayer(HERO_GEOFENCE_FILL_ID, HERO_GEOFENCE_SOURCE_ID).apply {
+                    setProperties(
+                        PropertyFactory.fillColor("#00D4FF"),
+                        PropertyFactory.fillOpacity(0.18f)
+                    )
+                }
+            )
+        }
+        if (style.getLayer(HERO_GEOFENCE_LINE_ID) == null) {
+            style.addLayer(
+                LineLayer(HERO_GEOFENCE_LINE_ID, HERO_GEOFENCE_SOURCE_ID).apply {
+                    setProperties(
+                        PropertyFactory.lineColor("#00E5FF"),
+                        PropertyFactory.lineWidth(2.2f),
+                        PropertyFactory.lineOpacity(0.9f)
+                    )
+                }
+            )
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun enableHeroLocationPuck(style: Style) {
+        if (!hasFineOrCoarseLocation()) return
+        val map = heroMap ?: return
+        runCatching {
+            val cyanAccent = ContextCompat.getColor(this, R.color.accent_cyan)
+            val options = LocationComponentOptions.builder(this)
+                .pulseEnabled(true)
+                .pulseColor(cyanAccent)
+                .foregroundTintColor(cyanAccent)
+                .accuracyColor(ContextCompat.getColor(this, R.color.geofence_fill))
+                .build()
+
+            val activation = LocationComponentActivationOptions.builder(this, style)
+                .locationComponentOptions(options)
+                .useDefaultLocationEngine(true)
+                .build()
+
+            map.locationComponent.apply {
+                activateLocationComponent(activation)
+                isLocationComponentEnabled = true
+                cameraMode = CameraMode.NONE
+                renderMode = RenderMode.NORMAL
+            }
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun updateHeroMapViewport(state: DashboardUiState) {
+        val map = heroMap ?: return
+        val style = map.style
+        val activeAlarms = state.alarms.filter { it.isActive }
+
+        if (style != null && style.isFullyLoaded) {
+            val features = activeAlarms.map { alarm ->
+                createGeodesicCircleFeature(alarm.latitude, alarm.longitude, alarm.radiusMeters)
+            }
+            style.getSourceAs<GeoJsonSource>(HERO_GEOFENCE_SOURCE_ID)
+                ?.setGeoJson(FeatureCollection.fromFeatures(features))
+        }
+
+        val targetAlarm = activeAlarms.minByOrNull { it.lastDistanceMeters ?: Float.MAX_VALUE }
+            ?: state.alarms.firstOrNull()
+
+        if (targetAlarm != null) {
+            val pos = CameraPosition.Builder()
+                .target(LatLng(targetAlarm.latitude, targetAlarm.longitude))
+                .zoom(13.8)
+                .build()
+            map.moveCamera(CameraUpdateFactory.newCameraPosition(pos))
+            return
+        }
+
+        if (hasFineOrCoarseLocation()) {
+            val lm = getSystemService(LocationManager::class.java)
+            val gps = runCatching { lm?.getLastKnownLocation(LocationManager.GPS_PROVIDER) }.getOrNull()
+            val net = runCatching { lm?.getLastKnownLocation(LocationManager.NETWORK_PROVIDER) }.getOrNull()
+            val best = when {
+                gps != null && net != null -> if (gps.time >= net.time) gps else net
+                gps != null -> gps
+                else -> net
+            }
+            if (best != null) {
+                val pos = CameraPosition.Builder()
+                    .target(LatLng(best.latitude, best.longitude))
+                    .zoom(14.0)
+                    .build()
+                map.moveCamera(CameraUpdateFactory.newCameraPosition(pos))
+                return
+            }
+        }
+
+        val defaultPos = CameraPosition.Builder()
+            .target(LatLng(48.8566, 2.3522))
+            .zoom(12.2)
+            .build()
+        map.moveCamera(CameraUpdateFactory.newCameraPosition(defaultPos))
+    }
+
+    private fun createGeodesicCircleFeature(
+        lat: Double,
+        lon: Double,
+        radiusMeters: Int,
+        steps: Int = 56
+    ): Feature {
+        val earthRadius = 6371008.8
+        val latRad = Math.toRadians(lat)
+        val lonRad = Math.toRadians(lon)
+        val angularDist = radiusMeters.toDouble() / earthRadius
+        val ring = ArrayList<Point>(steps + 1)
+        for (i in 0..steps) {
+            val bearing = 2.0 * Math.PI * (i % steps) / steps
+            val pLat = asin(
+                sin(latRad) * cos(angularDist) +
+                    cos(latRad) * sin(angularDist) * cos(bearing)
+            )
+            val pLon = lonRad + atan2(
+                sin(bearing) * sin(angularDist) * cos(latRad),
+                cos(angularDist) - sin(latRad) * sin(pLat)
+            )
+            ring.add(Point.fromLngLat(Math.toDegrees(pLon), Math.toDegrees(pLat)))
+        }
+        return Feature.fromGeometry(Polygon.fromLngLats(listOf(ring)))
     }
 
     private fun setupRecyclerViews() {
@@ -168,9 +416,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupClicks() {
-        binding.fabPinAlarm.setOnClickListener {
-            openMapPicker()
-        }
+        binding.fabPinAlarm.setOnClickListener { openMapPicker() }
+        binding.btnWhereTo.setOnClickListener { openMapPicker() }
+        binding.btnMapHeroTap.setOnClickListener { openMapPicker() }
 
         binding.btnLanguageToggle.setOnClickListener {
             LanguageManager.toggleLanguage(this)
@@ -336,6 +584,7 @@ class MainActivity : AppCompatActivity() {
             if (state.recentTrips.isEmpty()) View.GONE else View.VISIBLE
 
         renderTelemetryBanner(state)
+        updateHeroMapViewport(state)
         renderQuickFavorite(
             card = binding.cardFavHome,
             statusView = binding.tvFavHomeStatus,
@@ -361,6 +610,9 @@ class MainActivity : AppCompatActivity() {
         if (telemetry.isTracking && state.activeCount > 0) {
             binding.cardLiveTelemetry.setBackgroundResource(R.drawable.bg_liquid_glass_card_active)
             binding.viewTrackingDot.setBackgroundResource(R.drawable.bg_badge_emerald)
+            binding.viewHeroRadarDot.setBackgroundResource(R.drawable.bg_badge_emerald)
+            binding.tvHeroRadarText.text = getString(R.string.hero_live_radar)
+            binding.tvHeroRadarText.setTextColor(ContextCompat.getColor(this, R.color.accent_emerald))
             binding.tvTrackingTarget.text =
                 telemetry.closestAlarmTitle ?: getString(R.string.app_name)
             binding.tvTrackingSubtitle.text =
@@ -380,6 +632,9 @@ class MainActivity : AppCompatActivity() {
         } else {
             binding.cardLiveTelemetry.setBackgroundResource(R.drawable.bg_liquid_glass_card)
             binding.viewTrackingDot.setBackgroundResource(R.drawable.bg_badge_cyan)
+            binding.viewHeroRadarDot.setBackgroundResource(R.drawable.bg_badge_cyan)
+            binding.tvHeroRadarText.setText(R.string.status_standby)
+            binding.tvHeroRadarText.setTextColor(ContextCompat.getColor(this, R.color.text_primary))
             binding.tvTrackingTarget.setText(R.string.status_standby)
             binding.tvTrackingSubtitle.setText(R.string.app_tagline)
             binding.tvPollingTierBadge.setText(R.string.status_standby)
@@ -497,6 +752,20 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun hasFineOrCoarseLocation(): Boolean {
+        return ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED || ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.ACCESS_COARSE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun isRobolectric(): Boolean {
+        return "robolectric".equals(Build.FINGERPRINT, ignoreCase = true)
+    }
+
     private fun openMapPicker(
         alarmId: Long = -1L,
         defaultCategory: FavoriteCategory = FavoriteCategory.NONE
@@ -506,5 +775,11 @@ class MainActivity : AppCompatActivity() {
             putExtra(MapPickerActivity.EXTRA_DEFAULT_CATEGORY, defaultCategory.name)
         }
         startActivity(intent)
+    }
+
+    companion object {
+        private const val HERO_GEOFENCE_SOURCE_ID = "pinwake-hero-geofence-source"
+        private const val HERO_GEOFENCE_FILL_ID = "pinwake-hero-geofence-fill"
+        private const val HERO_GEOFENCE_LINE_ID = "pinwake-hero-geofence-line"
     }
 }

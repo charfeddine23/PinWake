@@ -119,4 +119,12 @@
     <string name="map_style_fiord">أزرق ليلي (Fiord)</string>
     <string name="map_style_liberty">كلاسيكي (Liberty)</string>
     <string name="map_style_positron">فاتح (Positron)</string>
+
+    <!-- Mobility Home & Sheet Copy -->
+    <string name="where_to_hint">إلى أين وجهتك؟</string>
+    <string name="where_to_sub">حدّد نقطة التنبيه على الخريطة</string>
+    <string name="where_to_map_chip">الخريطة</string>
+    <string name="hero_live_radar">رادار مباشر</string>
+    <string name="map_sheet_title">تحديد وجهة التنبيه</string>
+    <string name="alarm_card_armed">مفعّل</string>
 </resources>

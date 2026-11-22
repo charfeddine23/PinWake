@@ -8,7 +8,7 @@
                 android:endColor="@color/accent_emerald"
                 android:startColor="@color/accent_cyan"
                 android:type="linear" />
-            <corners android:radius="999dp" />
+            <corners android:radius="16dp" />
         </shape>
     </item>
 </ripple>

@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-
     <style name="Theme.PinWake" parent="Theme.Material3.Dark.NoActionBar">
         <item name="colorPrimary">@color/accent_cyan</item>
         <item name="colorOnPrimary">@color/text_on_accent</item>
@@ -39,12 +38,14 @@
         <item name="fontFamily">@font/space_grotesk</item>
         <item name="android:fontFamily">@font/space_grotesk</item>
         <item name="android:textColor">@color/text_primary</item>
+        <item name="android:letterSpacing">-0.02</item>
     </style>
 
     <style name="TextAppearance.PinWake.Title" parent="TextAppearance.Material3.TitleLarge">
         <item name="fontFamily">@font/space_grotesk</item>
         <item name="android:fontFamily">@font/space_grotesk</item>
         <item name="android:textColor">@color/text_primary</item>
+        <item name="android:letterSpacing">-0.01</item>
     </style>
 
     <style name="TextAppearance.PinWake.Mono" parent="TextAppearance.Material3.LabelLarge">
@@ -55,10 +56,10 @@
     <style name="Widget.PinWake.Slider" parent="Widget.Material3.Slider">
         <item name="trackColorActive">@color/accent_cyan</item>
         <item name="trackColorInactive">@color/glass_stroke_subtle</item>
-        <item name="thumbColor">@color/accent_cyan_glow</item>
+        <item name="thumbColor">@color/white</item>
         <item name="haloColor">@color/accent_cyan_tint</item>
-        <item name="trackHeight">8dp</item>
-        <item name="thumbRadius">12dp</item>
+        <item name="trackHeight">6dp</item>
+        <item name="thumbRadius">11dp</item>
         <item name="tickVisible">false</item>
     </style>
 

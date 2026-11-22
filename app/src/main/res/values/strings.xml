@@ -119,4 +119,12 @@
     <string name="map_style_fiord">Midnight Fiord</string>
     <string name="map_style_liberty">Liberty Classic</string>
     <string name="map_style_positron">Positron Light</string>
+
+    <!-- Mobility Home & Sheet Copy -->
+    <string name="where_to_hint">Where are you heading?</string>
+    <string name="where_to_sub">Drop a GPS wake pin on the map</string>
+    <string name="where_to_map_chip">Map</string>
+    <string name="hero_live_radar">LIVE RADAR</string>
+    <string name="map_sheet_title">Set Wake Destination</string>
+    <string name="alarm_card_armed">ARMED</string>
 </resources>

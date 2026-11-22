@@ -9,7 +9,7 @@
     android:layoutDirection="ltr"
     tools:context=".ui.map.MapPickerActivity">
 
-    <!-- Visible Map Viewport (centered above bottom sheet so crosshair & circle stay fully visible) -->
+    <!-- Visible Map Viewport (centered above mobility sheet so crosshair & geofence stay clear) -->
     <FrameLayout
         android:id="@+id/mapViewport"
         android:layout_width="0dp"
@@ -24,13 +24,25 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
 
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="96dp"
+            android:layout_gravity="top"
+            android:background="@drawable/bg_map_scrim_top" />
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:layout_gravity="bottom"
+            android:background="@drawable/bg_map_scrim_bottom" />
+
         <!-- Fixed Center Crosshair Pin -->
         <ImageView
             android:id="@+id/ivCrosshair"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
+            android:layout_width="50dp"
+            android:layout_height="50dp"
             android:layout_gravity="center"
-            android:layout_marginBottom="14dp"
+            android:layout_marginBottom="16dp"
             android:contentDescription="@string/map_crosshair_cd"
             android:elevation="6dp"
             android:src="@drawable/ic_crosshair_pin" />
@@ -38,11 +50,11 @@
         <!-- Map Layer Switcher FAB -->
         <ImageButton
             android:id="@+id/fabMapStyle"
-            android:layout_width="52dp"
-            android:layout_height="52dp"
+            android:layout_width="50dp"
+            android:layout_height="50dp"
             android:layout_gravity="bottom|end"
             android:layout_marginEnd="16dp"
-            android:layout_marginBottom="80dp"
+            android:layout_marginBottom="78dp"
             android:background="@drawable/bg_liquid_glass_pill"
             android:contentDescription="@string/cd_map_layers"
             android:elevation="6dp"
@@ -55,8 +67,8 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="bottom|end"
-            android:layout_marginEnd="78dp"
-            android:layout_marginBottom="80dp"
+            android:layout_marginEnd="76dp"
+            android:layout_marginBottom="78dp"
             android:background="@drawable/bg_liquid_glass_search"
             android:elevation="8dp"
             android:orientation="vertical"
@@ -123,8 +135,8 @@
         <!-- Current Location FAB -->
         <ImageButton
             android:id="@+id/fabMyLocation"
-            android:layout_width="52dp"
-            android:layout_height="52dp"
+            android:layout_width="50dp"
+            android:layout_height="50dp"
             android:layout_gravity="bottom|end"
             android:layout_marginEnd="16dp"
             android:layout_marginBottom="16dp"
@@ -135,7 +147,7 @@
             android:src="@drawable/ic_my_location" />
     </FrameLayout>
 
-    <!-- Floating Search Bar -->
+    <!-- Floating Search Pill Bar (Uber / Yassir Destination Search) -->
     <LinearLayout
         android:id="@+id/searchBarContainer"
         android:layout_width="0dp"
@@ -161,16 +173,17 @@
             android:src="@drawable/ic_back_arrow" />
 
         <ImageView
-            android:layout_width="20dp"
-            android:layout_height="20dp"
+            android:layout_width="18dp"
+            android:layout_height="18dp"
             android:contentDescription="@string/map_search_hint"
-            android:src="@drawable/ic_search" />
+            android:src="@drawable/ic_search"
+            app:tint="@color/accent_cyan_glow" />
 
         <EditText
             android:id="@+id/etSearchPlace"
             android:layout_width="0dp"
             android:layout_height="match_parent"
-            android:layout_marginStart="8dp"
+            android:layout_marginStart="10dp"
             android:layout_weight="1"
             android:background="@android:color/transparent"
             android:hint="@string/map_search_hint"
@@ -209,7 +222,7 @@
         android:layout_marginHorizontal="16dp"
         android:layout_marginTop="8dp"
         android:background="@drawable/bg_liquid_glass_search"
-        android:elevation="8dp"
+        android:elevation="10dp"
         android:orientation="vertical"
         android:paddingVertical="6dp"
         android:visibility="gone"
@@ -221,10 +234,10 @@
             android:id="@+id/rvSearchResults"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:maxHeight="230dp" />
+            android:maxHeight="240dp" />
     </LinearLayout>
 
-    <!-- Bottom Dark Liquid Glass Sheet -->
+    <!-- Bottom Mobility Confirmation Sheet -->
     <LinearLayout
         android:id="@+id/bottomSheet"
         android:layout_width="0dp"
@@ -233,39 +246,59 @@
         android:elevation="12dp"
         android:orientation="vertical"
         android:paddingHorizontal="20dp"
-        android:paddingTop="12dp"
-        android:paddingBottom="20dp"
+        android:paddingTop="10dp"
+        android:paddingBottom="18dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent">
 
         <View
-            android:layout_width="40dp"
+            android:layout_width="36dp"
             android:layout_height="4dp"
             android:layout_gravity="center_horizontal"
-            android:layout_marginBottom="12dp"
+            android:layout_marginBottom="10dp"
             android:background="@drawable/bg_liquid_glass_pill" />
 
-        <!-- Resolved Address & Coordinates -->
+        <!-- Sheet Title & Live Mono Coordinates Pill -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/map_sheet_title"
+                android:textAppearance="@style/TextAppearance.PinWake.Title"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tvCoordinatesMono"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_liquid_glass_pill"
+                android:paddingHorizontal="10dp"
+                android:paddingVertical="4dp"
+                android:textAppearance="@style/TextAppearance.PinWake.Mono"
+                android:textColor="@color/accent_cyan_glow"
+                android:textSize="10sp"
+                tools:text="48.85660, 2.35220" />
+        </LinearLayout>
+
+        <!-- Resolved Address -->
         <TextView
             android:id="@+id/tvResolvedAddress"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
             android:ellipsize="end"
             android:maxLines="2"
             android:text="@string/map_resolving_address"
             android:textColor="@color/text_secondary"
             android:textSize="12sp" />
-
-        <TextView
-            android:id="@+id/tvCoordinatesMono"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:textAppearance="@style/TextAppearance.PinWake.Mono"
-            android:textColor="@color/accent_cyan_glow"
-            android:textSize="11sp"
-            tools:text="48.8566, 2.3522" />
 
         <!-- Alarm Title Input -->
         <com.google.android.material.textfield.TextInputLayout
@@ -275,6 +308,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="10dp"
             android:hint="@string/map_label_hint"
+            app:boxBackgroundColor="@color/bg_surface_input"
             app:boxCornerRadiusBottomEnd="16dp"
             app:boxCornerRadiusBottomStart="16dp"
             app:boxCornerRadiusTopEnd="16dp"
@@ -296,7 +330,7 @@
         <HorizontalScrollView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
+            android:layout_marginTop="8dp"
             android:scrollbars="none">
 
             <com.google.android.material.chip.ChipGroup
@@ -348,7 +382,7 @@
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
+            android:layout_marginTop="8dp"
             android:gravity="center_vertical"
             android:orientation="horizontal">
 
@@ -384,12 +418,12 @@
             android:valueFrom="200.0"
             android:valueTo="5000.0" />
 
-        <!-- Save & Activate Button -->
+        <!-- Confirm & Activate Button -->
         <TextView
             android:id="@+id/btnSaveAlarm"
             android:layout_width="match_parent"
             android:layout_height="54dp"
-            android:layout_marginTop="8dp"
+            android:layout_marginTop="6dp"
             android:background="@drawable/bg_cyan_gradient_button"
             android:clickable="true"
             android:focusable="true"
