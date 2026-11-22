@@ -1,0 +1,100 @@
+<resources>
+    <string name="app_name">Pin Wake</string>
+    <string name="app_tagline">استيقظ عند الوصول. لا تفوّت محطتك أبداً.</string>
+
+    <!-- Dashboard Header & Tracking Status -->
+    <string name="status_standby">في الانتظار</string>
+    <string name="status_tracking_eco">توفير · 30ث</string>
+    <string name="status_tracking_balanced">متوازن · 10ث</string>
+    <string name="status_tracking_precision">دقيق · 2ث</string>
+    <string name="status_active_count">%1$d نشط</string>
+    <string name="lang_switch_label">AR / EN</string>
+
+    <!-- Permission Onboarding Card -->
+    <string name="perm_card_title">جاهزية التنبيه في الخلفية</string>
+    <string name="perm_card_subtitle">امنح هذه الأذونات لضمان عمل المنبه الجغرافي حتى عند قفل الشاشة.</string>
+    <string name="perm_fine_location">موقع GPS الدقيق</string>
+    <string name="perm_background_location">السماح بالموقع في الخلفية دائماً</string>
+    <string name="perm_notifications">إشعارات التنبيه والحالة</string>
+    <string name="perm_full_screen">إيقاظ شاشة القفل (ملء الشاشة)</string>
+    <string name="perm_battery">استخدام البطارية بدون قيود</string>
+    <string name="perm_status_granted">جاهز</string>
+    <string name="perm_status_grant">تفعيل</string>
+    <string name="perm_rationale_background">لإيقاظك أثناء قفل الهاتف، اختر \"السماح طوال الوقت\" في إعدادات الموقع.</string>
+    <string name="perm_open_settings">فتح الإعدادات</string>
+
+    <!-- Quick Favorites -->
+    <string name="section_quick_favorites">الأماكن المفضلة السريعة</string>
+    <string name="fav_home">المنزل</string>
+    <string name="fav_work">العمل</string>
+    <string name="fav_station">المحطة</string>
+    <string name="fav_custom">محفوظ</string>
+    <string name="fav_none">بدون</string>
+    <string name="fav_tap_to_pin">اضغط للتثبيت</string>
+    <string name="fav_tap_to_arm">اضغط للتفعيل</string>
+    <string name="fav_armed">مُفعّل</string>
+
+    <!-- Alarms List -->
+    <string name="section_gps_alarms">منبهات GPS الجغرافية</string>
+    <string name="btn_new_alarm">تثبيت منبه جديد</string>
+    <string name="empty_alarms_title">لا توجد منبهات جغرافية بعد</string>
+    <string name="empty_alarms_desc">اضغط على \"تثبيت منبه جديد\" أو اختر مفضلة سريعة لتحديد وجهتك على الخريطة.</string>
+    <string name="badge_radius_m">نطاق %1$d م</string>
+    <string name="badge_radius_km">نطاق %1$.1f كم</string>
+    <string name="badge_distance_m">يبعد %1$d م</string>
+    <string name="badge_distance_km">يبعد %1$.1f كم</string>
+    <string name="badge_waiting_gps">جاري تحديد الموقع…</string>
+    <string name="badge_inside_zone">داخل النطاق</string>
+    <string name="action_edit_on_map">تعديل</string>
+    <string name="action_delete_alarm">حذف</string>
+
+    <!-- Trip History -->
+    <string name="section_trip_history">سجل الوصول الأخير</string>
+    <string name="action_clear_history">مسح</string>
+    <string name="outcome_arrived">تم الوصول</string>
+    <string name="outcome_snoozed">غفوة 500م</string>
+    <string name="outcome_cancelled">تم الإلغاء</string>
+
+    <!-- Map Picker Screen -->
+    <string name="map_search_hint">ابحث عن محطة، معلم، أو مدينة…</string>
+    <string name="map_resolving_address">جاري جلب العنوان من OpenStreetMap…</string>
+    <string name="map_unknown_address">إحداثيات (%1$.4f, %2$.4f)</string>
+    <string name="map_label_hint">اسم المنبه (مثال: المحطة المركزية)</string>
+    <string name="map_radius_label">نطاق التنبيه الجغرافي</string>
+    <string name="map_radius_value_m">%1$d م</string>
+    <string name="map_radius_value_km">%1$.2f كم</string>
+    <string name="map_save_activate">تفعيل المنبه الجغرافي</string>
+    <string name="map_update_alarm">تحديث المنبه</string>
+    <string name="map_current_location_cd">التمركز على موقعي الحالي</string>
+    <string name="map_back_cd">العودة للرئيسية</string>
+    <string name="map_crosshair_cd">مؤشر تثبيت الوجهة</string>
+    <string name="map_favorite_tag_label">حفظ كمفضلة</string>
+    <string name="map_location_unavailable">بانتظار إشارة GPS. حرّك الخريطة أو ابحث يدوياً.</string>
+    <string name="map_error_empty_title">يرجى إدخال اسم لهذا المنبه.</string>
+
+    <!-- Foreground Service Notifications -->
+    <string name="notif_channel_tracking_name">التتبع المباشر لـ Pin Wake</string>
+    <string name="notif_channel_tracking_desc">يعرض المسافة المتبقية وحالة تتبع GPS التكيّفي.</string>
+    <string name="notif_channel_alarm_name">تنبيهات الوصول Pin Wake</string>
+    <string name="notif_channel_alarm_desc">تنبيهات ملء الشاشة عند دخول نطاق وجهتك.</string>
+    <string name="notif_tracking_title">تتبع: %1$s</string>
+    <string name="notif_tracking_body_dist">متبقي %1$s · %2$s</string>
+    <string name="notif_tracking_body_waiting">جاري التقاط إشارة GPS · %1$s</string>
+    <string name="notif_action_cancel">إلغاء المنبه</string>
+    <string name="notif_alarm_arrived_title">وصلت إلى %1$s</string>
+    <string name="notif_alarm_arrived_body">لقد دخلت نطاق %1$d م. اضغط لفتح المنبه.</string>
+
+    <!-- Alarm Ringing Screen -->
+    <string name="alarm_ringing_badge">تم الوصول للوجهة</string>
+    <string name="alarm_ringing_subtitle">داخل نطاق التنبيه %1$d م</string>
+    <string name="alarm_snooze_500m">غفوة (500م)</string>
+    <string name="alarm_slide_to_dismiss">اسحب لإيقاف المنبه</string>
+    <string name="alarm_snooze_toast">تم التأجيل — سيعاد التنبيه على بُعد 500م أقرب</string>
+    <string name="alarm_dismissed_toast">تم إيقاف المنبه. رحلة سعيدة!</string>
+
+    <!-- Accessibility Content Descriptions -->
+    <string name="cd_alarm_icon">أيقونة منبه GPS</string>
+    <string name="cd_delete_alarm">حذف المنبه</string>
+    <string name="cd_clear_search">مسح البحث</string>
+    <string name="cd_favorite_icon">أيقونة المكان المفضل</string>
+</resources>

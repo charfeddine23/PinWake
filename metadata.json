@@ -1,0 +1,6 @@
+{
+  "name": "Pin Wake",
+  "description": "Smart GPS location-based alarm app with dark OSMDroid mapping, adaptive battery-saving tracking, and lock-screen wake-up alerts.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

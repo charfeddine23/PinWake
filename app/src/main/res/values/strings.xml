@@ -1,0 +1,100 @@
+<resources>
+    <string name="app_name">Pin Wake</string>
+    <string name="app_tagline">Arrive awake. Never miss your stop.</string>
+
+    <!-- Dashboard Header & Tracking Status -->
+    <string name="status_standby">STANDBY</string>
+    <string name="status_tracking_eco">ECO · 30s</string>
+    <string name="status_tracking_balanced">BALANCED · 10s</string>
+    <string name="status_tracking_precision">PRECISION · 2s</string>
+    <string name="status_active_count">%1$d Active</string>
+    <string name="lang_switch_label">EN / AR</string>
+
+    <!-- Permission Onboarding Card -->
+    <string name="perm_card_title">Background Wake Readiness</string>
+    <string name="perm_card_subtitle">Grant these permissions so Pin Wake triggers reliably even when locked or in your pocket.</string>
+    <string name="perm_fine_location">Precise GPS Location</string>
+    <string name="perm_background_location">Always Allow Background GPS</string>
+    <string name="perm_notifications">Alarm &amp; Status Notifications</string>
+    <string name="perm_full_screen">Wake Lock Screen (Full-Screen)</string>
+    <string name="perm_battery">Unrestricted Battery Usage</string>
+    <string name="perm_status_granted">Ready</string>
+    <string name="perm_status_grant">Grant</string>
+    <string name="perm_rationale_background">To wake you while your phone is locked or in your pocket, select \"Allow all the time\" in Android location settings.</string>
+    <string name="perm_open_settings">Open Settings</string>
+
+    <!-- Quick Favorites -->
+    <string name="section_quick_favorites">Quick Pin Favorites</string>
+    <string name="fav_home">Home</string>
+    <string name="fav_work">Work</string>
+    <string name="fav_station">Station</string>
+    <string name="fav_custom">Saved</string>
+    <string name="fav_none">None</string>
+    <string name="fav_tap_to_pin">Tap to pin</string>
+    <string name="fav_tap_to_arm">Tap to arm</string>
+    <string name="fav_armed">Armed</string>
+
+    <!-- Alarms List -->
+    <string name="section_gps_alarms">GPS Wake Alarms</string>
+    <string name="btn_new_alarm">Pin New Alarm</string>
+    <string name="empty_alarms_title">No GPS Alarms Yet</string>
+    <string name="empty_alarms_desc">Tap \"Pin New Alarm\" or choose a quick favorite above to set a geofence destination on the map.</string>
+    <string name="badge_radius_m">%1$d m radius</string>
+    <string name="badge_radius_km">%1$.1f km radius</string>
+    <string name="badge_distance_m">%1$d m away</string>
+    <string name="badge_distance_km">%1$.1f km away</string>
+    <string name="badge_waiting_gps">Acquiring GPS…</string>
+    <string name="badge_inside_zone">Inside zone</string>
+    <string name="action_edit_on_map">Edit Pin</string>
+    <string name="action_delete_alarm">Delete</string>
+
+    <!-- Trip History -->
+    <string name="section_trip_history">Recent Arrivals</string>
+    <string name="action_clear_history">Clear</string>
+    <string name="outcome_arrived">ARRIVED</string>
+    <string name="outcome_snoozed">SNOOZED</string>
+    <string name="outcome_cancelled">CANCELLED</string>
+
+    <!-- Map Picker Screen -->
+    <string name="map_search_hint">Search station, landmark, or city…</string>
+    <string name="map_resolving_address">Resolving address via OpenStreetMap…</string>
+    <string name="map_unknown_address">Pinned coordinates (%1$.4f, %2$.4f)</string>
+    <string name="map_label_hint">Alarm Name (e.g. Central Station)</string>
+    <string name="map_radius_label">Geofence Radius</string>
+    <string name="map_radius_value_m">%1$d m</string>
+    <string name="map_radius_value_km">%1$.2f km</string>
+    <string name="map_save_activate">Activate Pin Alarm</string>
+    <string name="map_update_alarm">Update Pin Alarm</string>
+    <string name="map_current_location_cd">Center on current location</string>
+    <string name="map_back_cd">Back to dashboard</string>
+    <string name="map_crosshair_cd">Destination crosshair pin</string>
+    <string name="map_favorite_tag_label">Pin as Favorite</string>
+    <string name="map_location_unavailable">Waiting for GPS signal. Pan map or search manually.</string>
+    <string name="map_error_empty_title">Please enter a name for this alarm.</string>
+
+    <!-- Foreground Service Notifications -->
+    <string name="notif_channel_tracking_name">Pin Wake Live Tracking</string>
+    <string name="notif_channel_tracking_desc">Shows remaining distance and adaptive GPS tracking status.</string>
+    <string name="notif_channel_alarm_name">Pin Wake Arrival Alarms</string>
+    <string name="notif_channel_alarm_desc">High-priority full-screen alerts when entering your destination geofence.</string>
+    <string name="notif_tracking_title">Tracking: %1$s</string>
+    <string name="notif_tracking_body_dist">%1$s remaining · %2$s</string>
+    <string name="notif_tracking_body_waiting">Acquiring GPS fix · %1$s</string>
+    <string name="notif_action_cancel">Cancel Alarm</string>
+    <string name="notif_alarm_arrived_title">Arriving at %1$s</string>
+    <string name="notif_alarm_arrived_body">You entered the %1$d m wake zone. Tap to open alarm.</string>
+
+    <!-- Alarm Ringing Screen -->
+    <string name="alarm_ringing_badge">DESTINATION REACHED</string>
+    <string name="alarm_ringing_subtitle">Inside %1$d m wake geofence</string>
+    <string name="alarm_snooze_500m">Snooze (500m)</string>
+    <string name="alarm_slide_to_dismiss">Slide to Dismiss</string>
+    <string name="alarm_snooze_toast">Snoozed — will re-alert 500m closer</string>
+    <string name="alarm_dismissed_toast">Alarm dismissed. Have a safe trip!</string>
+
+    <!-- Accessibility Content Descriptions -->
+    <string name="cd_alarm_icon">GPS alarm indicator</string>
+    <string name="cd_delete_alarm">Delete alarm</string>
+    <string name="cd_clear_search">Clear search query</string>
+    <string name="cd_favorite_icon">Favorite location icon</string>
+</resources>
