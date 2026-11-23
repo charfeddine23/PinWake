@@ -8,9 +8,12 @@ import android.location.LocationManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
@@ -19,10 +22,12 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updatePadding
+import androidx.core.widget.NestedScrollView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
+import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.example.data.local.entity.FavoriteCategory
 import com.example.data.local.entity.GeoAlarmEntity
 import com.example.data.remote.GitHubReleaseApiService
@@ -72,12 +77,24 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var alarmAdapter: AlarmAdapter
     private lateinit var historyAdapter: TripHistoryAdapter
+    private lateinit var sheetBehavior: BottomSheetBehavior<NestedScrollView>
     private var pendingInstallApk: File? = null
     private var heroMap: MapLibreMap? = null
     private var loadedHeroStyle: OpenFreeMapStyle? = null
     private var loadedHero3dState: Boolean? = null
     private var lastHeroGeofenceKey: String? = null
+    private var lastHeroSavedPlacesKey: String? = null
     private var lastHeroCameraKey: String? = null
+    private var sysTopInset: Int = 0
+    private var sysBottomInset: Int = 0
+    private var computedHalfSlideOffset: Float = 0.65f
+    private var lastSheetState: Int = BottomSheetBehavior.STATE_HALF_EXPANDED
+
+    private val restoreSheetBackCallback = object : OnBackPressedCallback(false) {
+        override fun handleOnBackPressed() {
+            sheetBehavior.state = BottomSheetBehavior.STATE_HALF_EXPANDED
+        }
+    }
 
     private val fineLocationLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -129,11 +146,53 @@ class MainActivity : AppCompatActivity() {
         binding.tvAppVersionPill.text =
             getString(R.string.update_pill_version, BuildConfig.VERSION_NAME)
 
+        onBackPressedDispatcher.addCallback(this, restoreSheetBackCallback)
+        setupBottomSheet(savedInstanceState == null)
         applyEdgeToEdgeInsets()
         setupHeroMap()
         setupRecyclerViews()
         setupClicks()
         observeDashboard()
+    }
+
+    private fun setupBottomSheet(initialHalfExpanded: Boolean) {
+        sheetBehavior = BottomSheetBehavior.from(binding.scrollDashboard).apply {
+            isFitToContents = false
+            isHideable = false
+            skipCollapsed = false
+            isDraggable = true
+            if (initialHalfExpanded) {
+                state = BottomSheetBehavior.STATE_HALF_EXPANDED
+                lastSheetState = BottomSheetBehavior.STATE_HALF_EXPANDED
+            } else {
+                lastSheetState = state
+            }
+        }
+
+        sheetBehavior.addBottomSheetCallback(object : BottomSheetBehavior.BottomSheetCallback() {
+            override fun onStateChanged(bottomSheet: View, newState: Int) {
+                if (newState == BottomSheetBehavior.STATE_SETTLING ||
+                    newState == BottomSheetBehavior.STATE_DRAGGING
+                ) {
+                    return
+                }
+                val previous = lastSheetState
+                lastSheetState = newState
+                restoreSheetBackCallback.isEnabled = newState != BottomSheetBehavior.STATE_HALF_EXPANDED
+                syncModeForSheetState(
+                    state = newState,
+                    animateCamera = previous != newState
+                )
+            }
+
+            override fun onSlide(bottomSheet: View, slideOffset: Float) {
+                updateChromeForSlideOffset(slideOffset)
+            }
+        })
+
+        binding.rootCoordinator.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+            updateBottomSheetGeometry()
+        }
     }
 
     override fun onStart() {
@@ -197,26 +256,15 @@ class MainActivity : AppCompatActivity() {
         val baseTopPad = binding.topFloatingBar.paddingTop
         val baseScrollBottom = binding.scrollDashboard.paddingBottom
         val fabBaseMargin = (20f * density).toInt()
-        val baseHeroHeight = (268f * density).toInt()
-        val baseMinHeroHeight = (84f * density).toInt()
 
         ViewCompat.setOnApplyWindowInsetsListener(binding.rootCoordinator) { _, insets ->
             val sysBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            sysTopInset = sysBars.top
+            sysBottomInset = sysBars.bottom
 
             val targetTopPad = baseTopPad + sysBars.top
             if (binding.topFloatingBar.paddingTop != targetTopPad) {
                 binding.topFloatingBar.updatePadding(top = targetTopPad)
-            }
-
-            val targetHeroHeight = baseHeroHeight + sysBars.top
-            val targetMinHeroHeight = baseMinHeroHeight + sysBars.top
-            val collapseParams = binding.collapsingDashboard.layoutParams
-            if (collapseParams.height != targetHeroHeight ||
-                binding.collapsingDashboard.minimumHeight != targetMinHeroHeight
-            ) {
-                collapseParams.height = targetHeroHeight
-                binding.collapsingDashboard.layoutParams = collapseParams
-                binding.collapsingDashboard.minimumHeight = targetMinHeroHeight
             }
 
             val targetScrollBottom = baseScrollBottom + sysBars.bottom
@@ -231,7 +279,152 @@ class MainActivity : AppCompatActivity() {
                 fabParams.bottomMargin = targetFabMargin
                 binding.fabPinAlarm.layoutParams = fabParams
             }
+
+            updateBottomSheetGeometry()
             insets
+        }
+    }
+
+    private fun updateBottomSheetGeometry() {
+        val parentHeight = binding.rootCoordinator.height
+        if (parentHeight <= 0) return
+
+        val density = resources.displayMetrics.density
+        val desiredHeroTop = (244f * density).toInt() + sysTopInset
+        val expandedOffsetPx = (78f * density).toInt() + sysTopInset
+
+        val handleHeight = if (binding.layoutSheetHandle.height > 0) {
+            binding.layoutSheetHandle.height
+        } else {
+            (30f * density).toInt()
+        }
+        val whereToHeight = if (binding.btnWhereTo.height > 0) {
+            binding.btnWhereTo.height
+        } else {
+            (62f * density).toInt()
+        }
+        val topPadPx = binding.contentContainer.paddingTop
+        val bottomGapPx = (16f * density).toInt() + sysBottomInset
+        val targetPeekHeight = (topPadPx + handleHeight + whereToHeight + bottomGapPx)
+            .coerceAtMost((parentHeight * 0.45f).toInt())
+
+        val targetHalfRatio = (1f - desiredHeroTop.toFloat() / parentHeight.toFloat())
+            .coerceIn(0.45f, 0.78f)
+
+        if (sheetBehavior.peekHeight != targetPeekHeight) {
+            sheetBehavior.peekHeight = targetPeekHeight
+        }
+        if (sheetBehavior.expandedOffset != expandedOffsetPx) {
+            sheetBehavior.expandedOffset = expandedOffsetPx
+        }
+        if (kotlin.math.abs(sheetBehavior.halfExpandedRatio - targetHalfRatio) > 0.005f) {
+            sheetBehavior.halfExpandedRatio = targetHalfRatio
+        }
+
+        val collapsedOffset = parentHeight - targetPeekHeight
+        val halfOffset = (parentHeight * (1f - targetHalfRatio)).toInt()
+        val range = (collapsedOffset - expandedOffsetPx).coerceAtLeast(1)
+        computedHalfSlideOffset = ((collapsedOffset - halfOffset).toFloat() / range)
+            .coerceIn(0.15f, 0.95f)
+
+        val currentSlide = when (sheetBehavior.state) {
+            BottomSheetBehavior.STATE_COLLAPSED -> 0f
+            BottomSheetBehavior.STATE_EXPANDED -> 1f
+            else -> computedHalfSlideOffset
+        }
+        updateChromeForSlideOffset(currentSlide)
+    }
+
+    private fun updateChromeForSlideOffset(slideOffset: Float) {
+        val safeSlide = slideOffset.coerceIn(0f, 1f)
+        val half = computedHalfSlideOffset.coerceAtLeast(0.15f)
+        val collapseFactor = (safeSlide / half).coerceIn(0f, 1f)
+
+        val bodyAlpha = ((collapseFactor - 0.12f) / 0.48f).coerceIn(0f, 1f)
+        binding.sheetBodyContainer.alpha = bodyAlpha
+        binding.sheetBodyContainer.visibility =
+            if (bodyAlpha <= 0.01f) View.INVISIBLE else View.VISIBLE
+
+        val topBarAlpha = ((collapseFactor - 0.18f) / 0.52f).coerceIn(0f, 1f)
+        binding.topFloatingBar.alpha = topBarAlpha
+        binding.topFloatingBar.visibility =
+            if (topBarAlpha <= 0.02f) View.GONE else View.VISIBLE
+
+        binding.mapScrimTop.alpha = collapseFactor
+        binding.mapScrimBottom.alpha = collapseFactor
+
+        val fabAlpha = ((collapseFactor - 0.28f) / 0.45f).coerceIn(0f, 1f)
+        val fabScale = 0.72f + 0.28f * fabAlpha
+        binding.fabPinAlarm.alpha = fabAlpha
+        binding.fabPinAlarm.scaleX = fabScale
+        binding.fabPinAlarm.scaleY = fabScale
+        binding.fabPinAlarm.visibility =
+            if (fabAlpha <= 0.02f) View.GONE else View.VISIBLE
+
+        val density = resources.displayMetrics.density
+        val measuredSheetTop = binding.scrollDashboard.top
+        val sheetTop = if (measuredSheetTop > 0) {
+            measuredSheetTop.toFloat()
+        } else {
+            (244f * density) + sysTopInset
+        }
+        val pillH = if (binding.pillLiveRadar.height > 0) {
+            binding.pillLiveRadar.height.toFloat()
+        } else {
+            (28f * density)
+        }
+        val gap = 12f * density
+        binding.pillLiveRadar.translationY =
+            (sheetTop - pillH - gap).coerceAtLeast(sysTopInset + 12f * density)
+
+        val aboveHalfRange = (1f - half).coerceAtLeast(0.1f)
+        val upperFade = 1f - ((safeSlide - half) / (aboveHalfRange * 0.42f)).coerceIn(0f, 1f)
+        val lowerFade = ((collapseFactor - 0.25f) / 0.50f).coerceIn(0f, 1f)
+        val pillAlpha = (upperFade * lowerFade).coerceIn(0f, 1f)
+        binding.pillLiveRadar.alpha = pillAlpha
+        binding.pillLiveRadar.visibility =
+            if (pillAlpha <= 0.02f) View.GONE else View.VISIBLE
+    }
+
+    private fun syncModeForSheetState(state: Int, animateCamera: Boolean) {
+        val isFullMap = state == BottomSheetBehavior.STATE_COLLAPSED
+        if (isFullMap) {
+            binding.scrollDashboard.scrollTo(0, 0)
+            binding.btnMapHeroTap.visibility = View.GONE
+            setHeroMapGesturesEnabled(true)
+        } else {
+            binding.btnMapHeroTap.visibility =
+                if (state == BottomSheetBehavior.STATE_HALF_EXPANDED) View.VISIBLE else View.GONE
+            setHeroMapGesturesEnabled(false)
+        }
+
+        if (animateCamera) {
+            lastHeroCameraKey = null
+            updateHeroMapViewport(viewModel.uiState.value, animate = true)
+        }
+    }
+
+    private fun enterFullMapMode() {
+        binding.scrollDashboard.scrollTo(0, 0)
+        sheetBehavior.state = BottomSheetBehavior.STATE_COLLAPSED
+    }
+
+    private fun setHeroMapGesturesEnabled(enabled: Boolean) {
+        val map = heroMap ?: return
+        map.uiSettings.apply {
+            if (enabled) {
+                isScrollGesturesEnabled = true
+                isZoomGesturesEnabled = true
+                isDoubleTapGesturesEnabled = true
+                isQuickZoomGesturesEnabled = true
+                isTiltGesturesEnabled = true
+                isRotateGesturesEnabled = true
+                isScaleVelocityAnimationEnabled = true
+                isFlingVelocityAnimationEnabled = true
+                isRotateVelocityAnimationEnabled = true
+            } else {
+                setAllGesturesEnabled(false)
+            }
         }
     }
 
@@ -244,8 +437,22 @@ class MainActivity : AppCompatActivity() {
                 context = this,
                 mapView = binding.dashboardMapView,
                 map = map,
-                allowGestures = false
+                allowGestures = sheetBehavior.state == BottomSheetBehavior.STATE_COLLAPSED
             )
+            map.addOnMapClickListener { point ->
+                if (sheetBehavior.state != BottomSheetBehavior.STATE_COLLAPSED) {
+                    return@addOnMapClickListener false
+                }
+                val screenPt = map.projection.toScreenLocation(point)
+                val features = map.queryRenderedFeatures(screenPt, HERO_SAVED_PLACES_SYMBOL_ID)
+                val clickedId = features.firstOrNull()?.getNumberProperty("alarmId")?.toLong()
+                if (clickedId != null && clickedId > 0L) {
+                    openMapPicker(alarmId = clickedId)
+                    true
+                } else {
+                    false
+                }
+            }
             applyHeroMapStyle(OpenFreeMapStyles.getSavedStyle(this))
         }
     }
@@ -296,46 +503,75 @@ class MainActivity : AppCompatActivity() {
     }
 
     @SuppressLint("MissingPermission")
-    private fun updateHeroMapViewport(state: DashboardUiState, forceRefresh: Boolean = false) {
+    private fun updateHeroMapViewport(
+        state: DashboardUiState,
+        forceRefresh: Boolean = false,
+        animate: Boolean = false
+    ) {
         val map = heroMap ?: return
         val style = map.style
         val activeAlarms = state.alarms.filter { it.isActive }
+        val savedFavorites = state.alarms.filter {
+            it.isFavorite && it.favoriteCategory != FavoriteCategory.NONE
+        }
 
         val geoKey = activeAlarms.joinToString("|") {
             "${it.id}:${it.latitude}:${it.longitude}:${it.radiusMeters}"
         }
-        if (style != null && style.isFullyLoaded && (forceRefresh || geoKey != lastHeroGeofenceKey)) {
-            lastHeroGeofenceKey = geoKey
-            val features = activeAlarms.map { alarm ->
-                MapStyleHelper.createGeodesicCircleFeature(
-                    lat = alarm.latitude,
-                    lon = alarm.longitude,
-                    radiusMeters = alarm.radiusMeters,
-                    steps = 56
+        val favKey = savedFavorites.joinToString("|") {
+            "${it.id}:${it.favoriteCategory}:${it.title}:${it.latitude}:${it.longitude}"
+        }
+        val isDark = OpenFreeMapStyles.getSavedStyle(this).isDark
+
+        if (style != null && style.isFullyLoaded) {
+            if (forceRefresh || geoKey != lastHeroGeofenceKey) {
+                lastHeroGeofenceKey = geoKey
+                val features = activeAlarms.map { alarm ->
+                    MapStyleHelper.createGeodesicCircleFeature(
+                        lat = alarm.latitude,
+                        lon = alarm.longitude,
+                        radiusMeters = alarm.radiusMeters,
+                        steps = 56
+                    )
+                }
+                MapStyleHelper.ensureGeofenceCircleLayers(
+                    style = style,
+                    sourceId = HERO_GEOFENCE_SOURCE_ID,
+                    fillLayerId = HERO_GEOFENCE_FILL_ID,
+                    lineLayerId = HERO_GEOFENCE_LINE_ID,
+                    features = FeatureCollection.fromFeatures(features)
                 )
             }
-            MapStyleHelper.ensureGeofenceCircleLayers(
-                style = style,
-                sourceId = HERO_GEOFENCE_SOURCE_ID,
-                fillLayerId = HERO_GEOFENCE_FILL_ID,
-                lineLayerId = HERO_GEOFENCE_LINE_ID,
-                features = FeatureCollection.fromFeatures(features)
-            )
+
+            if (forceRefresh || favKey != lastHeroSavedPlacesKey) {
+                lastHeroSavedPlacesKey = favKey
+                MapStyleHelper.ensureSavedPlaceMarkersLayer(
+                    context = this,
+                    style = style,
+                    sourceId = HERO_SAVED_PLACES_SOURCE_ID,
+                    haloLayerId = HERO_SAVED_PLACES_HALO_ID,
+                    symbolLayerId = HERO_SAVED_PLACES_SYMBOL_ID,
+                    favorites = savedFavorites,
+                    isDark = isDark
+                )
+            }
         }
 
         val targetAlarm = activeAlarms.minByOrNull { it.lastDistanceMeters ?: Float.MAX_VALUE }
             ?: state.alarms.firstOrNull()
 
         if (targetAlarm != null) {
-            val camKey = "alarm:${targetAlarm.id}:${targetAlarm.latitude}:${targetAlarm.longitude}"
+            val modeTag = if (sheetBehavior.state == BottomSheetBehavior.STATE_COLLAPSED) "full" else "hero"
+            val camKey = "alarm:$modeTag:${targetAlarm.id}:${targetAlarm.latitude}:${targetAlarm.longitude}"
             if (forceRefresh || camKey != lastHeroCameraKey) {
                 lastHeroCameraKey = camKey
-                val pos = CameraPosition.Builder()
-                    .target(LatLng(targetAlarm.latitude, targetAlarm.longitude))
-                    .zoom(14.5)
-                    .tilt(if (OpenFreeMapStyles.is3dBuildingsEnabled(this)) 24.0 else 0.0)
-                    .build()
-                map.moveCamera(CameraUpdateFactory.newCameraPosition(pos))
+                moveHeroCameraWithSheetPadding(
+                    map = map,
+                    lat = targetAlarm.latitude,
+                    lon = targetAlarm.longitude,
+                    zoom = if (modeTag == "full") 14.2 else 14.5,
+                    animate = animate
+                )
             }
             return
         }
@@ -350,15 +586,17 @@ class MainActivity : AppCompatActivity() {
                 else -> net
             }
             if (best != null) {
-                val camKey = "loc:${best.latitude}:${best.longitude}"
+                val modeTag = if (sheetBehavior.state == BottomSheetBehavior.STATE_COLLAPSED) "full" else "hero"
+                val camKey = "loc:$modeTag:${best.latitude}:${best.longitude}"
                 if (forceRefresh || camKey != lastHeroCameraKey) {
                     lastHeroCameraKey = camKey
-                    val pos = CameraPosition.Builder()
-                        .target(LatLng(best.latitude, best.longitude))
-                        .zoom(14.8)
-                        .tilt(if (OpenFreeMapStyles.is3dBuildingsEnabled(this)) 24.0 else 0.0)
-                        .build()
-                    map.moveCamera(CameraUpdateFactory.newCameraPosition(pos))
+                    moveHeroCameraWithSheetPadding(
+                        map = map,
+                        lat = best.latitude,
+                        lon = best.longitude,
+                        zoom = 14.8,
+                        animate = animate
+                    )
                 }
                 return
             }
@@ -366,11 +604,51 @@ class MainActivity : AppCompatActivity() {
 
         if (forceRefresh || lastHeroCameraKey == null) {
             lastHeroCameraKey = "default"
-            val defaultPos = CameraPosition.Builder()
-                .target(LatLng(48.8566, 2.3522))
-                .zoom(12.5)
-                .build()
-            map.moveCamera(CameraUpdateFactory.newCameraPosition(defaultPos))
+            moveHeroCameraWithSheetPadding(
+                map = map,
+                lat = 48.8566,
+                lon = 2.3522,
+                zoom = 12.5,
+                animate = animate
+            )
+        }
+    }
+
+    private fun moveHeroCameraWithSheetPadding(
+        map: MapLibreMap,
+        lat: Double,
+        lon: Double,
+        zoom: Double,
+        animate: Boolean
+    ) {
+        val density = resources.displayMetrics.density
+        val parentHeight = binding.rootCoordinator.height
+        val isFullMap = sheetBehavior.state == BottomSheetBehavior.STATE_COLLAPSED
+        val topPad = if (isFullMap) {
+            sysTopInset.toDouble()
+        } else {
+            sysTopInset.toDouble() + (52f * density)
+        }
+        val bottomPad = when {
+            parentHeight <= 0 -> 0.0
+            isFullMap -> sheetBehavior.peekHeight.toDouble()
+            else -> {
+                val visibleHero = (244f * density) + sysTopInset
+                (parentHeight - visibleHero).coerceAtLeast(0f).toDouble()
+            }
+        }
+        val tilt = if (OpenFreeMapStyles.is3dBuildingsEnabled(this)) 24.0 else 0.0
+        val pos = CameraPosition.Builder()
+            .target(LatLng(lat, lon))
+            .zoom(zoom)
+            .tilt(tilt)
+            .padding(0.0, topPad, 0.0, bottomPad)
+            .build()
+        val update = CameraUpdateFactory.newCameraPosition(pos)
+        if (animate) {
+            map.animateCamera(update, 650)
+        } else {
+            map.moveCamera(update)
         }
     }
 
@@ -416,7 +694,15 @@ class MainActivity : AppCompatActivity() {
     private fun setupClicks() {
         binding.fabPinAlarm.setOnClickListener { openMapPicker() }
         binding.btnWhereTo.setOnClickListener { openMapPicker() }
-        binding.btnMapHeroTap.setOnClickListener { openMapPicker() }
+        setupMapHeroPullGesture()
+
+        binding.layoutSheetHandle.setOnClickListener {
+            if (sheetBehavior.state == BottomSheetBehavior.STATE_COLLAPSED) {
+                sheetBehavior.state = BottomSheetBehavior.STATE_HALF_EXPANDED
+            } else {
+                enterFullMapMode()
+            }
+        }
 
         binding.btnLanguageToggle.setOnClickListener {
             LanguageManager.toggleLanguage(this)
@@ -453,6 +739,52 @@ class MainActivity : AppCompatActivity() {
         }
         binding.btnPermBattery.setOnClickListener {
             runCatching { startActivity(PermissionHelper.buildBatteryOptimizationIntent(this)) }
+        }
+    }
+
+    @SuppressLint("ClickableViewAccessibility")
+    private fun setupMapHeroPullGesture() {
+        val touchSlop = ViewConfiguration.get(this).scaledTouchSlop
+        var downX = 0f
+        var downY = 0f
+        var pulledDown = false
+
+        binding.btnMapHeroTap.setOnTouchListener { view, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    downX = event.rawX
+                    downY = event.rawY
+                    pulledDown = false
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    if (!pulledDown) {
+                        val dx = event.rawX - downX
+                        val dy = event.rawY - downY
+                        if (dy > touchSlop && kotlin.math.abs(dy) > kotlin.math.abs(dx) * 1.1f) {
+                            pulledDown = true
+                            enterFullMapMode()
+                        }
+                    }
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    if (!pulledDown) {
+                        val dx = kotlin.math.abs(event.rawX - downX)
+                        val dy = kotlin.math.abs(event.rawY - downY)
+                        if (dx <= touchSlop && dy <= touchSlop) {
+                            view.performClick()
+                            openMapPicker()
+                        }
+                    }
+                    true
+                }
+                MotionEvent.ACTION_CANCEL -> {
+                    pulledDown = false
+                    true
+                }
+                else -> false
+            }
         }
     }
 
@@ -656,6 +988,7 @@ class MainActivity : AppCompatActivity() {
             card.setOnClickListener {
                 openMapPicker(defaultCategory = category)
             }
+            card.setOnLongClickListener(null)
         } else {
             if (favorite.isActive) {
                 card.setBackgroundResource(R.drawable.bg_liquid_glass_card_active)
@@ -678,6 +1011,10 @@ class MainActivity : AppCompatActivity() {
                         stopService(Intent(this, PinWakeService::class.java))
                     }
                 }
+            }
+            card.setOnLongClickListener {
+                openMapPicker(alarmId = favorite.id)
+                true
             }
         }
     }
@@ -779,5 +1116,8 @@ class MainActivity : AppCompatActivity() {
         private const val HERO_GEOFENCE_SOURCE_ID = "pinwake-hero-geofence-source"
         private const val HERO_GEOFENCE_FILL_ID = "pinwake-hero-geofence-fill"
         private const val HERO_GEOFENCE_LINE_ID = "pinwake-hero-geofence-line"
+        private const val HERO_SAVED_PLACES_SOURCE_ID = "pinwake-hero-saved-places-source"
+        private const val HERO_SAVED_PLACES_HALO_ID = "pinwake-hero-saved-places-halo"
+        private const val HERO_SAVED_PLACES_SYMBOL_ID = "pinwake-hero-saved-places-symbol"
     }
 }

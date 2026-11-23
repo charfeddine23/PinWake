@@ -271,6 +271,16 @@ class MapPickerActivity : AppCompatActivity() {
             features = FeatureCollection.fromFeature(circleFeature)
         )
 
+        MapStyleHelper.ensureSavedPlaceMarkersLayer(
+            context = this,
+            style = style,
+            sourceId = SAVED_PLACES_SOURCE_ID,
+            haloLayerId = SAVED_PLACES_HALO_LAYER_ID,
+            symbolLayerId = SAVED_PLACES_SYMBOL_LAYER_ID,
+            favorites = viewModel.favoriteAlarms.value,
+            isDark = styleOption.isDark
+        )
+
         if (hasLocationPermission()) {
             enableLocationComponent(style)
         }
@@ -499,33 +509,52 @@ class MapPickerActivity : AppCompatActivity() {
     private fun observeUiState() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                viewModel.uiState.collect { state ->
-                    binding.tvCoordinatesMono.text = String.format(
-                        Locale.US,
-                        "%.5f, %.5f",
-                        state.latitude,
-                        state.longitude
-                    )
+                launch {
+                    viewModel.uiState.collect { state ->
+                        binding.tvCoordinatesMono.text = String.format(
+                            Locale.US,
+                            "%.5f, %.5f",
+                            state.latitude,
+                            state.longitude
+                        )
 
-                    binding.tvResolvedAddress.text = when {
-                        state.isResolvingAddress -> getString(R.string.map_resolving_address)
-                        state.resolvedAddress.isNotBlank() -> state.resolvedAddress
-                        else -> getString(R.string.map_unknown_address, state.latitude, state.longitude)
+                        binding.tvResolvedAddress.text = when {
+                            state.isResolvingAddress -> getString(R.string.map_resolving_address)
+                            state.resolvedAddress.isNotBlank() -> state.resolvedAddress
+                            else -> getString(R.string.map_unknown_address, state.latitude, state.longitude)
+                        }
+
+                        if (!userEditedTitle &&
+                            state.suggestedTitle.isNotBlank() &&
+                            binding.etAlarmTitle.text.isNullOrBlank()
+                        ) {
+                            setTitleProgrammatically(state.suggestedTitle)
+                        }
+
+                        binding.progressSearch.visibility =
+                            if (state.isSearching) View.VISIBLE else View.GONE
+
+                        searchAdapter.submitList(state.searchResults)
+                        binding.cardSearchResults.visibility =
+                            if (state.searchResults.isNotEmpty()) View.VISIBLE else View.GONE
                     }
-
-                    if (!userEditedTitle &&
-                        state.suggestedTitle.isNotBlank() &&
-                        binding.etAlarmTitle.text.isNullOrBlank()
-                    ) {
-                        setTitleProgrammatically(state.suggestedTitle)
+                }
+                launch {
+                    viewModel.favoriteAlarms.collect { favorites ->
+                        val style = mapLibreMap?.style ?: return@collect
+                        if (style.isFullyLoaded) {
+                            val isDark = OpenFreeMapStyles.getSavedStyle(this@MapPickerActivity).isDark
+                            MapStyleHelper.ensureSavedPlaceMarkersLayer(
+                                context = this@MapPickerActivity,
+                                style = style,
+                                sourceId = SAVED_PLACES_SOURCE_ID,
+                                haloLayerId = SAVED_PLACES_HALO_LAYER_ID,
+                                symbolLayerId = SAVED_PLACES_SYMBOL_LAYER_ID,
+                                favorites = favorites,
+                                isDark = isDark
+                            )
+                        }
                     }
-
-                    binding.progressSearch.visibility =
-                        if (state.isSearching) View.VISIBLE else View.GONE
-
-                    searchAdapter.submitList(state.searchResults)
-                    binding.cardSearchResults.visibility =
-                        if (state.searchResults.isNotEmpty()) View.VISIBLE else View.GONE
                 }
             }
         }
@@ -791,5 +820,8 @@ class MapPickerActivity : AppCompatActivity() {
         private const val GEOFENCE_SOURCE_ID = "pinwake-geofence-source"
         private const val GEOFENCE_FILL_LAYER_ID = "pinwake-geofence-fill"
         private const val GEOFENCE_LINE_LAYER_ID = "pinwake-geofence-line"
+        private const val SAVED_PLACES_SOURCE_ID = "pinwake-saved-places-source"
+        private const val SAVED_PLACES_HALO_LAYER_ID = "pinwake-saved-places-halo"
+        private const val SAVED_PLACES_SYMBOL_LAYER_ID = "pinwake-saved-places-symbol"
     }
 }

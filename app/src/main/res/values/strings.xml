@@ -127,4 +127,5 @@
     <string name="hero_live_radar">LIVE RADAR</string>
     <string name="map_sheet_title">Set Wake Destination</string>
     <string name="alarm_card_armed">ARMED</string>
+    <string name="cd_drag_sheet">Expand or collapse map view</string>
 </resources>

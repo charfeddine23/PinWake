@@ -127,4 +127,5 @@
     <string name="hero_live_radar">رادار مباشر</string>
     <string name="map_sheet_title">تحديد وجهة التنبيه</string>
     <string name="alarm_card_armed">مفعّل</string>
+    <string name="cd_drag_sheet">توسيع أو طي عرض الخريطة</string>
 </resources>

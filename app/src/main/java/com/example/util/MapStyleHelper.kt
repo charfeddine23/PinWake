@@ -1,7 +1,15 @@
 package com.example.util
 
 import android.content.Context
-import android.view.animation.DecelerateInterpolator
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import androidx.core.content.ContextCompat
+import androidx.core.graphics.drawable.DrawableCompat
+import com.example.R
+import com.example.data.local.entity.FavoriteCategory
+import com.example.data.local.entity.GeoAlarmEntity
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
@@ -10,6 +18,7 @@ import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
 import org.maplibre.android.style.expressions.Expression
 import org.maplibre.android.style.layers.BackgroundLayer
+import org.maplibre.android.style.layers.CircleLayer
 import org.maplibre.android.style.layers.FillExtrusionLayer
 import org.maplibre.android.style.layers.FillLayer
 import org.maplibre.android.style.layers.LineLayer
@@ -469,6 +478,183 @@ object MapStyleHelper {
         return Feature.fromGeometry(Polygon.fromLngLats(listOf(ring)))
     }
 
+    /**
+     * Renders permanent Home, Work, Station, and Custom saved favorite markers on the map
+     * regardless of whether their wake alarm is currently active.
+     */
+    fun ensureSavedPlaceMarkersLayer(
+        context: Context,
+        style: Style,
+        sourceId: String,
+        haloLayerId: String,
+        symbolLayerId: String,
+        favorites: List<GeoAlarmEntity>,
+        isDark: Boolean
+    ) {
+        if (!style.isFullyLoaded) return
+
+        registerFavoriteMarkerImages(context, style)
+
+        val visiblePlaces = favorites.filter {
+            it.isFavorite && it.favoriteCategory != FavoriteCategory.NONE
+        }
+        val features = visiblePlaces.map { place ->
+            val iconId = when (place.favoriteCategory) {
+                FavoriteCategory.HOME -> MARKER_IMAGE_HOME
+                FavoriteCategory.WORK -> MARKER_IMAGE_WORK
+                FavoriteCategory.STATION -> MARKER_IMAGE_STATION
+                else -> MARKER_IMAGE_CUSTOM
+            }
+            val haloHex = when (place.favoriteCategory) {
+                FavoriteCategory.HOME -> "#10B981"
+                FavoriteCategory.WORK -> "#F59E0B"
+                FavoriteCategory.STATION -> "#06B6D4"
+                else -> "#38BDF8"
+            }
+            val label = buildSavedPlaceLabel(context, place)
+            Feature.fromGeometry(Point.fromLngLat(place.longitude, place.latitude)).apply {
+                addStringProperty("icon", iconId)
+                addStringProperty("label", label)
+                addStringProperty("haloColor", haloHex)
+                addNumberProperty("alarmId", place.id)
+            }
+        }
+        val collection = FeatureCollection.fromFeatures(features)
+
+        val existingSource = style.getSourceAs<GeoJsonSource>(sourceId)
+        if (existingSource == null) {
+            style.addSource(GeoJsonSource(sourceId, collection))
+        } else {
+            existingSource.setGeoJson(collection)
+        }
+
+        if (style.getLayer(haloLayerId) == null) {
+            style.addLayer(
+                CircleLayer(haloLayerId, sourceId).apply {
+                    setProperties(
+                        PropertyFactory.circleRadius(18f),
+                        PropertyFactory.circleColor(Expression.get("haloColor")),
+                        PropertyFactory.circleOpacity(0.18f),
+                        PropertyFactory.circleStrokeWidth(1.3f),
+                        PropertyFactory.circleStrokeColor(Expression.get("haloColor")),
+                        PropertyFactory.circleStrokeOpacity(0.55f)
+                    )
+                }
+            )
+        }
+
+        val textColor = if (isDark) "#F8FAFC" else "#0F172A"
+        val haloColor = if (isDark) "#0F172A" else "#FFFFFF"
+        val existingSymbol = style.getLayerAs<SymbolLayer>(symbolLayerId)
+        if (existingSymbol == null) {
+            style.addLayer(
+                SymbolLayer(symbolLayerId, sourceId).apply {
+                    setProperties(
+                        PropertyFactory.iconImage(Expression.get("icon")),
+                        PropertyFactory.iconAnchor(Property.ICON_ANCHOR_CENTER),
+                        PropertyFactory.iconAllowOverlap(true),
+                        PropertyFactory.iconIgnorePlacement(true),
+                        PropertyFactory.textField(Expression.get("label")),
+                        PropertyFactory.textAnchor(Property.TEXT_ANCHOR_TOP),
+                        PropertyFactory.textOffset(arrayOf(0f, 1.55f)),
+                        PropertyFactory.textSize(12f),
+                        PropertyFactory.textColor(textColor),
+                        PropertyFactory.textHaloColor(haloColor),
+                        PropertyFactory.textHaloWidth(1.8f),
+                        PropertyFactory.textHaloBlur(0.3f),
+                        PropertyFactory.textAllowOverlap(true),
+                        PropertyFactory.textOptional(false)
+                    )
+                }
+            )
+        } else {
+            existingSymbol.setProperties(
+                PropertyFactory.textColor(textColor),
+                PropertyFactory.textHaloColor(haloColor)
+            )
+        }
+    }
+
+    private fun buildSavedPlaceLabel(context: Context, place: GeoAlarmEntity): String {
+        val categoryLabel = when (place.favoriteCategory) {
+            FavoriteCategory.HOME -> context.getString(R.string.fav_home)
+            FavoriteCategory.WORK -> context.getString(R.string.fav_work)
+            FavoriteCategory.STATION -> context.getString(R.string.fav_station)
+            FavoriteCategory.CUSTOM -> context.getString(R.string.fav_custom)
+            FavoriteCategory.NONE -> ""
+        }
+        val cleanTitle = place.title.trim()
+        return when {
+            categoryLabel.isBlank() -> cleanTitle
+            cleanTitle.isBlank() || cleanTitle.equals(categoryLabel, ignoreCase = true) -> categoryLabel
+            else -> "$categoryLabel · $cleanTitle"
+        }
+    }
+
+    private fun registerFavoriteMarkerImages(context: Context, style: Style) {
+        val specs = listOf(
+            Triple(MARKER_IMAGE_HOME, R.drawable.ic_home, Color.parseColor("#10B981")),
+            Triple(MARKER_IMAGE_WORK, R.drawable.ic_work, Color.parseColor("#F59E0B")),
+            Triple(MARKER_IMAGE_STATION, R.drawable.ic_train, Color.parseColor("#06B6D4")),
+            Triple(MARKER_IMAGE_CUSTOM, R.drawable.ic_star, Color.parseColor("#38BDF8"))
+        )
+        specs.forEach { (id, drawableRes, ringColor) ->
+            if (style.getImage(id) == null) {
+                style.addImage(id, buildMarkerBitmap(context, drawableRes, ringColor))
+            }
+        }
+    }
+
+    private fun buildMarkerBitmap(
+        context: Context,
+        drawableRes: Int,
+        ringColor: Int
+    ): Bitmap {
+        val density = context.resources.displayMetrics.density.coerceAtLeast(1.5f)
+        val sizePx = (36f * density).toInt()
+        val bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+
+        val cx = sizePx / 2f
+        val cy = sizePx / 2f
+        val outerRadius = sizePx * 0.44f
+        val ringStroke = 2.6f * density
+
+        val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.argb(125, 0, 0, 0)
+            style = Paint.Style.FILL
+        }
+        canvas.drawCircle(cx, cy + 1.2f * density, outerRadius + 1.4f * density, shadowPaint)
+
+        val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#0F172A")
+            style = Paint.Style.FILL
+        }
+        canvas.drawCircle(cx, cy, outerRadius, fillPaint)
+
+        val ringPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = ringColor
+            style = Paint.Style.STROKE
+            strokeWidth = ringStroke
+        }
+        canvas.drawCircle(cx, cy, outerRadius - ringStroke * 0.5f, ringPaint)
+
+        val drawable = ContextCompat.getDrawable(context, drawableRes)
+        if (drawable != null) {
+            val wrapped = DrawableCompat.wrap(drawable).mutate()
+            DrawableCompat.setTint(wrapped, Color.WHITE)
+            val iconHalf = (sizePx * 0.22f).toInt()
+            wrapped.setBounds(
+                cx.toInt() - iconHalf,
+                cy.toInt() - iconHalf,
+                cx.toInt() + iconHalf,
+                cy.toInt() + iconHalf
+            )
+            wrapped.draw(canvas)
+        }
+        return bitmap
+    }
+
     private fun setFillColor(style: Style, layerId: String, hex: String, opacity: Float? = null) {
         val layer = style.getLayerAs<FillLayer>(layerId) ?: return
         if (opacity != null) {
@@ -492,4 +678,9 @@ object MapStyleHelper {
             layer.setProperties(PropertyFactory.lineColor(hex))
         }
     }
+
+    private const val MARKER_IMAGE_HOME = "pinwake-marker-home"
+    private const val MARKER_IMAGE_WORK = "pinwake-marker-work"
+    private const val MARKER_IMAGE_STATION = "pinwake-marker-station"
+    private const val MARKER_IMAGE_CUSTOM = "pinwake-marker-custom"
 }

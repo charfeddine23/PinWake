@@ -11,11 +11,13 @@ import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 data class MapPickerUiState(
@@ -38,6 +40,12 @@ class MapPickerViewModel(
 
     private val _uiState = MutableStateFlow(MapPickerUiState())
     val uiState: StateFlow<MapPickerUiState> = _uiState.asStateFlow()
+
+    val favoriteAlarms: StateFlow<List<GeoAlarmEntity>> = repository.favoriteAlarms.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000L),
+        initialValue = emptyList()
+    )
 
     private val searchQueryFlow = MutableStateFlow("")
     private var currentLanguage = "en"

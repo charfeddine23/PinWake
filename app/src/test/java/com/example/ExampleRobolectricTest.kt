@@ -68,4 +68,48 @@ class ExampleRobolectricTest {
         )
         assertFalse(com.example.util.OpenFreeMapStyles.is3dBuildingsEnabled(context))
     }
+
+    @Test
+    fun `saved home and work favorites persist even when inactive`() = kotlinx.coroutines.runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val db = androidx.room.Room.inMemoryDatabaseBuilder(
+            context,
+            com.example.data.local.AppDatabase::class.java
+        ).allowMainThreadQueries().build()
+
+        try {
+            val dao = db.geoAlarmDao()
+            val homeId = dao.insertAlarm(
+                com.example.data.local.entity.GeoAlarmEntity(
+                    title = "Home",
+                    address = "Algiers",
+                    latitude = 36.7538,
+                    longitude = 3.0588,
+                    radiusMeters = 500,
+                    isActive = false,
+                    isFavorite = true,
+                    favoriteCategory = com.example.data.local.entity.FavoriteCategory.HOME
+                )
+            )
+            val workId = dao.insertAlarm(
+                com.example.data.local.entity.GeoAlarmEntity(
+                    title = "Work",
+                    address = "Hydra",
+                    latitude = 36.7450,
+                    longitude = 3.0350,
+                    radiusMeters = 400,
+                    isActive = false,
+                    isFavorite = true,
+                    favoriteCategory = com.example.data.local.entity.FavoriteCategory.WORK
+                )
+            )
+            assertTrue(homeId > 0L && workId > 0L)
+            val savedHome = dao.getFavoriteByCategory(com.example.data.local.entity.FavoriteCategory.HOME)
+            val savedWork = dao.getFavoriteByCategory(com.example.data.local.entity.FavoriteCategory.WORK)
+            assertEquals(36.7538, savedHome?.latitude ?: 0.0, 0.0001)
+            assertEquals(36.7450, savedWork?.latitude ?: 0.0, 0.0001)
+        } finally {
+            db.close()
+        }
+    }
 }
