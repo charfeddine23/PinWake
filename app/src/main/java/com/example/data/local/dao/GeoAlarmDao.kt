@@ -52,11 +52,10 @@ interface GeoAlarmDao {
         updatedAt: Long = System.currentTimeMillis()
     )
 
-    @Query("UPDATE geo_alarms SET lastDistanceMeters = :distanceMeters, updatedAt = :updatedAt WHERE id = :id")
+    @Query("UPDATE geo_alarms SET lastDistanceMeters = :distanceMeters WHERE id = :id")
     suspend fun updateLastDistance(
         id: Long,
-        distanceMeters: Float?,
-        updatedAt: Long = System.currentTimeMillis()
+        distanceMeters: Float?
     )
 
     @Query("UPDATE geo_alarms SET isActive = 0, lastDistanceMeters = NULL, updatedAt = :updatedAt WHERE isActive = 1")

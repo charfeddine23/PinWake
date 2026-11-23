@@ -33,23 +33,46 @@ data class NominatimPlaceDto(
     fun longitudeDouble(): Double = lon.toDoubleOrNull() ?: 0.0
 
     fun shortTitle(): String {
-        if (!name.isNullOrBlank()) return name
+        val cleanName = stripUnsupportedGlyphs(name)
+        if (cleanName.isNotBlank()) return cleanName
         val addr = address
-        val candidate = addr?.station
-            ?: addr?.railway
-            ?: addr?.amenity
-            ?: addr?.road
-            ?: addr?.neighbourhood
-            ?: addr?.suburb
-            ?: addr?.city
-            ?: addr?.town
-            ?: addr?.village
+        val candidate = listOf(
+            addr?.station,
+            addr?.railway,
+            addr?.amenity,
+            addr?.road,
+            addr?.neighbourhood,
+            addr?.suburb,
+            addr?.city,
+            addr?.town,
+            addr?.village
+        ).firstNotNullOfOrNull { raw ->
+            stripUnsupportedGlyphs(raw).takeIf { it.isNotBlank() }
+        }
         if (!candidate.isNullOrBlank()) return candidate
-        return displayName.substringBefore(",").trim().ifEmpty { displayName }
+        val cleanDisplay = stripUnsupportedGlyphs(displayName)
+        return cleanDisplay.substringBefore(",").trim().ifEmpty { cleanDisplay }
     }
 
     fun compactAddress(): String {
-        val parts = displayName.split(",").map { it.trim() }.filter { it.isNotEmpty() }
-        return if (parts.size <= 3) displayName else parts.take(3).joinToString(", ")
+        val cleanDisplay = stripUnsupportedGlyphs(displayName)
+        val parts = cleanDisplay.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+        return if (parts.size <= 3) parts.joinToString(", ") else parts.take(3).joinToString(", ")
+    }
+
+    companion object {
+        // Strips Tifinagh Unicode block (U+2D30..U+2D7F) and cleans leftover separator artifacts
+        private val TIFINAGH_REGEX = Regex("[\u2D30-\u2D7F]+")
+        private val ORPHAN_SEP_REGEX = Regex("\\s*[/|·•-]+\\s*(?=[,|/]|$)|(^|\\s)[/|]+\\s*")
+        private val MULTI_SPACE_REGEX = Regex("\\s{2,}")
+
+        fun stripUnsupportedGlyphs(raw: String?): String {
+            if (raw.isNullOrBlank()) return ""
+            return raw
+                .replace(TIFINAGH_REGEX, "")
+                .replace(ORPHAN_SEP_REGEX, " ")
+                .replace(MULTI_SPACE_REGEX, " ")
+                .trim(' ', ',', '/', '-', '·')
+        }
     }
 }

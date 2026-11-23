@@ -51,18 +51,7 @@ class AlarmRingingActivity : AppCompatActivity() {
             }
         })
 
-        alarmId = intent.getLongExtra(PinWakeService.EXTRA_ALARM_ID, -1L)
-        val title = intent.getStringExtra(PinWakeService.EXTRA_ALARM_TITLE)
-            ?: getString(R.string.app_name)
-        val address = intent.getStringExtra(PinWakeService.EXTRA_ALARM_ADDRESS) ?: ""
-        val radius = intent.getIntExtra(PinWakeService.EXTRA_ALARM_RADIUS, 500)
-        val vibrateEnabled = intent.getBooleanExtra(PinWakeService.EXTRA_ALARM_VIBRATE, true)
-        currentDistanceMeters = intent.getFloatExtra(PinWakeService.EXTRA_DISTANCE_METERS, 0f)
-
-        binding.tvAlarmTitle.text = title
-        binding.tvAlarmAddress.text = address
-        binding.tvAlarmSubtitle.text = getString(R.string.alarm_ringing_subtitle, radius)
-        binding.tvDistanceRemaining.text = DistanceFormatter.formatCompactDistance(currentDistanceMeters)
+        bindAlarmIntent(intent)
 
         binding.slideToDismiss.onDismissListener = {
             handleDismiss()
@@ -71,6 +60,28 @@ class AlarmRingingActivity : AppCompatActivity() {
         binding.btnSnooze500m.setOnClickListener {
             handleSnooze500m()
         }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        stopAudioAndVibration()
+        bindAlarmIntent(intent)
+    }
+
+    private fun bindAlarmIntent(alarmIntent: android.content.Intent) {
+        alarmId = alarmIntent.getLongExtra(PinWakeService.EXTRA_ALARM_ID, -1L)
+        val title = alarmIntent.getStringExtra(PinWakeService.EXTRA_ALARM_TITLE)
+            ?: getString(R.string.app_name)
+        val address = alarmIntent.getStringExtra(PinWakeService.EXTRA_ALARM_ADDRESS) ?: ""
+        val radius = alarmIntent.getIntExtra(PinWakeService.EXTRA_ALARM_RADIUS, 500)
+        val vibrateEnabled = alarmIntent.getBooleanExtra(PinWakeService.EXTRA_ALARM_VIBRATE, true)
+        currentDistanceMeters = alarmIntent.getFloatExtra(PinWakeService.EXTRA_DISTANCE_METERS, 0f)
+
+        binding.tvAlarmTitle.text = title
+        binding.tvAlarmAddress.text = address
+        binding.tvAlarmSubtitle.text = getString(R.string.alarm_ringing_subtitle, radius)
+        binding.tvDistanceRemaining.text = DistanceFormatter.formatCompactDistance(currentDistanceMeters)
 
         startAlarmAudioWithCrescendo()
         if (vibrateEnabled) {

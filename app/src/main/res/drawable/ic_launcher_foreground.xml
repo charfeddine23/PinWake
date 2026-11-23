@@ -1,8 +1,148 @@
 <?xml version="1.0" encoding="utf-8"?>
-<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item
-        android:width="66dp"
-        android:height="66dp"
-        android:drawable="@drawable/pin_wake_icon"
-        android:gravity="center" />
-</layer-list>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="1024"
+    android:viewportHeight="1024">
+
+    <group
+        android:pivotX="512"
+        android:pivotY="512"
+        android:scaleX="0.96"
+        android:scaleY="0.96">
+
+        <!-- Ground GPS Ripple Rings -->
+        <path
+            android:fillColor="#00000000"
+            android:pathData="M320,864a192,36 0,1 0,384 0a192,36 0,1 0,-384 0z"
+            android:strokeAlpha="0.85"
+            android:strokeColor="#00E5FF"
+            android:strokeWidth="14" />
+
+        <path
+            android:fillAlpha="0.28"
+            android:fillColor="#10B981"
+            android:pathData="M400,864a112,20 0,1 0,224 0a112,20 0,1 0,-224 0z"
+            android:strokeAlpha="0.95"
+            android:strokeColor="#34D399"
+            android:strokeWidth="10" />
+
+        <!-- Outer Signal / Wake Arcs (Left & Right) -->
+        <path
+            android:fillColor="#00000000"
+            android:pathData="M196,492 A322,322 0 0,1 284,198"
+            android:strokeColor="#00E5FF"
+            android:strokeLineCap="round"
+            android:strokeWidth="24" />
+
+        <path
+            android:fillColor="#00000000"
+            android:pathData="M148,456 A374,374 0 0,1 240,162"
+            android:strokeAlpha="0.75"
+            android:strokeColor="#38BDF8"
+            android:strokeLineCap="round"
+            android:strokeWidth="18" />
+
+        <path
+            android:fillColor="#00000000"
+            android:pathData="M740,198 A322,322 0 0,1 828,492"
+            android:strokeColor="#10B981"
+            android:strokeLineCap="round"
+            android:strokeWidth="24" />
+
+        <path
+            android:fillColor="#00000000"
+            android:pathData="M784,162 A374,374 0 0,1 876,456"
+            android:strokeAlpha="0.75"
+            android:strokeColor="#34D399"
+            android:strokeLineCap="round"
+            android:strokeWidth="18" />
+
+        <!-- Sculptural GPS Map Pin Body -->
+        <path
+            android:pathData="M512,158 C360,158 240,278 240,428 C240,578 380,718 488,838 C500,852 524,852 536,838 C644,718 784,578 784,428 C784,278 664,158 512,158 Z"
+            android:strokeAlpha="0.90"
+            android:strokeColor="#BAE6FD"
+            android:strokeWidth="10">
+            <aapt:attr name="android:fillColor">
+                <gradient
+                    android:endX="512"
+                    android:endY="850"
+                    android:startX="512"
+                    android:startY="158"
+                    android:type="linear">
+                    <item
+                        android:color="#00F0FF"
+                        android:offset="0.0" />
+                    <item
+                        android:color="#06B6D4"
+                        android:offset="0.48" />
+                    <item
+                        android:color="#10B981"
+                        android:offset="1.0" />
+                </gradient>
+            </aapt:attr>
+        </path>
+
+        <!-- Glossy Top Highlight Crescent -->
+        <path
+            android:fillAlpha="0.28"
+            android:fillColor="#FFFFFF"
+            android:pathData="M322,268 A238,238 0 0,1 702,268 A248,200 0 0,0 322,268 Z" />
+
+        <!-- Deep Obsidian Inner Medallion -->
+        <path
+            android:pathData="M512,250 a176,176 0 1,0 0,352 a176,176 0 1,0 0,-352z"
+            android:strokeColor="#050A14"
+            android:strokeWidth="12">
+            <aapt:attr name="android:fillColor">
+                <gradient
+                    android:endX="664"
+                    android:endY="590"
+                    android:startX="360"
+                    android:startY="260"
+                    android:type="linear">
+                    <item
+                        android:color="#162036"
+                        android:offset="0.0" />
+                    <item
+                        android:color="#090F1C"
+                        android:offset="1.0" />
+                </gradient>
+            </aapt:attr>
+        </path>
+
+        <path
+            android:fillColor="#00000000"
+            android:pathData="M512,258 a168,168 0 1,0 0,336 a168,168 0 1,0 0,-336z"
+            android:strokeAlpha="0.65"
+            android:strokeColor="#67E8F9"
+            android:strokeWidth="6" />
+
+        <!-- Crisp White Wake Alarm Bell -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M512,286 C526,286 536,296 536,309 L536,319 C580,330 610,368 610,418 L610,472 L640,504 C646,511 642,522 632,522 L392,522 C382,522 378,511 384,504 L414,472 L414,418 C414,368 444,330 488,319 L488,309 C488,296 498,286 512,286 Z" />
+
+        <!-- Neon Clapper Beacon -->
+        <path
+            android:fillColor="#00E5FF"
+            android:pathData="M478,534 C478,556 493,572 512,572 C531,572 546,556 546,534 Z" />
+
+        <!-- Inner Bell Ringing Accents -->
+        <path
+            android:fillColor="#00000000"
+            android:pathData="M392,364 A136,136 0 0,1 432,316"
+            android:strokeColor="#22D3EE"
+            android:strokeLineCap="round"
+            android:strokeWidth="14" />
+
+        <path
+            android:fillColor="#00000000"
+            android:pathData="M592,316 A136,136 0 0,1 632,364"
+            android:strokeColor="#34D399"
+            android:strokeLineCap="round"
+            android:strokeWidth="14" />
+    </group>
+</vector>

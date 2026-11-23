@@ -3,6 +3,7 @@ package com.example.service
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import androidx.core.content.ContextCompat
 
 class AlarmActionReceiver : BroadcastReceiver() {
 
@@ -12,7 +13,7 @@ class AlarmActionReceiver : BroadcastReceiver() {
                 val cancelIntent = Intent(context, PinWakeService::class.java).apply {
                     action = PinWakeService.ACTION_CANCEL_ALL
                 }
-                context.startService(cancelIntent)
+                ContextCompat.startForegroundService(context, cancelIntent)
             }
             ACTION_DISMISS_ALARM -> {
                 val alarmId = intent.getLongExtra(PinWakeService.EXTRA_ALARM_ID, -1L)

@@ -39,6 +39,7 @@ import com.example.ui.map.MapPickerActivity
 import com.example.util.ApkUpdateManager
 import com.example.util.DistanceFormatter
 import com.example.util.LanguageManager
+import com.example.util.MapStyleHelper
 import com.example.util.OpenFreeMapStyle
 import com.example.util.OpenFreeMapStyles
 import com.example.util.PermissionHelper
@@ -54,20 +55,8 @@ import org.maplibre.android.location.modes.CameraMode
 import org.maplibre.android.location.modes.RenderMode
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.Style
-import org.maplibre.android.style.layers.BackgroundLayer
-import org.maplibre.android.style.layers.FillLayer
-import org.maplibre.android.style.layers.LineLayer
-import org.maplibre.android.style.layers.PropertyFactory
-import org.maplibre.android.style.sources.GeoJsonSource
-import org.maplibre.geojson.Feature
 import org.maplibre.geojson.FeatureCollection
-import org.maplibre.geojson.Point
-import org.maplibre.geojson.Polygon
 import java.io.File
-import kotlin.math.asin
-import kotlin.math.atan2
-import kotlin.math.cos
-import kotlin.math.sin
 
 class MainActivity : AppCompatActivity() {
 
@@ -86,6 +75,9 @@ class MainActivity : AppCompatActivity() {
     private var pendingInstallApk: File? = null
     private var heroMap: MapLibreMap? = null
     private var loadedHeroStyle: OpenFreeMapStyle? = null
+    private var loadedHero3dState: Boolean? = null
+    private var lastHeroGeofenceKey: String? = null
+    private var lastHeroCameraKey: String? = null
 
     private val fineLocationLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -95,6 +87,7 @@ class MainActivity : AppCompatActivity() {
         heroMap?.style?.let { style ->
             if (style.isFullyLoaded) enableHeroLocationPuck(style)
         }
+        lastHeroCameraKey = null
         updateHeroMapViewport(viewModel.uiState.value)
     }
 
@@ -155,8 +148,20 @@ class MainActivity : AppCompatActivity() {
         syncTrackingServiceIfPossible()
 
         val savedStyle = OpenFreeMapStyles.getSavedStyle(this)
-        if (heroMap != null && loadedHeroStyle != savedStyle) {
-            applyHeroMapStyle(savedStyle)
+        val saved3d = OpenFreeMapStyles.is3dBuildingsEnabled(this)
+        val map = heroMap
+        val currentStyle = map?.style
+        if (map != null && currentStyle != null && currentStyle.isFullyLoaded &&
+            (loadedHeroStyle != savedStyle || loadedHero3dState != saved3d)
+        ) {
+            loadedHeroStyle = savedStyle
+            loadedHero3dState = saved3d
+            MapStyleHelper.applyGoogleNavigationStyling(
+                style = currentStyle,
+                mode = savedStyle,
+                enable3dBuildings = saved3d
+            )
+            updateHeroMapViewport(viewModel.uiState.value, forceRefresh = true)
         } else {
             updateHeroMapViewport(viewModel.uiState.value)
         }
@@ -198,19 +203,34 @@ class MainActivity : AppCompatActivity() {
         ViewCompat.setOnApplyWindowInsetsListener(binding.rootCoordinator) { _, insets ->
             val sysBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
 
-            binding.topFloatingBar.updatePadding(top = baseTopPad + sysBars.top)
+            val targetTopPad = baseTopPad + sysBars.top
+            if (binding.topFloatingBar.paddingTop != targetTopPad) {
+                binding.topFloatingBar.updatePadding(top = targetTopPad)
+            }
 
+            val targetHeroHeight = baseHeroHeight + sysBars.top
+            val targetMinHeroHeight = baseMinHeroHeight + sysBars.top
             val collapseParams = binding.collapsingDashboard.layoutParams
-            collapseParams.height = baseHeroHeight + sysBars.top
-            binding.collapsingDashboard.layoutParams = collapseParams
-            binding.collapsingDashboard.minimumHeight = baseMinHeroHeight + sysBars.top
+            if (collapseParams.height != targetHeroHeight ||
+                binding.collapsingDashboard.minimumHeight != targetMinHeroHeight
+            ) {
+                collapseParams.height = targetHeroHeight
+                binding.collapsingDashboard.layoutParams = collapseParams
+                binding.collapsingDashboard.minimumHeight = targetMinHeroHeight
+            }
 
-            binding.scrollDashboard.updatePadding(bottom = baseScrollBottom + sysBars.bottom)
+            val targetScrollBottom = baseScrollBottom + sysBars.bottom
+            if (binding.scrollDashboard.paddingBottom != targetScrollBottom) {
+                binding.scrollDashboard.updatePadding(bottom = targetScrollBottom)
+            }
 
             val fabParams = binding.fabPinAlarm.layoutParams as
                 androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams
-            fabParams.bottomMargin = fabBaseMargin + sysBars.bottom
-            binding.fabPinAlarm.layoutParams = fabParams
+            val targetFabMargin = fabBaseMargin + sysBars.bottom
+            if (fabParams.bottomMargin != targetFabMargin) {
+                fabParams.bottomMargin = targetFabMargin
+                binding.fabPinAlarm.layoutParams = fabParams
+            }
             insets
         }
     }
@@ -218,56 +238,33 @@ class MainActivity : AppCompatActivity() {
     private fun setupHeroMap() {
         if (isRobolectric()) return
         binding.dashboardMapView.getMapAsync { map ->
+            if (isDestroyed || isFinishing) return@getMapAsync
             heroMap = map
-            map.uiSettings.apply {
-                isCompassEnabled = false
-                isLogoEnabled = false
-                isAttributionEnabled = false
-                setAllGesturesEnabled(false)
-            }
+            MapStyleHelper.configureHighPrecisionMap(
+                context = this,
+                mapView = binding.dashboardMapView,
+                map = map,
+                allowGestures = false
+            )
             applyHeroMapStyle(OpenFreeMapStyles.getSavedStyle(this))
         }
     }
 
     private fun applyHeroMapStyle(styleOption: OpenFreeMapStyle) {
         val map = heroMap ?: return
+        val enable3d = OpenFreeMapStyles.is3dBuildingsEnabled(this)
         loadedHeroStyle = styleOption
-        map.setStyle(Style.Builder().fromUri(styleOption.styleUrl)) { loadedStyle ->
-            if (styleOption == OpenFreeMapStyle.DARK) {
-                loadedStyle.getLayerAs<BackgroundLayer>("background")?.setProperties(
-                    PropertyFactory.backgroundColor("#090D16")
-                )
-            }
-            ensureHeroGeofenceLayers(loadedStyle)
-            enableHeroLocationPuck(loadedStyle)
-            updateHeroMapViewport(viewModel.uiState.value)
-        }
-    }
+        loadedHero3dState = enable3d
 
-    private fun ensureHeroGeofenceLayers(style: Style) {
-        if (style.getSourceAs<GeoJsonSource>(HERO_GEOFENCE_SOURCE_ID) == null) {
-            style.addSource(GeoJsonSource(HERO_GEOFENCE_SOURCE_ID, FeatureCollection.fromFeatures(emptyArray())))
-        }
-        if (style.getLayer(HERO_GEOFENCE_FILL_ID) == null) {
-            style.addLayer(
-                FillLayer(HERO_GEOFENCE_FILL_ID, HERO_GEOFENCE_SOURCE_ID).apply {
-                    setProperties(
-                        PropertyFactory.fillColor("#00D4FF"),
-                        PropertyFactory.fillOpacity(0.18f)
-                    )
-                }
+        map.setStyle(Style.Builder().fromUri(styleOption.styleUrl)) { loadedStyle ->
+            if (isDestroyed || isFinishing) return@setStyle
+            MapStyleHelper.applyGoogleNavigationStyling(
+                style = loadedStyle,
+                mode = styleOption,
+                enable3dBuildings = enable3d
             )
-        }
-        if (style.getLayer(HERO_GEOFENCE_LINE_ID) == null) {
-            style.addLayer(
-                LineLayer(HERO_GEOFENCE_LINE_ID, HERO_GEOFENCE_SOURCE_ID).apply {
-                    setProperties(
-                        PropertyFactory.lineColor("#00E5FF"),
-                        PropertyFactory.lineWidth(2.2f),
-                        PropertyFactory.lineOpacity(0.9f)
-                    )
-                }
-            )
+            enableHeroLocationPuck(loadedStyle)
+            updateHeroMapViewport(viewModel.uiState.value, forceRefresh = true)
         }
     }
 
@@ -299,28 +296,47 @@ class MainActivity : AppCompatActivity() {
     }
 
     @SuppressLint("MissingPermission")
-    private fun updateHeroMapViewport(state: DashboardUiState) {
+    private fun updateHeroMapViewport(state: DashboardUiState, forceRefresh: Boolean = false) {
         val map = heroMap ?: return
         val style = map.style
         val activeAlarms = state.alarms.filter { it.isActive }
 
-        if (style != null && style.isFullyLoaded) {
+        val geoKey = activeAlarms.joinToString("|") {
+            "${it.id}:${it.latitude}:${it.longitude}:${it.radiusMeters}"
+        }
+        if (style != null && style.isFullyLoaded && (forceRefresh || geoKey != lastHeroGeofenceKey)) {
+            lastHeroGeofenceKey = geoKey
             val features = activeAlarms.map { alarm ->
-                createGeodesicCircleFeature(alarm.latitude, alarm.longitude, alarm.radiusMeters)
+                MapStyleHelper.createGeodesicCircleFeature(
+                    lat = alarm.latitude,
+                    lon = alarm.longitude,
+                    radiusMeters = alarm.radiusMeters,
+                    steps = 56
+                )
             }
-            style.getSourceAs<GeoJsonSource>(HERO_GEOFENCE_SOURCE_ID)
-                ?.setGeoJson(FeatureCollection.fromFeatures(features))
+            MapStyleHelper.ensureGeofenceCircleLayers(
+                style = style,
+                sourceId = HERO_GEOFENCE_SOURCE_ID,
+                fillLayerId = HERO_GEOFENCE_FILL_ID,
+                lineLayerId = HERO_GEOFENCE_LINE_ID,
+                features = FeatureCollection.fromFeatures(features)
+            )
         }
 
         val targetAlarm = activeAlarms.minByOrNull { it.lastDistanceMeters ?: Float.MAX_VALUE }
             ?: state.alarms.firstOrNull()
 
         if (targetAlarm != null) {
-            val pos = CameraPosition.Builder()
-                .target(LatLng(targetAlarm.latitude, targetAlarm.longitude))
-                .zoom(13.8)
-                .build()
-            map.moveCamera(CameraUpdateFactory.newCameraPosition(pos))
+            val camKey = "alarm:${targetAlarm.id}:${targetAlarm.latitude}:${targetAlarm.longitude}"
+            if (forceRefresh || camKey != lastHeroCameraKey) {
+                lastHeroCameraKey = camKey
+                val pos = CameraPosition.Builder()
+                    .target(LatLng(targetAlarm.latitude, targetAlarm.longitude))
+                    .zoom(14.5)
+                    .tilt(if (OpenFreeMapStyles.is3dBuildingsEnabled(this)) 24.0 else 0.0)
+                    .build()
+                map.moveCamera(CameraUpdateFactory.newCameraPosition(pos))
+            }
             return
         }
 
@@ -334,46 +350,28 @@ class MainActivity : AppCompatActivity() {
                 else -> net
             }
             if (best != null) {
-                val pos = CameraPosition.Builder()
-                    .target(LatLng(best.latitude, best.longitude))
-                    .zoom(14.0)
-                    .build()
-                map.moveCamera(CameraUpdateFactory.newCameraPosition(pos))
+                val camKey = "loc:${best.latitude}:${best.longitude}"
+                if (forceRefresh || camKey != lastHeroCameraKey) {
+                    lastHeroCameraKey = camKey
+                    val pos = CameraPosition.Builder()
+                        .target(LatLng(best.latitude, best.longitude))
+                        .zoom(14.8)
+                        .tilt(if (OpenFreeMapStyles.is3dBuildingsEnabled(this)) 24.0 else 0.0)
+                        .build()
+                    map.moveCamera(CameraUpdateFactory.newCameraPosition(pos))
+                }
                 return
             }
         }
 
-        val defaultPos = CameraPosition.Builder()
-            .target(LatLng(48.8566, 2.3522))
-            .zoom(12.2)
-            .build()
-        map.moveCamera(CameraUpdateFactory.newCameraPosition(defaultPos))
-    }
-
-    private fun createGeodesicCircleFeature(
-        lat: Double,
-        lon: Double,
-        radiusMeters: Int,
-        steps: Int = 56
-    ): Feature {
-        val earthRadius = 6371008.8
-        val latRad = Math.toRadians(lat)
-        val lonRad = Math.toRadians(lon)
-        val angularDist = radiusMeters.toDouble() / earthRadius
-        val ring = ArrayList<Point>(steps + 1)
-        for (i in 0..steps) {
-            val bearing = 2.0 * Math.PI * (i % steps) / steps
-            val pLat = asin(
-                sin(latRad) * cos(angularDist) +
-                    cos(latRad) * sin(angularDist) * cos(bearing)
-            )
-            val pLon = lonRad + atan2(
-                sin(bearing) * sin(angularDist) * cos(latRad),
-                cos(angularDist) - sin(latRad) * sin(pLat)
-            )
-            ring.add(Point.fromLngLat(Math.toDegrees(pLon), Math.toDegrees(pLat)))
+        if (forceRefresh || lastHeroCameraKey == null) {
+            lastHeroCameraKey = "default"
+            val defaultPos = CameraPosition.Builder()
+                .target(LatLng(48.8566, 2.3522))
+                .zoom(12.5)
+                .build()
+            map.moveCamera(CameraUpdateFactory.newCameraPosition(defaultPos))
         }
-        return Feature.fromGeometry(Polygon.fromLngLats(listOf(ring)))
     }
 
     private fun setupRecyclerViews() {

@@ -37,4 +37,35 @@ class ExampleRobolectricTest {
         assertFalse(ApkUpdateManager.isNewerVersion("v1.0.1", "1.0.1"))
         assertFalse(ApkUpdateManager.isNewerVersion("1.0.0", "1.0.1"))
     }
+
+    @Test
+    fun `stripUnsupportedGlyphs removes Tifinagh blocks cleanly`() {
+        val raw = "Alger / ⴷⵣⴰⵢⵔ Centre, الجزائر"
+        val cleaned = com.example.data.remote.dto.NominatimPlaceDto.stripUnsupportedGlyphs(raw)
+        assertFalse(cleaned.any { it in '\u2D30'..'\u2D7F' })
+        assertTrue(cleaned.contains("Alger"))
+        assertTrue(cleaned.contains("الجزائر"))
+    }
+
+    @Test
+    fun `openFreeMapStyles defaults to google dark and persists 3d buildings toggle`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        assertEquals(
+            com.example.util.OpenFreeMapStyle.GOOGLE_DARK,
+            com.example.util.OpenFreeMapStyles.getSavedStyle(context)
+        )
+        assertTrue(com.example.util.OpenFreeMapStyles.is3dBuildingsEnabled(context))
+
+        com.example.util.OpenFreeMapStyles.saveStyle(
+            context,
+            com.example.util.OpenFreeMapStyle.GOOGLE_LIGHT
+        )
+        com.example.util.OpenFreeMapStyles.set3dBuildingsEnabled(context, false)
+
+        assertEquals(
+            com.example.util.OpenFreeMapStyle.GOOGLE_LIGHT,
+            com.example.util.OpenFreeMapStyles.getSavedStyle(context)
+        )
+        assertFalse(com.example.util.OpenFreeMapStyles.is3dBuildingsEnabled(context))
+    }
 }

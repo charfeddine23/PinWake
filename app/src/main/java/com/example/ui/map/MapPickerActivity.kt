@@ -10,6 +10,8 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Looper
 import android.view.View
+import android.view.animation.DecelerateInterpolator
+import android.view.animation.OvershootInterpolator
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
@@ -33,6 +35,7 @@ import com.example.databinding.ActivityMapPickerBinding
 import com.example.service.PinWakeService
 import com.example.util.DistanceFormatter
 import com.example.util.LanguageManager
+import com.example.util.MapStyleHelper
 import com.example.util.OpenFreeMapStyle
 import com.example.util.OpenFreeMapStyles
 import com.example.util.PermissionHelper
@@ -47,19 +50,8 @@ import org.maplibre.android.location.modes.CameraMode
 import org.maplibre.android.location.modes.RenderMode
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.Style
-import org.maplibre.android.style.layers.BackgroundLayer
-import org.maplibre.android.style.layers.FillLayer
-import org.maplibre.android.style.layers.LineLayer
-import org.maplibre.android.style.layers.PropertyFactory
-import org.maplibre.android.style.sources.GeoJsonSource
-import org.maplibre.geojson.Feature
-import org.maplibre.geojson.Point
-import org.maplibre.geojson.Polygon
+import org.maplibre.geojson.FeatureCollection
 import java.util.Locale
-import kotlin.math.asin
-import kotlin.math.atan2
-import kotlin.math.cos
-import kotlin.math.sin
 
 class MapPickerActivity : AppCompatActivity() {
 
@@ -71,9 +63,13 @@ class MapPickerActivity : AppCompatActivity() {
     private lateinit var searchAdapter: SearchResultAdapter
     private var mapLibreMap: MapLibreMap? = null
     private lateinit var locationManager: LocationManager
+    private var activeSingleFixListener: LocationListener? = null
 
     private var userEditedTitle = false
     private var isProgrammaticTitleUpdate = false
+    private var isSyncing3dSwitch = false
+    private var isPinLifted = false
+    private var suppressNextIdleGeocode = false
     private var pendingCameraTarget: Triple<Double, Double, Double>? = null
     private var currentLat: Double = DEFAULT_LAT
     private var currentLon: Double = DEFAULT_LON
@@ -92,7 +88,7 @@ class MapPickerActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        if (!"robolectric".equals(Build.FINGERPRINT, ignoreCase = true)) {
+        if (!isRobolectric()) {
             MapLibre.getInstance(this)
         }
         enableEdgeToEdge()
@@ -116,14 +112,22 @@ class MapPickerActivity : AppCompatActivity() {
 
         val lang = LanguageManager.getCurrentLanguageCode(this)
         viewModel.initialize(alarmId, defaultCategory, lang) { existing ->
+            if (isDestroyed || isFinishing) return@initialize
             if (existing != null) {
                 userEditedTitle = true
+                suppressNextIdleGeocode = true
                 setTitleProgrammatically(existing.title)
                 binding.sliderRadius.value = existing.radiusMeters.toFloat().coerceIn(200f, 5000f)
                 binding.tvRadiusValue.text = DistanceFormatter.formatRadiusSliderValue(this, existing.radiusMeters)
                 binding.btnSaveAlarm.setText(R.string.map_update_alarm)
                 selectCategoryChip(existing.favoriteCategory)
-                moveCameraTo(existing.latitude, existing.longitude, 15.5, animate = false)
+                moveCameraTo(
+                    lat = existing.latitude,
+                    lon = existing.longitude,
+                    zoom = 16.0,
+                    animate = false,
+                    triggerReverseGeocode = false
+                )
             } else {
                 selectCategoryChip(defaultCategory)
                 preFillCategoryTitle(defaultCategory)
@@ -140,41 +144,58 @@ class MapPickerActivity : AppCompatActivity() {
             val sysBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             val searchParams = binding.searchBarContainer.layoutParams as
                 androidx.constraintlayout.widget.ConstraintLayout.LayoutParams
-            searchParams.topMargin = searchTopMargin + sysBars.top
-            binding.searchBarContainer.layoutParams = searchParams
+            val targetTopMargin = searchTopMargin + sysBars.top
+            if (searchParams.topMargin != targetTopMargin) {
+                searchParams.topMargin = targetTopMargin
+                binding.searchBarContainer.layoutParams = searchParams
+            }
 
-            binding.bottomSheet.updatePadding(bottom = sheetBottomPad + sysBars.bottom)
+            val targetBottomPad = sheetBottomPad + sysBars.bottom
+            if (binding.bottomSheet.paddingBottom != targetBottomPad) {
+                binding.bottomSheet.updatePadding(bottom = targetBottomPad)
+            }
             insets
         }
     }
 
     private fun setupMap() {
         val initialStyle = OpenFreeMapStyles.getSavedStyle(this)
-        highlightSelectedMapStyle(initialStyle)
+        val is3dEnabled = OpenFreeMapStyles.is3dBuildingsEnabled(this)
+        syncLayerMenuUi(initialStyle, is3dEnabled)
+
+        if (isRobolectric()) return
 
         binding.mapView.getMapAsync { map ->
+            if (isDestroyed || isFinishing) return@getMapAsync
             mapLibreMap = map
-
-            map.uiSettings.apply {
-                isCompassEnabled = false
-                isLogoEnabled = false
-                isAttributionEnabled = false
-                isRotateGesturesEnabled = true
-                isTiltGesturesEnabled = false
-            }
+            MapStyleHelper.configureHighPrecisionMap(
+                context = this,
+                mapView = binding.mapView,
+                map = map,
+                allowGestures = true
+            )
 
             val initialTarget = pendingCameraTarget
             pendingCameraTarget = null
             val startLat = initialTarget?.first ?: DEFAULT_LAT
             val startLon = initialTarget?.second ?: DEFAULT_LON
-            val startZoom = initialTarget?.third ?: 14.5
+            val startZoom = initialTarget?.third ?: 15.0
             currentLat = startLat
             currentLon = startLon
 
+            val startTilt = if (OpenFreeMapStyles.is3dBuildingsEnabled(this) && startZoom >= 15.0) 32.0 else 0.0
             map.cameraPosition = CameraPosition.Builder()
                 .target(LatLng(startLat, startLon))
                 .zoom(startZoom)
+                .tilt(startTilt)
                 .build()
+
+            map.addOnCameraMoveStartedListener { reason ->
+                if (reason == MapLibreMap.OnCameraMoveStartedListener.REASON_API_GESTURE) {
+                    suppressNextIdleGeocode = false
+                    liftPinUp()
+                }
+            }
 
             map.addOnCameraMoveListener {
                 val target = map.cameraPosition.target ?: return@addOnCameraMoveListener
@@ -185,16 +206,21 @@ class MapPickerActivity : AppCompatActivity() {
             }
 
             map.addOnCameraIdleListener {
+                dropPinDown()
                 val target = map.cameraPosition.target ?: return@addOnCameraIdleListener
                 currentLat = target.latitude
                 currentLon = target.longitude
                 updateCircleOverlay(target.latitude, target.longitude, viewModel.uiState.value.radiusMeters)
                 viewModel.updateCoordinatesImmediate(target.latitude, target.longitude)
-                viewModel.onMapCenterSettled(
-                    target.latitude,
-                    target.longitude,
-                    LanguageManager.getCurrentLanguageCode(this@MapPickerActivity)
-                )
+                if (suppressNextIdleGeocode) {
+                    suppressNextIdleGeocode = false
+                } else {
+                    viewModel.onMapCenterSettled(
+                        target.latitude,
+                        target.longitude,
+                        LanguageManager.getCurrentLanguageCode(this@MapPickerActivity)
+                    )
+                }
             }
 
             map.addOnMapClickListener {
@@ -212,88 +238,100 @@ class MapPickerActivity : AppCompatActivity() {
 
     private fun loadMapStyle(styleOption: OpenFreeMapStyle) {
         val map = mapLibreMap ?: return
+        val existingStyle = map.style
+        if (existingStyle != null && existingStyle.isFullyLoaded) {
+            applyRuntimeStyleAndOverlays(existingStyle, styleOption)
+            return
+        }
+
         map.setStyle(Style.Builder().fromUri(styleOption.styleUrl)) { loadedStyle ->
-            if (styleOption == OpenFreeMapStyle.DARK) {
-                loadedStyle.getLayerAs<BackgroundLayer>("background")?.setProperties(
-                    PropertyFactory.backgroundColor("#0B0F19")
-                )
-            }
-            ensureGeofenceLayers(
-                style = loadedStyle,
-                lat = currentLat,
-                lon = currentLon,
-                radiusMeters = viewModel.uiState.value.radiusMeters
-            )
-            if (hasLocationPermission()) {
-                enableLocationComponent(loadedStyle)
-            }
+            if (isDestroyed || isFinishing) return@setStyle
+            applyRuntimeStyleAndOverlays(loadedStyle, styleOption)
         }
     }
 
-    private fun ensureGeofenceLayers(style: Style, lat: Double, lon: Double, radiusMeters: Int) {
-        val circleFeature = createGeodesicCircleFeature(lat, lon, radiusMeters)
-        val existingSource = style.getSourceAs<GeoJsonSource>(GEOFENCE_SOURCE_ID)
-        if (existingSource == null) {
-            val source = GeoJsonSource(GEOFENCE_SOURCE_ID, circleFeature)
-            style.addSource(source)
-        } else {
-            existingSource.setGeoJson(circleFeature)
-        }
+    private fun applyRuntimeStyleAndOverlays(style: Style, styleOption: OpenFreeMapStyle) {
+        val enable3d = OpenFreeMapStyles.is3dBuildingsEnabled(this)
+        MapStyleHelper.applyGoogleNavigationStyling(
+            style = style,
+            mode = styleOption,
+            enable3dBuildings = enable3d
+        )
 
-        if (style.getLayer(GEOFENCE_FILL_LAYER_ID) == null) {
-            val fillLayer = FillLayer(GEOFENCE_FILL_LAYER_ID, GEOFENCE_SOURCE_ID).apply {
-                setProperties(
-                    PropertyFactory.fillColor("#22D3EE"),
-                    PropertyFactory.fillOpacity(0.18f)
-                )
-            }
-            style.addLayer(fillLayer)
-        }
+        val circleFeature = MapStyleHelper.createGeodesicCircleFeature(
+            lat = currentLat,
+            lon = currentLon,
+            radiusMeters = viewModel.uiState.value.radiusMeters
+        )
+        MapStyleHelper.ensureGeofenceCircleLayers(
+            style = style,
+            sourceId = GEOFENCE_SOURCE_ID,
+            fillLayerId = GEOFENCE_FILL_LAYER_ID,
+            lineLayerId = GEOFENCE_LINE_LAYER_ID,
+            features = FeatureCollection.fromFeature(circleFeature)
+        )
 
-        if (style.getLayer(GEOFENCE_LINE_LAYER_ID) == null) {
-            val lineLayer = LineLayer(GEOFENCE_LINE_LAYER_ID, GEOFENCE_SOURCE_ID).apply {
-                setProperties(
-                    PropertyFactory.lineColor("#00E5FF"),
-                    PropertyFactory.lineWidth(2.5f),
-                    PropertyFactory.lineOpacity(0.95f)
-                )
-            }
-            style.addLayer(lineLayer)
+        if (hasLocationPermission()) {
+            enableLocationComponent(style)
         }
     }
 
     private fun updateCircleOverlay(lat: Double, lon: Double, radiusMeters: Int) {
         val style = mapLibreMap?.style ?: return
         if (!style.isFullyLoaded) return
-        val source = style.getSourceAs<GeoJsonSource>(GEOFENCE_SOURCE_ID) ?: return
-        source.setGeoJson(createGeodesicCircleFeature(lat, lon, radiusMeters))
+        val feature = MapStyleHelper.createGeodesicCircleFeature(lat, lon, radiusMeters)
+        MapStyleHelper.ensureGeofenceCircleLayers(
+            style = style,
+            sourceId = GEOFENCE_SOURCE_ID,
+            fillLayerId = GEOFENCE_FILL_LAYER_ID,
+            lineLayerId = GEOFENCE_LINE_LAYER_ID,
+            features = FeatureCollection.fromFeature(feature)
+        )
     }
 
-    private fun createGeodesicCircleFeature(
-        lat: Double,
-        lon: Double,
-        radiusMeters: Int,
-        steps: Int = 72
-    ): Feature {
-        val earthRadiusMeters = 6371008.8
-        val latRad = Math.toRadians(lat)
-        val lonRad = Math.toRadians(lon)
-        val angularDistance = radiusMeters.toDouble() / earthRadiusMeters
+    private fun liftPinUp() {
+        if (isPinLifted) return
+        isPinLifted = true
+        val liftPx = -18f * resources.displayMetrics.density
 
-        val ring = ArrayList<Point>(steps + 1)
-        for (i in 0..steps) {
-            val bearing = 2.0 * Math.PI * (i % steps) / steps
-            val pointLat = asin(
-                sin(latRad) * cos(angularDistance) +
-                    cos(latRad) * sin(angularDistance) * cos(bearing)
-            )
-            val pointLon = lonRad + atan2(
-                sin(bearing) * sin(angularDistance) * cos(latRad),
-                cos(angularDistance) - sin(latRad) * sin(pointLat)
-            )
-            ring.add(Point.fromLngLat(Math.toDegrees(pointLon), Math.toDegrees(pointLat)))
-        }
-        return Feature.fromGeometry(Polygon.fromLngLats(listOf(ring)))
+        binding.ivCrosshair.animate().cancel()
+        binding.ivCrosshair.animate()
+            .translationY(liftPx)
+            .scaleX(1.1f)
+            .scaleY(1.1f)
+            .setDuration(180L)
+            .setInterpolator(DecelerateInterpolator())
+            .start()
+
+        binding.viewPinShadow.animate().cancel()
+        binding.viewPinShadow.animate()
+            .scaleX(0.75f)
+            .scaleY(0.75f)
+            .alpha(0.55f)
+            .setDuration(180L)
+            .start()
+    }
+
+    private fun dropPinDown() {
+        if (!isPinLifted) return
+        isPinLifted = false
+
+        binding.ivCrosshair.animate().cancel()
+        binding.ivCrosshair.animate()
+            .translationY(0f)
+            .scaleX(1.0f)
+            .scaleY(1.0f)
+            .setDuration(300L)
+            .setInterpolator(OvershootInterpolator(1.7f))
+            .start()
+
+        binding.viewPinShadow.animate().cancel()
+        binding.viewPinShadow.animate()
+            .scaleX(1.0f)
+            .scaleY(1.0f)
+            .alpha(1.0f)
+            .setDuration(240L)
+            .start()
     }
 
     private fun setupSearch() {
@@ -305,7 +343,14 @@ class MapPickerActivity : AppCompatActivity() {
             if (!userEditedTitle || binding.etAlarmTitle.text.isNullOrBlank()) {
                 setTitleProgrammatically(place.shortTitle())
             }
-            moveCameraTo(place.latitudeDouble(), place.longitudeDouble(), 15.5)
+            suppressNextIdleGeocode = true
+            moveCameraTo(
+                lat = place.latitudeDouble(),
+                lon = place.longitudeDouble(),
+                zoom = 16.0,
+                animate = true,
+                triggerReverseGeocode = false
+            )
         }
 
         binding.rvSearchResults.apply {
@@ -346,10 +391,41 @@ class MapPickerActivity : AppCompatActivity() {
                 if (binding.cardMapStyleMenu.visibility == View.VISIBLE) View.GONE else View.VISIBLE
         }
 
-        binding.optMapDark.setOnClickListener { applyMapStyle(OpenFreeMapStyle.DARK) }
-        binding.optMapFiord.setOnClickListener { applyMapStyle(OpenFreeMapStyle.FIORD) }
-        binding.optMapLiberty.setOnClickListener { applyMapStyle(OpenFreeMapStyle.LIBERTY) }
-        binding.optMapPositron.setOnClickListener { applyMapStyle(OpenFreeMapStyle.POSITRON) }
+        binding.optMapGoogleDark.setOnClickListener {
+            applyMapStyle(OpenFreeMapStyle.GOOGLE_DARK)
+        }
+        binding.optMapGoogleLight.setOnClickListener {
+            applyMapStyle(OpenFreeMapStyle.GOOGLE_LIGHT)
+        }
+
+        binding.rowToggle3dBuildings.setOnClickListener {
+            binding.switch3dBuildings.toggle()
+        }
+
+        binding.switch3dBuildings.setOnCheckedChangeListener { _, isChecked ->
+            if (isSyncing3dSwitch) return@setOnCheckedChangeListener
+            OpenFreeMapStyles.set3dBuildingsEnabled(this, isChecked)
+            val savedStyle = OpenFreeMapStyles.getSavedStyle(this)
+            mapLibreMap?.style?.let { style ->
+                if (style.isFullyLoaded) {
+                    MapStyleHelper.applyGoogleNavigationStyling(style, savedStyle, isChecked)
+                }
+            }
+            mapLibreMap?.let { map ->
+                val cam = map.cameraPosition
+                val target = cam.target ?: return@let
+                val nextZoom = if (isChecked && cam.zoom < 15.2) 15.8 else cam.zoom
+                val nextTilt = if (isChecked) 40.0 else 0.0
+                MapStyleHelper.animateCameraSmooth(
+                    map = map,
+                    lat = target.latitude,
+                    lon = target.longitude,
+                    zoom = nextZoom,
+                    tilt = nextTilt,
+                    durationMs = 800
+                )
+            }
+        }
 
         binding.fabMyLocation.setOnClickListener {
             if (hasLocationPermission()) {
@@ -457,17 +533,15 @@ class MapPickerActivity : AppCompatActivity() {
 
     private fun applyMapStyle(style: OpenFreeMapStyle) {
         OpenFreeMapStyles.saveStyle(this, style)
-        highlightSelectedMapStyle(style)
+        syncLayerMenuUi(style, OpenFreeMapStyles.is3dBuildingsEnabled(this))
         binding.cardMapStyleMenu.visibility = View.GONE
         loadMapStyle(style)
     }
 
-    private fun highlightSelectedMapStyle(active: OpenFreeMapStyle) {
+    private fun syncLayerMenuUi(active: OpenFreeMapStyle, enable3d: Boolean) {
         val options = listOf(
-            binding.optMapDark to OpenFreeMapStyle.DARK,
-            binding.optMapFiord to OpenFreeMapStyle.FIORD,
-            binding.optMapLiberty to OpenFreeMapStyle.LIBERTY,
-            binding.optMapPositron to OpenFreeMapStyle.POSITRON
+            binding.optMapGoogleDark to OpenFreeMapStyle.GOOGLE_DARK,
+            binding.optMapGoogleLight to OpenFreeMapStyle.GOOGLE_LIGHT
         )
         options.forEach { (view, style) ->
             if (style == active) {
@@ -478,32 +552,53 @@ class MapPickerActivity : AppCompatActivity() {
                 view.setTextColor(ContextCompat.getColor(this, R.color.text_primary))
             }
         }
+        isSyncing3dSwitch = true
+        binding.switch3dBuildings.isChecked = enable3d
+        isSyncing3dSwitch = false
     }
 
-    private fun moveCameraTo(lat: Double, lon: Double, zoom: Double? = null, animate: Boolean = true) {
+    private fun moveCameraTo(
+        lat: Double,
+        lon: Double,
+        zoom: Double? = null,
+        animate: Boolean = true,
+        triggerReverseGeocode: Boolean = true
+    ) {
         currentLat = lat
         currentLon = lon
         val map = mapLibreMap
         if (map == null) {
-            pendingCameraTarget = Triple(lat, lon, zoom ?: 15.5)
+            pendingCameraTarget = Triple(lat, lon, zoom ?: 15.8)
             updateCircleOverlay(lat, lon, viewModel.uiState.value.radiusMeters)
-            viewModel.onMapCenterSettled(lat, lon, LanguageManager.getCurrentLanguageCode(this))
+            if (triggerReverseGeocode) {
+                viewModel.onMapCenterSettled(lat, lon, LanguageManager.getCurrentLanguageCode(this))
+            }
             return
         }
 
         val targetZoom = zoom ?: map.cameraPosition.zoom
-        val position = CameraPosition.Builder()
-            .target(LatLng(lat, lon))
-            .zoom(targetZoom)
-            .build()
-        val update = CameraUpdateFactory.newCameraPosition(position)
+        val tilt = if (OpenFreeMapStyles.is3dBuildingsEnabled(this) && targetZoom >= 15.0) 32.0 else 0.0
         if (animate) {
-            map.animateCamera(update, 450)
+            MapStyleHelper.animateCameraSmooth(
+                map = map,
+                lat = lat,
+                lon = lon,
+                zoom = targetZoom,
+                tilt = tilt,
+                durationMs = 800
+            )
         } else {
-            map.moveCamera(update)
+            val position = CameraPosition.Builder()
+                .target(LatLng(lat, lon))
+                .zoom(targetZoom)
+                .tilt(tilt)
+                .build()
+            map.moveCamera(CameraUpdateFactory.newCameraPosition(position))
         }
         updateCircleOverlay(lat, lon, viewModel.uiState.value.radiusMeters)
-        viewModel.onMapCenterSettled(lat, lon, LanguageManager.getCurrentLanguageCode(this))
+        if (triggerReverseGeocode) {
+            viewModel.onMapCenterSettled(lat, lon, LanguageManager.getCurrentLanguageCode(this))
+        }
     }
 
     @SuppressLint("MissingPermission")
@@ -550,7 +645,7 @@ class MapPickerActivity : AppCompatActivity() {
         }
 
         if (best != null) {
-            moveCameraTo(best.latitude, best.longitude, 15.5)
+            moveCameraTo(best.latitude, best.longitude, 16.0, animate = true)
             return
         }
 
@@ -567,10 +662,17 @@ class MapPickerActivity : AppCompatActivity() {
             return
         }
 
+        activeSingleFixListener?.let { old ->
+            runCatching { locationManager.removeUpdates(old) }
+        }
+
         val singleFixListener = object : LocationListener {
             override fun onLocationChanged(location: Location) {
-                locationManager.removeUpdates(this)
-                moveCameraTo(location.latitude, location.longitude, 15.5)
+                runCatching { locationManager.removeUpdates(this) }
+                activeSingleFixListener = null
+                if (!isDestroyed && !isFinishing) {
+                    moveCameraTo(location.latitude, location.longitude, 16.0, animate = true)
+                }
             }
 
             override fun onProviderEnabled(provider: String) {}
@@ -578,6 +680,7 @@ class MapPickerActivity : AppCompatActivity() {
             @Deprecated("Deprecated in Java")
             override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
         }
+        activeSingleFixListener = singleFixListener
 
         runCatching {
             locationManager.requestLocationUpdates(
@@ -633,6 +736,10 @@ class MapPickerActivity : AppCompatActivity() {
         imm?.hideSoftInputFromWindow(binding.etSearchPlace.windowToken, 0)
     }
 
+    private fun isRobolectric(): Boolean {
+        return "robolectric".equals(Build.FINGERPRINT, ignoreCase = true)
+    }
+
     override fun onStart() {
         super.onStart()
         binding.mapView.onStart()
@@ -664,6 +771,12 @@ class MapPickerActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        activeSingleFixListener?.let { listener ->
+            runCatching { locationManager.removeUpdates(listener) }
+        }
+        activeSingleFixListener = null
+        binding.ivCrosshair.animate().cancel()
+        binding.viewPinShadow.animate().cancel()
         binding.mapView.onDestroy()
         super.onDestroy()
     }

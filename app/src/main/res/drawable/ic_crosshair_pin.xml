@@ -1,15 +1,21 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="44dp"
-    android:height="44dp"
-    android:viewportWidth="44"
-    android:viewportHeight="44">
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <!-- Sleek Google Maps-inspired electric cyan target pin whose sharp tip lands at y=46 -->
     <path
-        android:fillColor="#4006B6D4"
-        android:pathData="M22,22m-18,0a18,18 0,1 1,36 0a18,18 0,1 1,-36 0" />
+        android:fillColor="#3006B6D4"
+        android:pathData="M24,4C15.72,4 9,10.72 9,19c0,10.8 15,27 15,27s15,-16.2 15,-27c0,-8.28 -6.72,-15 -15,-15z" />
     <path
         android:fillColor="@color/accent_cyan"
-        android:pathData="M22,4C15.93,4 11,8.93 11,15c0,8.25 11,21 11,21s11,-12.75 11,-21c0,-6.07 -4.93,-11 -11,-11z" />
+        android:pathData="M24,6C16.82,6 11,11.82 11,19c0,9.6 13,25 13,25s13,-15.4 13,-25c0,-7.18 -5.82,-13 -13,-13z"
+        android:strokeColor="#E0F7FF"
+        android:strokeWidth="1.4" />
     <path
         android:fillColor="@color/bg_midnight"
-        android:pathData="M22,11a4,4 0,1 0,0 8a4,4 0,1 0,0 -8z" />
+        android:pathData="M24,13a6,6 0,1 0,0 12a6,6 0,1 0,0 -12z" />
+    <path
+        android:fillColor="@color/white"
+        android:pathData="M24,16.5a2.5,2.5 0,1 0,0 5a2.5,2.5 0,1 0,0 -5z" />
 </vector>

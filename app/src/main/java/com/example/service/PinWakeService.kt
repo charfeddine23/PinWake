@@ -37,10 +37,13 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 class PinWakeService : Service() {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val evaluationMutex = Mutex()
     private lateinit var repository: PinWakeRepository
     private lateinit var locationManager: LocationManager
     private lateinit var notificationManager: NotificationManager
@@ -72,6 +75,10 @@ class PinWakeService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // Always enter foreground synchronously before any async branching or stopSelf()
+        // to satisfy Android 12+ startForegroundService() contract and avoid ANR/crash.
+        ensureForegroundStarted()
+
         when (intent?.action) {
             ACTION_CANCEL_ALL -> {
                 serviceScope.launch {
@@ -88,7 +95,6 @@ class PinWakeService : Service() {
                 notificationManager.cancel(NOTIFICATION_ALARM_ID)
                 val alarmId = intent.getLongExtra(EXTRA_ALARM_ID, -1L)
                 if (alarmId > 0L) triggeredLock.remove(alarmId)
-                ensureForegroundStarted()
                 observeActiveAlarms()
                 return START_STICKY
             }
@@ -96,7 +102,6 @@ class PinWakeService : Service() {
                 notificationManager.cancel(NOTIFICATION_ALARM_ID)
                 val alarmId = intent.getLongExtra(EXTRA_ALARM_ID, -1L)
                 val dist = intent.getFloatExtra(EXTRA_DISTANCE_METERS, -1f).let { if (it >= 0f) it else null }
-                ensureForegroundStarted()
                 serviceScope.launch {
                     if (alarmId > 0L) {
                         triggeredLock.remove(alarmId)
@@ -109,7 +114,6 @@ class PinWakeService : Service() {
                 return START_STICKY
             }
             else -> {
-                ensureForegroundStarted()
                 observeActiveAlarms()
                 return START_STICKY
             }
@@ -145,7 +149,6 @@ class PinWakeService : Service() {
                     return@collectLatest
                 }
 
-                // Seed initial fix if we don't have one yet
                 if (lastKnownLocation == null) {
                     lastKnownLocation = getBestLastKnownLocation()
                 }
@@ -193,8 +196,8 @@ class PinWakeService : Service() {
     private suspend fun evaluateAlarmsAgainstLocation(
         location: Location,
         activeAlarms: List<GeoAlarmEntity>
-    ) {
-        if (activeAlarms.isEmpty()) return
+    ) = evaluationMutex.withLock {
+        if (activeAlarms.isEmpty()) return@withLock
 
         var closestAlarm: GeoAlarmEntity? = null
         var minDistance = Float.MAX_VALUE
@@ -217,7 +220,6 @@ class PinWakeService : Service() {
                 closestAlarm = alarm
             }
 
-            // Accuracy sanity guard against wild coarse cell-tower jumps when GPS isn't locked
             val accuracyAcceptable = !location.hasAccuracy() ||
                 location.provider == LocationManager.GPS_PROVIDER ||
                 location.accuracy <= (alarm.radiusMeters * 1.5f).coerceAtLeast(500f)
@@ -225,9 +227,8 @@ class PinWakeService : Service() {
             if (dist <= alarm.radiusMeters &&
                 now >= alarm.snoozedUntilMs &&
                 accuracyAcceptable &&
-                !triggeredLock.contains(alarm.id)
-            ) {
                 triggeredLock.add(alarm.id)
+            ) {
                 repository.setAlarmActive(alarm.id, active = false, lastDistanceMeters = dist)
                 repository.recordTripOutcome(alarm, TripOutcome.ARRIVED)
                 triggerUnmissableAlarm(alarm, dist)
@@ -236,10 +237,8 @@ class PinWakeService : Service() {
 
         val remaining = repository.getActiveAlarmsOnce()
         if (remaining.isEmpty()) {
-            // Keep service alive briefly or let AlarmRingingActivity handle dismiss/snooze;
-            // if user snoozes, PinWakeService restarts via ACTION_SNOOZE_500M.
             stopTrackingAndSelf()
-            return
+            return@withLock
         }
 
         val targetTier = PollingTier.forDistance(minDistance)
@@ -296,7 +295,6 @@ class PinWakeService : Service() {
 
         try {
             if (locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
-                // Network provider runs at least balanced interval to assist indoors without draining battery
                 locationManager.requestLocationUpdates(
                     LocationManager.NETWORK_PROVIDER,
                     intervalMs.coerceAtLeast(10_000L),
@@ -509,7 +507,7 @@ class PinWakeService : Service() {
                 action = ACTION_DISMISS_ALARM
                 putExtra(EXTRA_ALARM_ID, alarmId)
             }
-            runCatching { context.startService(intent) }
+            runCatching { ContextCompat.startForegroundService(context, intent) }
         }
     }
 }

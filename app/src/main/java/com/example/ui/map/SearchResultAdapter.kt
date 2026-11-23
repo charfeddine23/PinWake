@@ -31,7 +31,7 @@ class SearchResultAdapter(
 
         fun bind(item: NominatimPlaceDto) {
             binding.tvPlaceTitle.text = item.shortTitle()
-            binding.tvPlaceAddress.text = item.displayName
+            binding.tvPlaceAddress.text = NominatimPlaceDto.stripUnsupportedGlyphs(item.displayName)
             binding.root.setOnClickListener { onPlaceClick(item) }
         }
     }
