@@ -8,9 +8,10 @@
 
     <group
         android:pivotX="512"
-        android:pivotY="512"
-        android:scaleX="0.96"
-        android:scaleY="0.96">
+        android:pivotY="529"
+        android:scaleX="0.58"
+        android:scaleY="0.58"
+        android:translateY="-17">
 
         <!-- Ground GPS Ripple Rings -->
         <path
