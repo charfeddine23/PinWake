@@ -112,4 +112,69 @@ class ExampleRobolectricTest {
             db.close()
         }
     }
+
+    @Test
+    fun `saveQuickAssignedLocation replaces canonical Home without duplicates and supports custom places`() = kotlinx.coroutines.runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val db = androidx.room.Room.inMemoryDatabaseBuilder(
+            context,
+            com.example.data.local.AppDatabase::class.java
+        ).allowMainThreadQueries().build()
+
+        try {
+            val repo = com.example.data.repository.PinWakeRepository(
+                geoAlarmDao = db.geoAlarmDao(),
+                tripHistoryDao = db.tripHistoryDao(),
+                nominatimApi = com.example.data.remote.NominatimApiService.create(),
+                trackingStateManager = com.example.data.repository.TrackingStateManager()
+            )
+
+            val firstHomeId = repo.saveQuickAssignedLocation(
+                category = com.example.data.local.entity.FavoriteCategory.HOME,
+                title = "Home",
+                address = "Old Address",
+                latitude = 36.7500,
+                longitude = 3.0500,
+                radiusMeters = 500,
+                isActive = false
+            )
+            val replacedHomeId = repo.saveQuickAssignedLocation(
+                category = com.example.data.local.entity.FavoriteCategory.HOME,
+                title = "New Home",
+                address = "Updated Address",
+                latitude = 36.7600,
+                longitude = 3.0600,
+                radiusMeters = 650,
+                isActive = true
+            )
+            val customId = repo.saveQuickAssignedLocation(
+                category = com.example.data.local.entity.FavoriteCategory.CUSTOM,
+                title = "Gym",
+                address = "City Center",
+                latitude = 36.7700,
+                longitude = 3.0700,
+                radiusMeters = 350,
+                isActive = false
+            )
+
+            assertEquals(firstHomeId, replacedHomeId)
+            assertTrue(customId != replacedHomeId)
+
+            val home = repo.getFavoriteByCategory(com.example.data.local.entity.FavoriteCategory.HOME)
+            assertEquals("New Home", home?.title)
+            assertEquals(36.7600, home?.latitude ?: 0.0, 0.0001)
+            assertEquals(650, home?.radiusMeters)
+            assertTrue(home?.isActive == true)
+
+            val custom = repo.getAlarmById(customId)
+            assertEquals("Gym", custom?.title)
+            assertTrue(custom?.isFavorite == true)
+            assertEquals(
+                com.example.data.local.entity.FavoriteCategory.CUSTOM,
+                custom?.favoriteCategory
+            )
+        } finally {
+            db.close()
+        }
+    }
 }

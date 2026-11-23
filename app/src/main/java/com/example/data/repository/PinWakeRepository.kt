@@ -40,6 +40,60 @@ class PinWakeRepository(
         }
     }
 
+    suspend fun saveQuickAssignedLocation(
+        category: FavoriteCategory,
+        title: String,
+        address: String,
+        latitude: Double,
+        longitude: Double,
+        radiusMeters: Int,
+        isActive: Boolean
+    ): Long {
+        val now = System.currentTimeMillis()
+        val isCanonicalSlot = category == FavoriteCategory.HOME ||
+            category == FavoriteCategory.WORK ||
+            category == FavoriteCategory.STATION
+        val existing = if (isCanonicalSlot) {
+            geoAlarmDao.getFavoriteByCategory(category)
+        } else {
+            null
+        }
+        val cleanTitle = title.trim()
+        val cleanAddress = address.trim()
+        return if (existing != null) {
+            val updated = existing.copy(
+                title = cleanTitle,
+                address = cleanAddress,
+                latitude = latitude,
+                longitude = longitude,
+                radiusMeters = radiusMeters.coerceIn(200, 5000),
+                isActive = isActive,
+                isFavorite = true,
+                favoriteCategory = category,
+                lastDistanceMeters = null,
+                snoozedUntilMs = 0L,
+                updatedAt = now
+            )
+            geoAlarmDao.updateAlarm(updated)
+            existing.id
+        } else {
+            geoAlarmDao.insertAlarm(
+                GeoAlarmEntity(
+                    title = cleanTitle,
+                    address = cleanAddress,
+                    latitude = latitude,
+                    longitude = longitude,
+                    radiusMeters = radiusMeters.coerceIn(200, 5000),
+                    isActive = isActive,
+                    isFavorite = category != FavoriteCategory.NONE,
+                    favoriteCategory = category,
+                    createdAt = now,
+                    updatedAt = now
+                )
+            )
+        }
+    }
+
     suspend fun setAlarmActive(id: Long, active: Boolean, lastDistanceMeters: Float? = null) {
         geoAlarmDao.setAlarmActive(
             id = id,

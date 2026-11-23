@@ -195,6 +195,52 @@ class DashboardViewModel(
         }
     }
 
+    fun reverseGeocodeCoordinate(
+        latitude: Double,
+        longitude: Double,
+        languageCode: String,
+        onResult: (suggestedTitle: String, resolvedAddress: String) -> Unit
+    ) {
+        viewModelScope.launch {
+            val result = repository.reverseGeocode(latitude, longitude, languageCode)
+            result.onSuccess { place ->
+                val title = place.shortTitle()
+                val address = place.compactAddress().ifBlank { title }
+                onResult(title, address)
+            }.onFailure {
+                onResult("", "")
+            }
+        }
+    }
+
+    fun saveQuickAssignedLocation(
+        category: FavoriteCategory,
+        title: String,
+        address: String,
+        latitude: Double,
+        longitude: Double,
+        radiusMeters: Int,
+        isActive: Boolean,
+        onDone: (savedId: Long, hasAnyActive: Boolean) -> Unit
+    ) {
+        viewModelScope.launch {
+            val savedId = repository.saveQuickAssignedLocation(
+                category = category,
+                title = title,
+                address = address,
+                latitude = latitude,
+                longitude = longitude,
+                radiusMeters = radiusMeters,
+                isActive = isActive
+            )
+            val hasAnyActive = repository.getActiveAlarmsOnce().isNotEmpty()
+            if (!hasAnyActive) {
+                repository.trackingStateManager.resetToStandby()
+            }
+            onDone(savedId, hasAnyActive)
+        }
+    }
+
     class Factory(
         private val repository: PinWakeRepository,
         private val apkUpdateManager: ApkUpdateManager

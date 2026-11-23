@@ -39,6 +39,7 @@ import com.example.util.MapStyleHelper
 import com.example.util.OpenFreeMapStyle
 import com.example.util.OpenFreeMapStyles
 import com.example.util.PermissionHelper
+import com.example.util.SafeMapLocationEngine
 import kotlinx.coroutines.launch
 import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraPosition
@@ -73,6 +74,7 @@ class MapPickerActivity : AppCompatActivity() {
     private var pendingCameraTarget: Triple<Double, Double, Double>? = null
     private var currentLat: Double = DEFAULT_LAT
     private var currentLon: Double = DEFAULT_LON
+    private val safeLocationEngine by lazy { SafeMapLocationEngine(this) }
 
     private val locationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -652,7 +654,8 @@ class MapPickerActivity : AppCompatActivity() {
 
             val activationOptions = LocationComponentActivationOptions.builder(this, style)
                 .locationComponentOptions(options)
-                .useDefaultLocationEngine(true)
+                .useDefaultLocationEngine(false)
+                .locationEngine(safeLocationEngine)
                 .build()
 
             map.locationComponent.apply {
@@ -811,6 +814,9 @@ class MapPickerActivity : AppCompatActivity() {
             runCatching { locationManager.removeUpdates(listener) }
         }
         activeSingleFixListener = null
+        runCatching {
+            mapLibreMap?.locationComponent?.takeIf { it.isLocationComponentActivated }?.isLocationComponentEnabled = false
+        }
         binding.ivCrosshair.animate().cancel()
         binding.viewPinShadow.animate().cancel()
         binding.mapView.onDestroy()

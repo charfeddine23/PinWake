@@ -128,4 +128,13 @@
     <string name="map_sheet_title">تحديد وجهة التنبيه</string>
     <string name="alarm_card_armed">مفعّل</string>
     <string name="cd_drag_sheet">توسيع أو طي عرض الخريطة</string>
+
+    <!-- قائمة التثبيت السريع بالضغط لمدة ثانية على الخريطة -->
+    <string name="quick_assign_title">تخصيص نقطة على الخريطة</string>
+    <string name="quick_assign_other">مكان آخر</string>
+    <string name="quick_assign_name_hint">اسم الوجهة (مثال: المنزل، العمل، النادي)</string>
+    <string name="quick_assign_activate_alarm">تفعيل منبه الوصول بالـ GPS الآن</string>
+    <string name="quick_assign_save">تثبيت على الخريطة</string>
+    <string name="quick_assign_saved_toast">تم تثبيت %1$s على الخريطة بنجاح</string>
+    <string name="quick_assign_hold_hint">اضغط مطولاً 1ث لتثبيت مكان</string>
 </resources>

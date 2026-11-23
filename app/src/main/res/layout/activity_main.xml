@@ -78,7 +78,7 @@
         android:layout_gravity="top"
         android:elevation="9dp" />
 
-    <!-- Floating Top Command Bar -->
+    <!-- Floating Top Command Bar (Always visible in all modes including Full Map) -->
     <LinearLayout
         android:id="@+id/topFloatingBar"
         android:layout_width="match_parent"
@@ -92,13 +92,15 @@
         android:paddingBottom="8dp">
 
         <LinearLayout
+            android:id="@+id/pillBrandHeader"
             android:layout_width="wrap_content"
-            android:layout_height="44dp"
-            android:background="@drawable/bg_liquid_glass_pill"
+            android:layout_height="46dp"
+            android:background="@drawable/bg_luxury_glass_pill"
+            android:elevation="6dp"
             android:gravity="center_vertical"
             android:orientation="horizontal"
             android:paddingStart="6dp"
-            android:paddingEnd="14dp">
+            android:paddingEnd="15dp">
 
             <ImageView
                 android:layout_width="32dp"
@@ -111,7 +113,8 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
+                android:layout_marginStart="9dp"
+                android:letterSpacing="0.01"
                 android:text="@string/app_name"
                 android:textAppearance="@style/TextAppearance.PinWake.Title"
                 android:textSize="16sp"
@@ -126,52 +129,56 @@
         <LinearLayout
             android:id="@+id/btnCheckUpdates"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+            android:layout_height="46dp"
             android:layout_marginEnd="8dp"
-            android:background="@drawable/bg_liquid_glass_pill"
+            android:background="@drawable/bg_luxury_glass_pill"
             android:clickable="true"
             android:contentDescription="@string/cd_check_updates"
+            android:elevation="6dp"
             android:focusable="true"
-            android:foreground="?attr/selectableItemBackgroundBorderless"
             android:gravity="center"
             android:minWidth="48dp"
             android:minHeight="48dp"
             android:orientation="horizontal"
-            android:paddingHorizontal="12dp">
+            android:paddingHorizontal="13dp">
 
             <ImageView
                 android:layout_width="16dp"
                 android:layout_height="16dp"
                 android:contentDescription="@string/cd_check_updates"
-                android:src="@drawable/ic_update" />
+                android:src="@drawable/ic_update"
+                app:tint="@color/accent_cyan_glow" />
 
             <TextView
                 android:id="@+id/tvAppVersionPill"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="5dp"
+                android:layout_marginStart="6dp"
                 android:textAppearance="@style/TextAppearance.PinWake.Mono"
                 android:textColor="@color/accent_cyan_glow"
                 android:textSize="11sp"
+                android:textStyle="bold"
                 tools:text="v1.0.0" />
         </LinearLayout>
 
         <TextView
             android:id="@+id/btnLanguageToggle"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:background="@drawable/bg_liquid_glass_pill"
+            android:layout_height="46dp"
+            android:background="@drawable/bg_luxury_glass_pill"
             android:clickable="true"
+            android:elevation="6dp"
             android:focusable="true"
-            android:foreground="?attr/selectableItemBackgroundBorderless"
             android:gravity="center"
-            android:minWidth="48dp"
+            android:letterSpacing="0.04"
+            android:minWidth="56dp"
             android:minHeight="48dp"
-            android:paddingHorizontal="12dp"
+            android:paddingHorizontal="13dp"
             android:text="@string/lang_switch_label"
             android:textAppearance="@style/TextAppearance.PinWake.Mono"
             android:textColor="@color/text_primary"
-            android:textSize="11sp" />
+            android:textSize="11sp"
+            android:textStyle="bold" />
     </LinearLayout>
 
     <!-- Draggable Mobility Bottom Sheet (Pull down to leave only "Where are you heading?") -->
@@ -968,35 +975,40 @@
     <LinearLayout
         android:id="@+id/fabPinAlarm"
         android:layout_width="wrap_content"
-        android:layout_height="54dp"
+        android:layout_height="56dp"
         android:layout_gravity="bottom|end"
-        android:layout_marginEnd="20dp"
+        android:layout_marginEnd="16dp"
         android:layout_marginBottom="20dp"
-        android:background="@drawable/bg_cyan_gradient_button"
+        android:background="@drawable/bg_luxury_cta_pill"
         android:clickable="true"
-        android:elevation="10dp"
+        android:elevation="12dp"
         android:focusable="true"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingHorizontal="20dp">
+        android:paddingStart="10dp"
+        android:paddingEnd="18dp">
 
         <ImageView
-            android:layout_width="20dp"
-            android:layout_height="20dp"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:background="@drawable/bg_icon_circle_dark"
             android:contentDescription="@string/btn_new_alarm"
-            android:src="@drawable/ic_add" />
+            android:padding="8dp"
+            android:src="@drawable/ic_add"
+            app:tint="@color/accent_cyan_glow" />
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
+            android:layout_marginStart="10dp"
+            android:letterSpacing="0.01"
             android:text="@string/btn_new_alarm"
             android:textColor="@color/text_on_accent"
             android:textSize="14sp"
             android:textStyle="bold" />
     </LinearLayout>
 
-    <!-- Full-Map Quick Stacked Buttons (Top: My Location, Middle: Work, Bottom: Home) -->
+    <!-- Full-Map Quick Stacked Dock (Top: My Location, Middle: Work, Bottom: Home) -->
     <LinearLayout
         android:id="@+id/stackQuickFavMapButtons"
         android:layout_width="wrap_content"
@@ -1004,98 +1016,121 @@
         android:layout_gravity="bottom|end"
         android:layout_marginEnd="16dp"
         android:layout_marginBottom="132dp"
+        android:clipChildren="false"
+        android:clipToPadding="false"
         android:elevation="11dp"
         android:gravity="end"
         android:orientation="vertical"
-        android:visibility="gone"
+        android:visibility="invisible"
         tools:visibility="visible">
 
         <!-- Current GPS Location Button (above Work) -->
         <ImageButton
             android:id="@+id/btnMyLocationFullMap"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:background="@drawable/bg_liquid_glass_pill"
+            android:layout_width="50dp"
+            android:layout_height="50dp"
+            android:background="@drawable/bg_luxury_glass_pill"
             android:contentDescription="@string/map_current_location_cd"
-            android:elevation="6dp"
-            android:foreground="?attr/selectableItemBackgroundBorderless"
-            android:padding="12dp"
+            android:elevation="8dp"
+            android:padding="13dp"
             android:scaleType="centerInside"
             android:src="@drawable/ic_my_location"
             app:tint="@color/accent_cyan_glow" />
 
-        <!-- First Favorite Button: Work -->
+        <!-- Work Quick Fly-To Pill -->
         <LinearLayout
             android:id="@+id/btnQuickWorkFullMap"
             android:layout_width="wrap_content"
             android:layout_height="48dp"
-            android:layout_marginTop="10dp"
-            android:background="@drawable/bg_liquid_glass_pill"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/bg_luxury_glass_pill"
             android:clickable="true"
             android:contentDescription="@string/fav_work"
-            android:elevation="6dp"
+            android:elevation="8dp"
             android:focusable="true"
-            android:foreground="?attr/selectableItemBackgroundBorderless"
             android:gravity="center_vertical"
-            android:minWidth="112dp"
+            android:minWidth="136dp"
             android:orientation="horizontal"
-            android:paddingHorizontal="14dp">
+            android:paddingStart="8dp"
+            android:paddingEnd="14dp">
 
             <ImageView
                 android:id="@+id/ivQuickWorkFullMap"
-                android:layout_width="18dp"
-                android:layout_height="18dp"
+                android:layout_width="30dp"
+                android:layout_height="30dp"
+                android:background="@drawable/bg_icon_circle_dark"
                 android:contentDescription="@string/fav_work"
+                android:padding="6dp"
                 android:src="@drawable/ic_work"
                 app:tint="@color/accent_amber" />
 
             <TextView
                 android:id="@+id/tvQuickWorkFullMap"
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
+                android:layout_marginStart="10dp"
+                android:layout_marginEnd="8dp"
+                android:layout_weight="1"
                 android:text="@string/fav_work"
                 android:textAppearance="@style/TextAppearance.PinWake.Title"
                 android:textColor="@color/text_primary"
                 android:textSize="13sp"
                 android:textStyle="bold" />
+
+            <View
+                android:id="@+id/dotQuickWorkFullMap"
+                android:layout_width="8dp"
+                android:layout_height="8dp"
+                android:alpha="0.45"
+                android:background="@drawable/bg_badge_cyan" />
         </LinearLayout>
 
-        <!-- Second Stacked Button: Home -->
+        <!-- Home Quick Fly-To Pill -->
         <LinearLayout
             android:id="@+id/btnQuickHomeFullMap"
             android:layout_width="wrap_content"
             android:layout_height="48dp"
             android:layout_marginTop="10dp"
-            android:background="@drawable/bg_liquid_glass_pill"
+            android:background="@drawable/bg_luxury_glass_pill"
             android:clickable="true"
             android:contentDescription="@string/fav_home"
-            android:elevation="6dp"
+            android:elevation="8dp"
             android:focusable="true"
-            android:foreground="?attr/selectableItemBackgroundBorderless"
             android:gravity="center_vertical"
-            android:minWidth="112dp"
+            android:minWidth="136dp"
             android:orientation="horizontal"
-            android:paddingHorizontal="14dp">
+            android:paddingStart="8dp"
+            android:paddingEnd="14dp">
 
             <ImageView
                 android:id="@+id/ivQuickHomeFullMap"
-                android:layout_width="18dp"
-                android:layout_height="18dp"
+                android:layout_width="30dp"
+                android:layout_height="30dp"
+                android:background="@drawable/bg_icon_circle_dark"
                 android:contentDescription="@string/fav_home"
+                android:padding="6dp"
                 android:src="@drawable/ic_home"
                 app:tint="@color/accent_emerald" />
 
             <TextView
                 android:id="@+id/tvQuickHomeFullMap"
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
+                android:layout_marginStart="10dp"
+                android:layout_marginEnd="8dp"
+                android:layout_weight="1"
                 android:text="@string/fav_home"
                 android:textAppearance="@style/TextAppearance.PinWake.Title"
                 android:textColor="@color/text_primary"
                 android:textSize="13sp"
                 android:textStyle="bold" />
+
+            <View
+                android:id="@+id/dotQuickHomeFullMap"
+                android:layout_width="8dp"
+                android:layout_height="8dp"
+                android:alpha="0.45"
+                android:background="@drawable/bg_badge_emerald" />
         </LinearLayout>
     </LinearLayout>
 
