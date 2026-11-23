@@ -4,10 +4,13 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.location.Location
+import android.location.LocationListener
 import android.location.LocationManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Looper
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
@@ -89,6 +92,8 @@ class MainActivity : AppCompatActivity() {
     private var sysBottomInset: Int = 0
     private var computedHalfSlideOffset: Float = 0.65f
     private var lastSheetState: Int = BottomSheetBehavior.STATE_HALF_EXPANDED
+    private var activeSingleFixListener: LocationListener? = null
+    private var pendingCenterOnLocation: Boolean = false
 
     private val restoreSheetBackCallback = object : OnBackPressedCallback(false) {
         override fun handleOnBackPressed() {
@@ -104,8 +109,15 @@ class MainActivity : AppCompatActivity() {
         heroMap?.style?.let { style ->
             if (style.isFullyLoaded) enableHeroLocationPuck(style)
         }
-        lastHeroCameraKey = null
-        updateHeroMapViewport(viewModel.uiState.value)
+        if (pendingCenterOnLocation) {
+            pendingCenterOnLocation = false
+            if (hasFineOrCoarseLocation()) {
+                centerHeroOnCurrentLocation()
+            }
+        } else {
+            lastHeroCameraKey = null
+            updateHeroMapViewport(viewModel.uiState.value)
+        }
     }
 
     private val backgroundLocationLauncher = registerForActivityResult(
@@ -247,6 +259,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        activeSingleFixListener?.let { listener ->
+            runCatching { getSystemService(LocationManager::class.java)?.removeUpdates(listener) }
+        }
+        activeSingleFixListener = null
         binding.dashboardMapView.onDestroy()
         super.onDestroy()
     }
@@ -279,6 +295,14 @@ class MainActivity : AppCompatActivity() {
                 fabParams.bottomMargin = targetFabMargin
                 binding.fabPinAlarm.layoutParams = fabParams
             }
+
+            val targetBlurHeight = (94f * density).toInt() + sysBars.top
+            val blurParams = binding.topLiquidGlassBlur.layoutParams
+            if (blurParams.height != targetBlurHeight) {
+                blurParams.height = targetBlurHeight
+                binding.topLiquidGlassBlur.layoutParams = blurParams
+            }
+            binding.topLiquidGlassBlur.pivotY = 0f
 
             updateBottomSheetGeometry()
             insets
@@ -327,6 +351,14 @@ class MainActivity : AppCompatActivity() {
         computedHalfSlideOffset = ((collapsedOffset - halfOffset).toFloat() / range)
             .coerceIn(0.15f, 0.95f)
 
+        val stackParams = binding.stackQuickFavMapButtons.layoutParams as
+            androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams
+        val targetStackBottom = targetPeekHeight + (14f * density).toInt()
+        if (stackParams.bottomMargin != targetStackBottom) {
+            stackParams.bottomMargin = targetStackBottom
+            binding.stackQuickFavMapButtons.layoutParams = stackParams
+        }
+
         val currentSlide = when (sheetBehavior.state) {
             BottomSheetBehavior.STATE_COLLAPSED -> 0f
             BottomSheetBehavior.STATE_EXPANDED -> 1f
@@ -350,7 +382,8 @@ class MainActivity : AppCompatActivity() {
         binding.topFloatingBar.visibility =
             if (topBarAlpha <= 0.02f) View.GONE else View.VISIBLE
 
-        binding.mapScrimTop.alpha = collapseFactor
+        binding.topLiquidGlassBlur.alpha = 0.72f + 0.28f * collapseFactor
+        binding.topLiquidGlassBlur.scaleY = 0.56f + 0.44f * collapseFactor
         binding.mapScrimBottom.alpha = collapseFactor
 
         val fabAlpha = ((collapseFactor - 0.28f) / 0.45f).coerceIn(0f, 1f)
@@ -384,6 +417,14 @@ class MainActivity : AppCompatActivity() {
         binding.pillLiveRadar.alpha = pillAlpha
         binding.pillLiveRadar.visibility =
             if (pillAlpha <= 0.02f) View.GONE else View.VISIBLE
+
+        val fullMapQuickAlpha = ((0.38f - collapseFactor) / 0.38f).coerceIn(0f, 1f)
+        val quickScale = 0.85f + 0.15f * fullMapQuickAlpha
+        binding.stackQuickFavMapButtons.alpha = fullMapQuickAlpha
+        binding.stackQuickFavMapButtons.scaleX = quickScale
+        binding.stackQuickFavMapButtons.scaleY = quickScale
+        binding.stackQuickFavMapButtons.visibility =
+            if (fullMapQuickAlpha <= 0.02f) View.GONE else View.VISIBLE
     }
 
     private fun syncModeForSheetState(state: Int, animateCamera: Boolean) {
@@ -740,6 +781,88 @@ class MainActivity : AppCompatActivity() {
         binding.btnPermBattery.setOnClickListener {
             runCatching { startActivity(PermissionHelper.buildBatteryOptimizationIntent(this)) }
         }
+
+        binding.btnMyLocationFullMap.setOnClickListener {
+            if (hasFineOrCoarseLocation()) {
+                centerHeroOnCurrentLocation()
+            } else {
+                pendingCenterOnLocation = true
+                requestFineLocation()
+            }
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun centerHeroOnCurrentLocation() {
+        if (!hasFineOrCoarseLocation()) return
+        val map = heroMap ?: return
+        val lm = getSystemService(LocationManager::class.java) ?: return
+
+        map.style?.let { style ->
+            if (style.isFullyLoaded) enableHeroLocationPuck(style)
+        }
+
+        val gps = runCatching { lm.getLastKnownLocation(LocationManager.GPS_PROVIDER) }.getOrNull()
+        val net = runCatching { lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER) }.getOrNull()
+        val best = when {
+            gps != null && net != null -> if (gps.time >= net.time) gps else net
+            gps != null -> gps
+            else -> net
+        }
+
+        if (best != null) {
+            lastHeroCameraKey = "myloc:${best.latitude}:${best.longitude}"
+            moveHeroCameraWithSheetPadding(
+                map = map,
+                lat = best.latitude,
+                lon = best.longitude,
+                zoom = 16.0,
+                animate = true
+            )
+            return
+        }
+
+        val provider = when {
+            lm.isProviderEnabled(LocationManager.GPS_PROVIDER) -> LocationManager.GPS_PROVIDER
+            lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER) -> LocationManager.NETWORK_PROVIDER
+            else -> null
+        }
+
+        if (provider == null) {
+            Toast.makeText(this, R.string.map_location_unavailable, Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        activeSingleFixListener?.let { old ->
+            runCatching { lm.removeUpdates(old) }
+        }
+
+        val listener = object : LocationListener {
+            override fun onLocationChanged(location: Location) {
+                runCatching { lm.removeUpdates(this) }
+                activeSingleFixListener = null
+                if (!isDestroyed && !isFinishing) {
+                    lastHeroCameraKey = "myloc:${location.latitude}:${location.longitude}"
+                    moveHeroCameraWithSheetPadding(
+                        map = map,
+                        lat = location.latitude,
+                        lon = location.longitude,
+                        zoom = 16.0,
+                        animate = true
+                    )
+                }
+            }
+
+            override fun onProviderEnabled(provider: String) {}
+            override fun onProviderDisabled(provider: String) {}
+            @Deprecated("Deprecated in Java")
+            override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
+        }
+        activeSingleFixListener = listener
+
+        runCatching {
+            lm.requestLocationUpdates(provider, 0L, 0f, listener, Looper.getMainLooper())
+        }
     }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -933,6 +1056,18 @@ class MainActivity : AppCompatActivity() {
             favorite = state.stationFavorite,
             category = FavoriteCategory.STATION
         )
+        renderFullMapQuickButton(
+            button = binding.btnQuickWorkFullMap,
+            labelView = binding.tvQuickWorkFullMap,
+            favorite = state.workFavorite,
+            category = FavoriteCategory.WORK
+        )
+        renderFullMapQuickButton(
+            button = binding.btnQuickHomeFullMap,
+            labelView = binding.tvQuickHomeFullMap,
+            favorite = state.homeFavorite,
+            category = FavoriteCategory.HOME
+        )
     }
 
     private fun renderTelemetryBanner(state: DashboardUiState) {
@@ -1013,6 +1148,57 @@ class MainActivity : AppCompatActivity() {
                 }
             }
             card.setOnLongClickListener {
+                openMapPicker(alarmId = favorite.id)
+                true
+            }
+        }
+    }
+
+    private fun renderFullMapQuickButton(
+        button: View,
+        labelView: TextView,
+        favorite: GeoAlarmEntity?,
+        category: FavoriteCategory
+    ) {
+        if (favorite == null) {
+            button.setBackgroundResource(R.drawable.bg_liquid_glass_pill)
+            labelView.setTextColor(ContextCompat.getColor(this, R.color.text_primary))
+            button.setOnClickListener {
+                openMapPicker(defaultCategory = category)
+            }
+            button.setOnLongClickListener(null)
+        } else {
+            if (favorite.isActive) {
+                button.setBackgroundResource(R.drawable.bg_liquid_glass_pill_active)
+                labelView.setTextColor(ContextCompat.getColor(this, R.color.accent_emerald))
+            } else {
+                button.setBackgroundResource(R.drawable.bg_liquid_glass_pill)
+                labelView.setTextColor(ContextCompat.getColor(this, R.color.text_primary))
+            }
+            button.setOnClickListener {
+                heroMap?.let { map ->
+                    lastHeroCameraKey = "fav:${favorite.id}:${favorite.latitude}:${favorite.longitude}"
+                    moveHeroCameraWithSheetPadding(
+                        map = map,
+                        lat = favorite.latitude,
+                        lon = favorite.longitude,
+                        zoom = 15.5,
+                        animate = true
+                    )
+                }
+                val nextActive = !favorite.isActive
+                if (nextActive && !PermissionHelper.checkStatus(this).hasFineLocation) {
+                    requestFineLocation()
+                }
+                viewModel.setAlarmActive(favorite, nextActive) { hasActive ->
+                    if (hasActive && PermissionHelper.checkStatus(this).hasFineLocation) {
+                        PinWakeService.startOrSync(this)
+                    } else if (!hasActive) {
+                        stopService(Intent(this, PinWakeService::class.java))
+                    }
+                }
+            }
+            button.setOnLongClickListener {
                 openMapPicker(alarmId = favorite.id)
                 true
             }

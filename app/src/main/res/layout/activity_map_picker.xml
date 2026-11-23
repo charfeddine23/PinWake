@@ -24,11 +24,12 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
 
-        <View
+        <com.example.ui.widget.LiquidGlassTopFadeView
+            android:id="@+id/topLiquidGlassBlur"
             android:layout_width="match_parent"
-            android:layout_height="96dp"
+            android:layout_height="124dp"
             android:layout_gravity="top"
-            android:background="@drawable/bg_map_scrim_top" />
+            android:elevation="5dp" />
 
         <View
             android:layout_width="match_parent"

@@ -154,6 +154,13 @@ class MapPickerActivity : AppCompatActivity() {
             if (binding.bottomSheet.paddingBottom != targetBottomPad) {
                 binding.bottomSheet.updatePadding(bottom = targetBottomPad)
             }
+
+            val targetBlurHeight = (94f * resources.displayMetrics.density).toInt() + sysBars.top
+            val blurParams = binding.topLiquidGlassBlur.layoutParams
+            if (blurParams.height != targetBlurHeight) {
+                blurParams.height = targetBlurHeight
+                binding.topLiquidGlassBlur.layoutParams = blurParams
+            }
             insets
         }
     }

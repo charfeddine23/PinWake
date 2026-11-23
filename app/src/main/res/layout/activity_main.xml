@@ -20,14 +20,7 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
 
-        <!-- Top & Bottom Atmospheric Scrims (Fade out in Full Map Mode) -->
-        <View
-            android:id="@+id/mapScrimTop"
-            android:layout_width="match_parent"
-            android:layout_height="96dp"
-            android:layout_gravity="top"
-            android:background="@drawable/bg_map_scrim_top" />
-
+        <!-- Bottom Atmospheric Scrim (Fades out in Full Map Mode) -->
         <View
             android:id="@+id/mapScrimBottom"
             android:layout_width="match_parent"
@@ -76,6 +69,14 @@
             android:textSize="10sp"
             android:textStyle="bold" />
     </LinearLayout>
+
+    <!-- Top Fade-to-Blur Liquid Glass Canopy -->
+    <com.example.ui.widget.LiquidGlassTopFadeView
+        android:id="@+id/topLiquidGlassBlur"
+        android:layout_width="match_parent"
+        android:layout_height="128dp"
+        android:layout_gravity="top"
+        android:elevation="9dp" />
 
     <!-- Floating Top Command Bar -->
     <LinearLayout
@@ -993,6 +994,109 @@
             android:textColor="@color/text_on_accent"
             android:textSize="14sp"
             android:textStyle="bold" />
+    </LinearLayout>
+
+    <!-- Full-Map Quick Stacked Buttons (Top: My Location, Middle: Work, Bottom: Home) -->
+    <LinearLayout
+        android:id="@+id/stackQuickFavMapButtons"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="132dp"
+        android:elevation="11dp"
+        android:gravity="end"
+        android:orientation="vertical"
+        android:visibility="gone"
+        tools:visibility="visible">
+
+        <!-- Current GPS Location Button (above Work) -->
+        <ImageButton
+            android:id="@+id/btnMyLocationFullMap"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="@drawable/bg_liquid_glass_pill"
+            android:contentDescription="@string/map_current_location_cd"
+            android:elevation="6dp"
+            android:foreground="?attr/selectableItemBackgroundBorderless"
+            android:padding="12dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_my_location"
+            app:tint="@color/accent_cyan_glow" />
+
+        <!-- First Favorite Button: Work -->
+        <LinearLayout
+            android:id="@+id/btnQuickWorkFullMap"
+            android:layout_width="wrap_content"
+            android:layout_height="48dp"
+            android:layout_marginTop="10dp"
+            android:background="@drawable/bg_liquid_glass_pill"
+            android:clickable="true"
+            android:contentDescription="@string/fav_work"
+            android:elevation="6dp"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackgroundBorderless"
+            android:gravity="center_vertical"
+            android:minWidth="112dp"
+            android:orientation="horizontal"
+            android:paddingHorizontal="14dp">
+
+            <ImageView
+                android:id="@+id/ivQuickWorkFullMap"
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:contentDescription="@string/fav_work"
+                android:src="@drawable/ic_work"
+                app:tint="@color/accent_amber" />
+
+            <TextView
+                android:id="@+id/tvQuickWorkFullMap"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="@string/fav_work"
+                android:textAppearance="@style/TextAppearance.PinWake.Title"
+                android:textColor="@color/text_primary"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- Second Stacked Button: Home -->
+        <LinearLayout
+            android:id="@+id/btnQuickHomeFullMap"
+            android:layout_width="wrap_content"
+            android:layout_height="48dp"
+            android:layout_marginTop="10dp"
+            android:background="@drawable/bg_liquid_glass_pill"
+            android:clickable="true"
+            android:contentDescription="@string/fav_home"
+            android:elevation="6dp"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackgroundBorderless"
+            android:gravity="center_vertical"
+            android:minWidth="112dp"
+            android:orientation="horizontal"
+            android:paddingHorizontal="14dp">
+
+            <ImageView
+                android:id="@+id/ivQuickHomeFullMap"
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:contentDescription="@string/fav_home"
+                android:src="@drawable/ic_home"
+                app:tint="@color/accent_emerald" />
+
+            <TextView
+                android:id="@+id/tvQuickHomeFullMap"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="@string/fav_home"
+                android:textAppearance="@style/TextAppearance.PinWake.Title"
+                android:textColor="@color/text_primary"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+        </LinearLayout>
     </LinearLayout>
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>
