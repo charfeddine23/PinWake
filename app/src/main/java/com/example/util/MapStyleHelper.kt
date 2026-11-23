@@ -5,6 +5,8 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.RectF
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.DrawableCompat
 import com.example.R
@@ -479,8 +481,8 @@ object MapStyleHelper {
     }
 
     /**
-     * Renders permanent Home, Work, Station, and Custom saved favorite markers on the map
-     * regardless of whether their wake alarm is currently active.
+     * Renders permanent pin symbols on the map for all pinned destinations (Home, Work, Station,
+     * Custom, and standard Wake Pins) with category-specific icons and colors.
      */
     fun ensureSavedPlaceMarkersLayer(
         context: Context,
@@ -495,21 +497,20 @@ object MapStyleHelper {
 
         registerFavoriteMarkerImages(context, style)
 
-        val visiblePlaces = favorites.filter {
-            it.isFavorite && it.favoriteCategory != FavoriteCategory.NONE
-        }
-        val features = visiblePlaces.map { place ->
+        val features = favorites.map { place ->
             val iconId = when (place.favoriteCategory) {
                 FavoriteCategory.HOME -> MARKER_IMAGE_HOME
                 FavoriteCategory.WORK -> MARKER_IMAGE_WORK
                 FavoriteCategory.STATION -> MARKER_IMAGE_STATION
-                else -> MARKER_IMAGE_CUSTOM
+                FavoriteCategory.CUSTOM -> MARKER_IMAGE_CUSTOM
+                FavoriteCategory.NONE -> MARKER_IMAGE_ALARM
             }
             val haloHex = when (place.favoriteCategory) {
                 FavoriteCategory.HOME -> "#10B981"
                 FavoriteCategory.WORK -> "#F59E0B"
                 FavoriteCategory.STATION -> "#06B6D4"
-                else -> "#38BDF8"
+                FavoriteCategory.CUSTOM -> "#38BDF8"
+                FavoriteCategory.NONE -> "#00D4FF"
             }
             val label = buildSavedPlaceLabel(context, place)
             Feature.fromGeometry(Point.fromLngLat(place.longitude, place.latitude)).apply {
@@ -517,6 +518,8 @@ object MapStyleHelper {
                 addStringProperty("label", label)
                 addStringProperty("haloColor", haloHex)
                 addNumberProperty("alarmId", place.id)
+                addNumberProperty("haloRadius", if (place.isActive) 13.0 else 9.0)
+                addNumberProperty("haloOpacity", if (place.isActive) 0.24 else 0.14)
             }
         }
         val collection = FeatureCollection.fromFeatures(features)
@@ -532,12 +535,12 @@ object MapStyleHelper {
             style.addLayer(
                 CircleLayer(haloLayerId, sourceId).apply {
                     setProperties(
-                        PropertyFactory.circleRadius(18f),
+                        PropertyFactory.circleRadius(Expression.get("haloRadius")),
                         PropertyFactory.circleColor(Expression.get("haloColor")),
-                        PropertyFactory.circleOpacity(0.18f),
-                        PropertyFactory.circleStrokeWidth(1.3f),
+                        PropertyFactory.circleOpacity(Expression.get("haloOpacity")),
+                        PropertyFactory.circleStrokeWidth(1.5f),
                         PropertyFactory.circleStrokeColor(Expression.get("haloColor")),
-                        PropertyFactory.circleStrokeOpacity(0.55f)
+                        PropertyFactory.circleStrokeOpacity(0.70f)
                     )
                 }
             )
@@ -551,12 +554,13 @@ object MapStyleHelper {
                 SymbolLayer(symbolLayerId, sourceId).apply {
                     setProperties(
                         PropertyFactory.iconImage(Expression.get("icon")),
-                        PropertyFactory.iconAnchor(Property.ICON_ANCHOR_CENTER),
+                        PropertyFactory.iconAnchor(Property.ICON_ANCHOR_BOTTOM),
+                        PropertyFactory.iconOffset(arrayOf(0f, 3f)),
                         PropertyFactory.iconAllowOverlap(true),
                         PropertyFactory.iconIgnorePlacement(true),
                         PropertyFactory.textField(Expression.get("label")),
                         PropertyFactory.textAnchor(Property.TEXT_ANCHOR_TOP),
-                        PropertyFactory.textOffset(arrayOf(0f, 1.55f)),
+                        PropertyFactory.textOffset(arrayOf(0f, 0.45f)),
                         PropertyFactory.textSize(12f),
                         PropertyFactory.textColor(textColor),
                         PropertyFactory.textHaloColor(haloColor),
@@ -569,6 +573,10 @@ object MapStyleHelper {
             )
         } else {
             existingSymbol.setProperties(
+                PropertyFactory.iconAnchor(Property.ICON_ANCHOR_BOTTOM),
+                PropertyFactory.iconOffset(arrayOf(0f, 3f)),
+                PropertyFactory.textAnchor(Property.TEXT_ANCHOR_TOP),
+                PropertyFactory.textOffset(arrayOf(0f, 0.45f)),
                 PropertyFactory.textColor(textColor),
                 PropertyFactory.textHaloColor(haloColor)
             )
@@ -596,11 +604,12 @@ object MapStyleHelper {
             Triple(MARKER_IMAGE_HOME, R.drawable.ic_home, Color.parseColor("#10B981")),
             Triple(MARKER_IMAGE_WORK, R.drawable.ic_work, Color.parseColor("#F59E0B")),
             Triple(MARKER_IMAGE_STATION, R.drawable.ic_train, Color.parseColor("#06B6D4")),
-            Triple(MARKER_IMAGE_CUSTOM, R.drawable.ic_star, Color.parseColor("#38BDF8"))
+            Triple(MARKER_IMAGE_CUSTOM, R.drawable.ic_star, Color.parseColor("#38BDF8")),
+            Triple(MARKER_IMAGE_ALARM, R.drawable.ic_alarm_bell, Color.parseColor("#00D4FF"))
         )
-        specs.forEach { (id, drawableRes, ringColor) ->
+        specs.forEach { (id, drawableRes, pinColor) ->
             if (style.getImage(id) == null) {
-                style.addImage(id, buildMarkerBitmap(context, drawableRes, ringColor))
+                style.addImage(id, buildMarkerBitmap(context, drawableRes, pinColor))
             }
         }
     }
@@ -608,47 +617,84 @@ object MapStyleHelper {
     private fun buildMarkerBitmap(
         context: Context,
         drawableRes: Int,
-        ringColor: Int
+        pinColor: Int
     ): Bitmap {
         val density = context.resources.displayMetrics.density.coerceAtLeast(1.5f)
-        val sizePx = (36f * density).toInt()
-        val bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+        val widthPx = (40f * density).toInt()
+        val heightPx = (50f * density).toInt()
+        val bitmap = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
 
-        val cx = sizePx / 2f
-        val cy = sizePx / 2f
-        val outerRadius = sizePx * 0.44f
-        val ringStroke = 2.6f * density
+        val cx = widthPx / 2f
+        val headRadius = 15f * density
+        val headCy = 4f * density + headRadius
+        val tipY = heightPx - 3f * density
 
+        // Subtle ground shadow ellipse directly beneath pin tip
         val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.argb(125, 0, 0, 0)
+            color = Color.argb(115, 0, 0, 0)
             style = Paint.Style.FILL
         }
-        canvas.drawCircle(cx, cy + 1.2f * density, outerRadius + 1.4f * density, shadowPaint)
+        canvas.drawOval(
+            RectF(cx - 7.5f * density, tipY - 2.2f * density, cx + 7.5f * density, tipY + 2.2f * density),
+            shadowPaint
+        )
 
-        val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        // Smooth Google Maps-style teardrop contour pointing to (cx, tipY)
+        val leftX = cx - headRadius
+        val rightX = cx + headRadius
+        val teardropPath = Path().apply {
+            moveTo(cx, tipY)
+            cubicTo(
+                cx - headRadius * 0.25f, tipY - 7f * density,
+                leftX, headCy + headRadius * 0.72f,
+                leftX, headCy
+            )
+            arcTo(
+                RectF(leftX, headCy - headRadius, rightX, headCy + headRadius),
+                180f,
+                180f,
+                false
+            )
+            cubicTo(
+                rightX, headCy + headRadius * 0.72f,
+                cx + headRadius * 0.25f, tipY - 7f * density,
+                cx, tipY
+            )
+            close()
+        }
+
+        val bodyPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = pinColor
+            style = Paint.Style.FILL
+        }
+        canvas.drawPath(teardropPath, bodyPaint)
+
+        val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#E6FFFFFF")
+            style = Paint.Style.STROKE
+            strokeWidth = 1.6f * density
+        }
+        canvas.drawPath(teardropPath, strokePaint)
+
+        // Crisp dark inner emblem circle holding the category symbol
+        val innerRadius = 9.5f * density
+        val innerFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.parseColor("#0F172A")
             style = Paint.Style.FILL
         }
-        canvas.drawCircle(cx, cy, outerRadius, fillPaint)
-
-        val ringPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = ringColor
-            style = Paint.Style.STROKE
-            strokeWidth = ringStroke
-        }
-        canvas.drawCircle(cx, cy, outerRadius - ringStroke * 0.5f, ringPaint)
+        canvas.drawCircle(cx, headCy, innerRadius, innerFillPaint)
 
         val drawable = ContextCompat.getDrawable(context, drawableRes)
         if (drawable != null) {
             val wrapped = DrawableCompat.wrap(drawable).mutate()
             DrawableCompat.setTint(wrapped, Color.WHITE)
-            val iconHalf = (sizePx * 0.22f).toInt()
+            val iconHalf = (5.8f * density).toInt()
             wrapped.setBounds(
                 cx.toInt() - iconHalf,
-                cy.toInt() - iconHalf,
+                headCy.toInt() - iconHalf,
                 cx.toInt() + iconHalf,
-                cy.toInt() + iconHalf
+                headCy.toInt() + iconHalf
             )
             wrapped.draw(canvas)
         }
@@ -683,4 +729,5 @@ object MapStyleHelper {
     private const val MARKER_IMAGE_WORK = "pinwake-marker-work"
     private const val MARKER_IMAGE_STATION = "pinwake-marker-station"
     private const val MARKER_IMAGE_CUSTOM = "pinwake-marker-custom"
+    private const val MARKER_IMAGE_ALARM = "pinwake-marker-alarm"
 }

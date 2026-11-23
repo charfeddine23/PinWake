@@ -177,4 +177,50 @@ class ExampleRobolectricTest {
             db.close()
         }
     }
+
+    @Test
+    fun `languageManager setLanguage persists and toggles between en and ar`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        com.example.util.LanguageManager.setLanguage(context, "ar")
+        assertEquals("ar", com.example.util.LanguageManager.getCurrentLanguageCode(context))
+
+        com.example.util.LanguageManager.setLanguage(context, "en")
+        assertEquals("en", com.example.util.LanguageManager.getCurrentLanguageCode(context))
+    }
+
+    @Test
+    fun `saveQuickAssignedLocation supports standard wake pin category NONE`() = kotlinx.coroutines.runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val db = androidx.room.Room.inMemoryDatabaseBuilder(
+            context,
+            com.example.data.local.AppDatabase::class.java
+        ).allowMainThreadQueries().build()
+
+        try {
+            val repo = com.example.data.repository.PinWakeRepository(
+                geoAlarmDao = db.geoAlarmDao(),
+                tripHistoryDao = db.tripHistoryDao(),
+                nominatimApi = com.example.data.remote.NominatimApiService.create(),
+                trackingStateManager = com.example.data.repository.TrackingStateManager()
+            )
+            val pinId = repo.saveQuickAssignedLocation(
+                category = com.example.data.local.entity.FavoriteCategory.NONE,
+                title = "Central Square",
+                address = "Downtown",
+                latitude = 36.7525,
+                longitude = 3.0420,
+                radiusMeters = 450,
+                isActive = true
+            )
+            val saved = repo.getAlarmById(pinId)
+            assertEquals(
+                com.example.data.local.entity.FavoriteCategory.NONE,
+                saved?.favoriteCategory
+            )
+            assertFalse(saved?.isFavorite ?: true)
+            assertTrue(saved?.isActive == true)
+        } finally {
+            db.close()
+        }
+    }
 }

@@ -161,24 +161,35 @@
                 tools:text="v1.0.0" />
         </LinearLayout>
 
-        <TextView
-            android:id="@+id/btnLanguageToggle"
-            android:layout_width="wrap_content"
-            android:layout_height="46dp"
+        <FrameLayout
+            android:id="@+id/btnSettings"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
             android:background="@drawable/bg_luxury_glass_pill"
             android:clickable="true"
+            android:contentDescription="@string/cd_settings"
             android:elevation="6dp"
-            android:focusable="true"
-            android:gravity="center"
-            android:letterSpacing="0.04"
-            android:minWidth="56dp"
-            android:minHeight="48dp"
-            android:paddingHorizontal="13dp"
-            android:text="@string/lang_switch_label"
-            android:textAppearance="@style/TextAppearance.PinWake.Mono"
-            android:textColor="@color/text_primary"
-            android:textSize="11sp"
-            android:textStyle="bold" />
+            android:focusable="true">
+
+            <ImageView
+                android:layout_width="21dp"
+                android:layout_height="21dp"
+                android:layout_gravity="center"
+                android:contentDescription="@string/cd_settings"
+                android:src="@drawable/ic_settings"
+                app:tint="@color/text_primary" />
+
+            <View
+                android:id="@+id/dotSettingsAttention"
+                android:layout_width="8dp"
+                android:layout_height="8dp"
+                android:layout_gravity="top|end"
+                android:layout_marginTop="9dp"
+                android:layout_marginEnd="9dp"
+                android:background="@drawable/bg_badge_emerald"
+                android:visibility="gone"
+                tools:visibility="visible" />
+        </FrameLayout>
     </LinearLayout>
 
     <!-- Draggable Mobility Bottom Sheet (Pull down to leave only "Where are you heading?") -->
@@ -350,338 +361,6 @@
                     android:textAppearance="@style/TextAppearance.PinWake.Mono"
                     android:textColor="@color/accent_cyan_glow"
                     android:textSize="11sp" />
-            </LinearLayout>
-
-            <!-- In-App GitHub Update Card -->
-            <LinearLayout
-                android:id="@+id/cardUpdateAvailable"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="14dp"
-                android:background="@drawable/bg_liquid_glass_card_active"
-                android:orientation="vertical"
-                android:padding="16dp"
-                android:visibility="gone"
-                tools:visibility="visible">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:background="@drawable/bg_badge_emerald"
-                        android:paddingHorizontal="10dp"
-                        android:paddingVertical="4dp"
-                        android:text="@string/update_card_badge"
-                        android:textAppearance="@style/TextAppearance.PinWake.Mono"
-                        android:textColor="@color/accent_emerald"
-                        android:textSize="10sp"
-                        android:textStyle="bold" />
-
-                    <View
-                        android:layout_width="0dp"
-                        android:layout_height="0dp"
-                        android:layout_weight="1" />
-
-                    <TextView
-                        android:id="@+id/tvUpdateTagMono"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:textAppearance="@style/TextAppearance.PinWake.Mono"
-                        android:textColor="@color/accent_cyan_glow"
-                        android:textSize="11sp"
-                        tools:text="v1.0.1" />
-                </LinearLayout>
-
-                <TextView
-                    android:id="@+id/tvUpdateTitle"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="10dp"
-                    android:textAppearance="@style/TextAppearance.PinWake.Title"
-                    android:textSize="16sp"
-                    android:textStyle="bold"
-                    tools:text="Pin Wake v1.0.1 Ready" />
-
-                <TextView
-                    android:id="@+id/tvUpdateSubtitle"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="2dp"
-                    android:textColor="@color/text_secondary"
-                    android:textSize="12sp"
-                    tools:text="Size: 12.4 MB · Direct in-place update" />
-
-                <TextView
-                    android:id="@+id/tvUpdateNotes"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="6dp"
-                    android:ellipsize="end"
-                    android:maxLines="2"
-                    android:textColor="@color/text_secondary"
-                    android:textSize="12sp"
-                    android:visibility="gone" />
-
-                <com.google.android.material.progressindicator.LinearProgressIndicator
-                    android:id="@+id/progressUpdateDownload"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
-                    android:max="100"
-                    android:visibility="gone"
-                    app:indicatorColor="@color/accent_cyan"
-                    app:trackColor="@color/glass_stroke_subtle"
-                    app:trackCornerRadius="4dp"
-                    app:trackThickness="6dp" />
-
-                <TextView
-                    android:id="@+id/tvUpdateProgress"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:textAppearance="@style/TextAppearance.PinWake.Mono"
-                    android:textColor="@color/accent_cyan_glow"
-                    android:textSize="11sp"
-                    android:visibility="gone" />
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
-
-                    <TextView
-                        android:id="@+id/btnDownloadUpdate"
-                        android:layout_width="0dp"
-                        android:layout_height="48dp"
-                        android:layout_weight="1"
-                        android:background="@drawable/bg_cyan_gradient_button"
-                        android:clickable="true"
-                        android:focusable="true"
-                        android:gravity="center"
-                        android:text="@string/update_btn_download"
-                        android:textColor="@color/text_on_accent"
-                        android:textSize="13sp"
-                        android:textStyle="bold" />
-
-                    <TextView
-                        android:id="@+id/btnOpenGithubRelease"
-                        android:layout_width="wrap_content"
-                        android:layout_height="48dp"
-                        android:layout_marginStart="10dp"
-                        android:background="@drawable/bg_liquid_glass_pill"
-                        android:clickable="true"
-                        android:focusable="true"
-                        android:foreground="?attr/selectableItemBackgroundBorderless"
-                        android:gravity="center"
-                        android:minWidth="84dp"
-                        android:paddingHorizontal="16dp"
-                        android:text="@string/update_btn_github"
-                        android:textColor="@color/text_primary"
-                        android:textSize="13sp"
-                        android:textStyle="bold" />
-                </LinearLayout>
-            </LinearLayout>
-
-            <!-- Permission Onboarding Card -->
-            <LinearLayout
-                android:id="@+id/cardPermissions"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="14dp"
-                android:background="@drawable/bg_liquid_glass_card"
-                android:orientation="vertical"
-                android:padding="16dp"
-                android:visibility="gone"
-                tools:visibility="visible">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
-
-                    <ImageView
-                        android:layout_width="22dp"
-                        android:layout_height="22dp"
-                        android:contentDescription="@string/perm_card_title"
-                        android:src="@drawable/ic_shield_check" />
-
-                    <TextView
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="10dp"
-                        android:layout_weight="1"
-                        android:text="@string/perm_card_title"
-                        android:textAppearance="@style/TextAppearance.PinWake.Title"
-                        android:textSize="15sp"
-                        android:textStyle="bold" />
-                </LinearLayout>
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="6dp"
-                    android:text="@string/perm_card_subtitle"
-                    android:textColor="@color/text_secondary"
-                    android:textSize="12sp" />
-
-                <LinearLayout
-                    android:id="@+id/rowPermFineLocation"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="10dp"
-                    android:gravity="center_vertical"
-                    android:minHeight="48dp"
-                    android:orientation="horizontal">
-
-                    <TextView
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="@string/perm_fine_location"
-                        android:textColor="@color/text_primary"
-                        android:textSize="13sp" />
-
-                    <TextView
-                        android:id="@+id/btnPermFineLocation"
-                        android:layout_width="wrap_content"
-                        android:layout_height="36dp"
-                        android:background="@drawable/bg_badge_cyan"
-                        android:gravity="center"
-                        android:minWidth="72dp"
-                        android:paddingHorizontal="14dp"
-                        android:text="@string/perm_status_grant"
-                        android:textColor="@color/accent_cyan_glow"
-                        android:textSize="12sp"
-                        android:textStyle="bold" />
-                </LinearLayout>
-
-                <LinearLayout
-                    android:id="@+id/rowPermBackgroundLocation"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:gravity="center_vertical"
-                    android:minHeight="48dp"
-                    android:orientation="horizontal">
-
-                    <TextView
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="@string/perm_background_location"
-                        android:textColor="@color/text_primary"
-                        android:textSize="13sp" />
-
-                    <TextView
-                        android:id="@+id/btnPermBackgroundLocation"
-                        android:layout_width="wrap_content"
-                        android:layout_height="36dp"
-                        android:background="@drawable/bg_badge_cyan"
-                        android:gravity="center"
-                        android:minWidth="72dp"
-                        android:paddingHorizontal="14dp"
-                        android:text="@string/perm_status_grant"
-                        android:textColor="@color/accent_cyan_glow"
-                        android:textSize="12sp"
-                        android:textStyle="bold" />
-                </LinearLayout>
-
-                <LinearLayout
-                    android:id="@+id/rowPermNotifications"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:gravity="center_vertical"
-                    android:minHeight="48dp"
-                    android:orientation="horizontal">
-
-                    <TextView
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="@string/perm_notifications"
-                        android:textColor="@color/text_primary"
-                        android:textSize="13sp" />
-
-                    <TextView
-                        android:id="@+id/btnPermNotifications"
-                        android:layout_width="wrap_content"
-                        android:layout_height="36dp"
-                        android:background="@drawable/bg_badge_cyan"
-                        android:gravity="center"
-                        android:minWidth="72dp"
-                        android:paddingHorizontal="14dp"
-                        android:text="@string/perm_status_grant"
-                        android:textColor="@color/accent_cyan_glow"
-                        android:textSize="12sp"
-                        android:textStyle="bold" />
-                </LinearLayout>
-
-                <LinearLayout
-                    android:id="@+id/rowPermFullScreen"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:gravity="center_vertical"
-                    android:minHeight="48dp"
-                    android:orientation="horizontal">
-
-                    <TextView
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="@string/perm_full_screen"
-                        android:textColor="@color/text_primary"
-                        android:textSize="13sp" />
-
-                    <TextView
-                        android:id="@+id/btnPermFullScreen"
-                        android:layout_width="wrap_content"
-                        android:layout_height="36dp"
-                        android:background="@drawable/bg_badge_cyan"
-                        android:gravity="center"
-                        android:minWidth="72dp"
-                        android:paddingHorizontal="14dp"
-                        android:text="@string/perm_status_grant"
-                        android:textColor="@color/accent_cyan_glow"
-                        android:textSize="12sp"
-                        android:textStyle="bold" />
-                </LinearLayout>
-
-                <LinearLayout
-                    android:id="@+id/rowPermBattery"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:gravity="center_vertical"
-                    android:minHeight="48dp"
-                    android:orientation="horizontal">
-
-                    <TextView
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="@string/perm_battery"
-                        android:textColor="@color/text_primary"
-                        android:textSize="13sp" />
-
-                    <TextView
-                        android:id="@+id/btnPermBattery"
-                        android:layout_width="wrap_content"
-                        android:layout_height="36dp"
-                        android:background="@drawable/bg_badge_cyan"
-                        android:gravity="center"
-                        android:minWidth="72dp"
-                        android:paddingHorizontal="14dp"
-                        android:text="@string/perm_status_grant"
-                        android:textColor="@color/accent_cyan_glow"
-                        android:textSize="12sp"
-                        android:textStyle="bold" />
-                </LinearLayout>
             </LinearLayout>
 
             <!-- Quick Favorite Destinations Strip (Uber / Yassir Shortcuts) -->

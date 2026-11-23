@@ -40,6 +40,9 @@ import com.example.util.OpenFreeMapStyle
 import com.example.util.OpenFreeMapStyles
 import com.example.util.PermissionHelper
 import com.example.util.SafeMapLocationEngine
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraPosition
@@ -280,13 +283,14 @@ class MapPickerActivity : AppCompatActivity() {
             features = FeatureCollection.fromFeature(circleFeature)
         )
 
+        val editingId = viewModel.uiState.value.existingAlarm?.id
         MapStyleHelper.ensureSavedPlaceMarkersLayer(
             context = this,
             style = style,
             sourceId = SAVED_PLACES_SOURCE_ID,
             haloLayerId = SAVED_PLACES_HALO_LAYER_ID,
             symbolLayerId = SAVED_PLACES_SYMBOL_LAYER_ID,
-            favorites = viewModel.favoriteAlarms.value,
+            favorites = viewModel.allMapPins.value.filter { it.id != editingId },
             isDark = styleOption.isDark
         )
 
@@ -313,8 +317,8 @@ class MapPickerActivity : AppCompatActivity() {
         isPinLifted = true
         val liftPx = -18f * resources.displayMetrics.density
 
-        binding.ivCrosshair.animate().cancel()
-        binding.ivCrosshair.animate()
+        binding.layoutCrosshairContainer.animate().cancel()
+        binding.layoutCrosshairContainer.animate()
             .translationY(liftPx)
             .scaleX(1.1f)
             .scaleY(1.1f)
@@ -335,8 +339,8 @@ class MapPickerActivity : AppCompatActivity() {
         if (!isPinLifted) return
         isPinLifted = false
 
-        binding.ivCrosshair.animate().cancel()
-        binding.ivCrosshair.animate()
+        binding.layoutCrosshairContainer.animate().cancel()
+        binding.layoutCrosshairContainer.animate()
             .translationY(0f)
             .scaleX(1.0f)
             .scaleY(1.0f)
@@ -483,6 +487,7 @@ class MapPickerActivity : AppCompatActivity() {
                 else -> FavoriteCategory.NONE
             }
             viewModel.updateCategory(cat)
+            syncCrosshairPinType(cat)
             if (!userEditedTitle) {
                 preFillCategoryTitle(cat)
             }
@@ -549,7 +554,12 @@ class MapPickerActivity : AppCompatActivity() {
                     }
                 }
                 launch {
-                    viewModel.favoriteAlarms.collect { favorites ->
+                    combine(
+                        viewModel.allMapPins,
+                        viewModel.uiState.map { it.existingAlarm?.id }.distinctUntilChanged()
+                    ) { pins, editingId ->
+                        pins.filter { it.id != editingId }
+                    }.collect { visiblePins ->
                         val style = mapLibreMap?.style ?: return@collect
                         if (style.isFullyLoaded) {
                             val isDark = OpenFreeMapStyles.getSavedStyle(this@MapPickerActivity).isDark
@@ -559,7 +569,7 @@ class MapPickerActivity : AppCompatActivity() {
                                 sourceId = SAVED_PLACES_SOURCE_ID,
                                 haloLayerId = SAVED_PLACES_HALO_LAYER_ID,
                                 symbolLayerId = SAVED_PLACES_SYMBOL_LAYER_ID,
-                                favorites = favorites,
+                                favorites = visiblePins,
                                 isDark = isDark
                             )
                         }
@@ -751,6 +761,19 @@ class MapPickerActivity : AppCompatActivity() {
             FavoriteCategory.NONE -> R.id.chipNone
         }
         binding.chipGroupCategory.check(chipId)
+        syncCrosshairPinType(category)
+    }
+
+    private fun syncCrosshairPinType(category: FavoriteCategory) {
+        val (iconRes, tintColorRes) = when (category) {
+            FavoriteCategory.HOME -> R.drawable.ic_home to R.color.accent_emerald
+            FavoriteCategory.WORK -> R.drawable.ic_work to R.color.accent_amber
+            FavoriteCategory.STATION -> R.drawable.ic_train to R.color.accent_cyan_glow
+            FavoriteCategory.CUSTOM -> R.drawable.ic_star to R.color.accent_cyan_glow
+            FavoriteCategory.NONE -> R.drawable.ic_alarm_bell to R.color.accent_cyan
+        }
+        binding.ivCrosshair.setColorFilter(ContextCompat.getColor(this, tintColorRes))
+        binding.ivCrosshairCategoryIcon.setImageResource(iconRes)
     }
 
     private fun preFillCategoryTitle(category: FavoriteCategory) {
@@ -817,7 +840,7 @@ class MapPickerActivity : AppCompatActivity() {
         runCatching {
             mapLibreMap?.locationComponent?.takeIf { it.isLocationComponentActivated }?.isLocationComponentEnabled = false
         }
-        binding.ivCrosshair.animate().cancel()
+        binding.layoutCrosshairContainer.animate().cancel()
         binding.viewPinShadow.animate().cancel()
         binding.mapView.onDestroy()
         super.onDestroy()

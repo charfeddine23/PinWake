@@ -46,16 +46,40 @@
             android:background="@drawable/bg_badge_cyan"
             android:elevation="5dp" />
 
-        <!-- Animated Center Pin (lifts on drag, bounces down on idle) -->
-        <ImageView
-            android:id="@+id/ivCrosshair"
+        <!-- Animated Center Pin Container (lifts on drag, bounces down on idle, shows pin type) -->
+        <FrameLayout
+            android:id="@+id/layoutCrosshairContainer"
             android:layout_width="48dp"
             android:layout_height="48dp"
             android:layout_gravity="center"
             android:layout_marginBottom="22dp"
-            android:contentDescription="@string/map_crosshair_cd"
-            android:elevation="6dp"
-            android:src="@drawable/ic_crosshair_pin" />
+            android:elevation="6dp">
+
+            <ImageView
+                android:id="@+id/ivCrosshair"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:contentDescription="@string/map_crosshair_cd"
+                android:src="@drawable/ic_crosshair_pin"
+                app:tint="@color/accent_cyan" />
+
+            <View
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:layout_gravity="top|center_horizontal"
+                android:layout_marginTop="10dp"
+                android:background="@drawable/bg_icon_circle_dark" />
+
+            <ImageView
+                android:id="@+id/ivCrosshairCategoryIcon"
+                android:layout_width="12dp"
+                android:layout_height="12dp"
+                android:layout_gravity="top|center_horizontal"
+                android:layout_marginTop="13dp"
+                android:importantForAccessibility="no"
+                android:src="@drawable/ic_alarm_bell"
+                app:tint="@color/white" />
+        </FrameLayout>
 
         <!-- Map Layer Switcher FAB -->
         <ImageButton
@@ -376,35 +400,45 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:checked="true"
-                    android:text="@string/fav_none" />
+                    android:text="@string/fav_none"
+                    app:chipIcon="@drawable/ic_alarm_bell"
+                    app:chipIconTint="@color/accent_cyan" />
 
                 <com.google.android.material.chip.Chip
                     android:id="@+id/chipHome"
                     style="@style/Widget.Material3.Chip.Filter"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="@string/fav_home" />
+                    android:text="@string/fav_home"
+                    app:chipIcon="@drawable/ic_home"
+                    app:chipIconTint="@color/accent_emerald" />
 
                 <com.google.android.material.chip.Chip
                     android:id="@+id/chipWork"
                     style="@style/Widget.Material3.Chip.Filter"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="@string/fav_work" />
+                    android:text="@string/fav_work"
+                    app:chipIcon="@drawable/ic_work"
+                    app:chipIconTint="@color/accent_amber" />
 
                 <com.google.android.material.chip.Chip
                     android:id="@+id/chipStation"
                     style="@style/Widget.Material3.Chip.Filter"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="@string/fav_station" />
+                    android:text="@string/fav_station"
+                    app:chipIcon="@drawable/ic_train"
+                    app:chipIconTint="@color/accent_cyan_glow" />
 
                 <com.google.android.material.chip.Chip
                     android:id="@+id/chipCustom"
                     style="@style/Widget.Material3.Chip.Filter"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="@string/fav_custom" />
+                    android:text="@string/fav_custom"
+                    app:chipIcon="@drawable/ic_star"
+                    app:chipIconTint="@color/accent_cyan_glow" />
             </com.google.android.material.chip.ChipGroup>
         </HorizontalScrollView>
 

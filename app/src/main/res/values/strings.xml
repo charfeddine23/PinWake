@@ -137,4 +137,25 @@
     <string name="quick_assign_save">Pin on Map</string>
     <string name="quick_assign_saved_toast">Pinned %1$s on your map</string>
     <string name="quick_assign_hold_hint">Hold 1s anywhere to pin</string>
+
+    <!-- Settings Screen -->
+    <string name="settings_title">Settings</string>
+    <string name="cd_settings">Open app settings</string>
+    <string name="settings_section_language">App Language</string>
+    <string name="settings_language_subtitle">Choose your preferred interface and map address language</string>
+    <string name="settings_lang_english">English</string>
+    <string name="settings_lang_arabic">العربية</string>
+    <string name="settings_section_map">Map &amp; 3D Display</string>
+    <string name="settings_map_subtitle">Customize vector map styling and 3D buildings across the app</string>
+    <string name="settings_perm_all_ready">ALL READY</string>
+    <string name="settings_perm_needed">%1$d NEEDED</string>
+    <string name="settings_open_android_settings">Open Android App Settings</string>
+    <string name="settings_section_updates">App Updates</string>
+    <string name="settings_current_version">Installed version v%1$s</string>
+    <string name="settings_btn_check_updates">Check for Updates</string>
+    <string name="settings_section_data">Trips &amp; History</string>
+    <string name="settings_history_count">%1$d recorded trips</string>
+    <string name="settings_history_empty">No arrival history recorded</string>
+    <string name="settings_clear_history">Clear</string>
+    <string name="settings_history_cleared_toast">Arrival history cleared</string>
 </resources>

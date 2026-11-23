@@ -9,7 +9,6 @@ import android.graphics.PointF
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -40,7 +39,6 @@ import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.example.data.local.entity.FavoriteCategory
 import com.example.data.local.entity.GeoAlarmEntity
-import com.example.data.remote.GitHubReleaseApiService
 import com.example.data.repository.PollingTier
 import com.example.databinding.ActivityMainBinding
 import com.example.databinding.DialogQuickAssignPinBinding
@@ -50,9 +48,8 @@ import com.example.ui.dashboard.DashboardUiState
 import com.example.ui.dashboard.DashboardViewModel
 import com.example.ui.dashboard.TripHistoryAdapter
 import com.example.ui.dashboard.UpdateCheckEvent
-import com.example.ui.dashboard.UpdateUiState
 import com.example.ui.map.MapPickerActivity
-import com.example.util.ApkUpdateManager
+import com.example.ui.settings.SettingsActivity
 import com.example.util.DistanceFormatter
 import com.example.util.LanguageManager
 import com.example.util.MapStyleHelper
@@ -60,7 +57,6 @@ import com.example.util.OpenFreeMapStyle
 import com.example.util.OpenFreeMapStyles
 import com.example.util.PermissionHelper
 import com.example.util.SafeMapLocationEngine
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlinx.coroutines.launch
 import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraPosition
@@ -73,16 +69,12 @@ import org.maplibre.android.location.modes.RenderMode
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.Style
 import org.maplibre.geojson.FeatureCollection
-import java.io.File
 import java.util.Locale
 import kotlin.math.hypot
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
-    private val apkUpdateManager: ApkUpdateManager by lazy {
-        (application as PinWakeApplication).container.apkUpdateManager
-    }
 
     private val viewModel: DashboardViewModel by viewModels {
         val container = (application as PinWakeApplication).container
@@ -92,7 +84,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var alarmAdapter: AlarmAdapter
     private lateinit var historyAdapter: TripHistoryAdapter
     private lateinit var sheetBehavior: BottomSheetBehavior<NestedScrollView>
-    private var pendingInstallApk: File? = null
     private var heroMap: MapLibreMap? = null
     private var loadedHeroStyle: OpenFreeMapStyle? = null
     private var loadedHero3dState: Boolean? = null
@@ -121,7 +112,7 @@ class MainActivity : AppCompatActivity() {
     private val fineLocationLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) {
-        refreshPermissionCard()
+        refreshSettingsAttentionDot()
         syncTrackingServiceIfPossible()
         if (hasFineOrCoarseLocation()) {
             heroMap?.style?.let { style ->
@@ -136,31 +127,6 @@ class MainActivity : AppCompatActivity() {
             }
         } else {
             pendingCenterOnLocation = false
-        }
-    }
-
-    private val backgroundLocationLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        refreshPermissionCard()
-        if (!granted && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startActivity(PermissionHelper.buildAppSettingsIntent(this))
-        }
-    }
-
-    private val notificationLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) {
-        refreshPermissionCard()
-    }
-
-    private val installPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) {
-        val pending = pendingInstallApk
-        if (pending != null && apkUpdateManager.canRequestPackageInstalls()) {
-            pendingInstallApk = null
-            launchApkInstaller(pending)
         }
     }
 
@@ -240,7 +206,7 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         binding.dashboardMapView.onResume()
-        refreshPermissionCard()
+        refreshSettingsAttentionDot()
         syncTrackingServiceIfPossible()
 
         val savedStyle = OpenFreeMapStyles.getSavedStyle(this)
@@ -633,15 +599,13 @@ class MainActivity : AppCompatActivity() {
         val map = heroMap ?: return
         val style = map.style
         val activeAlarms = state.alarms.filter { it.isActive }
-        val savedFavorites = state.alarms.filter {
-            it.isFavorite && it.favoriteCategory != FavoriteCategory.NONE
-        }
+        val pinnedPlaces = state.alarms
 
         val geoKey = activeAlarms.joinToString("|") {
             "${it.id}:${it.latitude}:${it.longitude}:${it.radiusMeters}"
         }
-        val favKey = savedFavorites.joinToString("|") {
-            "${it.id}:${it.favoriteCategory}:${it.title}:${it.latitude}:${it.longitude}"
+        val favKey = pinnedPlaces.joinToString("|") {
+            "${it.id}:${it.favoriteCategory}:${it.isActive}:${it.title}:${it.latitude}:${it.longitude}"
         }
         val isDark = OpenFreeMapStyles.getSavedStyle(this).isDark
 
@@ -673,7 +637,7 @@ class MainActivity : AppCompatActivity() {
                     sourceId = HERO_SAVED_PLACES_SOURCE_ID,
                     haloLayerId = HERO_SAVED_PLACES_HALO_ID,
                     symbolLayerId = HERO_SAVED_PLACES_SYMBOL_ID,
-                    favorites = savedFavorites,
+                    favorites = pinnedPlaces,
                     isDark = isDark
                 )
             }
@@ -829,7 +793,7 @@ class MainActivity : AppCompatActivity() {
             binding.btnQuickWorkFullMap,
             binding.btnQuickHomeFullMap,
             binding.btnCheckUpdates,
-            binding.btnLanguageToggle
+            binding.btnSettings
         ).forEach { attachLuxuryPressFeedback(it) }
 
         binding.layoutSheetHandle.setOnClickListener {
@@ -840,41 +804,21 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        binding.btnLanguageToggle.setOnClickListener {
-            LanguageManager.toggleLanguage(this)
+        binding.btnSettings.setOnClickListener {
+            openSettings()
         }
 
         binding.btnCheckUpdates.setOnClickListener {
-            Toast.makeText(this, R.string.update_checking, Toast.LENGTH_SHORT).show()
-            viewModel.checkForUpdates(manual = true)
-        }
-
-        binding.btnDownloadUpdate.setOnClickListener {
-            viewModel.startInAppDownload { apkFile ->
-                installDownloadedApk(apkFile)
-            }
-        }
-
-        binding.btnOpenGithubRelease.setOnClickListener {
-            val url = viewModel.updateState.value.availableUpdate?.releasePageUrl
-                ?: GitHubReleaseApiService.REPO_RELEASES_URL
-            runCatching {
-                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+            if (viewModel.updateState.value.availableUpdate != null) {
+                openSettings(scrollToUpdates = true)
+            } else {
+                Toast.makeText(this, R.string.update_checking, Toast.LENGTH_SHORT).show()
+                viewModel.checkForUpdates(manual = true)
             }
         }
 
         binding.btnClearHistory.setOnClickListener {
             viewModel.clearHistory()
-        }
-
-        binding.btnPermFineLocation.setOnClickListener { requestFineLocation() }
-        binding.btnPermBackgroundLocation.setOnClickListener { requestBackgroundLocation() }
-        binding.btnPermNotifications.setOnClickListener { requestNotifications() }
-        binding.btnPermFullScreen.setOnClickListener {
-            runCatching { startActivity(PermissionHelper.buildFullScreenIntentSettings(this)) }
-        }
-        binding.btnPermBattery.setOnClickListener {
-            runCatching { startActivity(PermissionHelper.buildBatteryOptimizationIntent(this)) }
         }
 
         binding.btnMyLocationFullMap.setOnClickListener {
@@ -1117,7 +1061,14 @@ class MainActivity : AppCompatActivity() {
                 }
                 launch {
                     viewModel.updateState.collect { update ->
-                        renderUpdateState(update)
+                        val hasUpdate = update.availableUpdate != null
+                        binding.tvAppVersionPill.setTextColor(
+                            ContextCompat.getColor(
+                                this@MainActivity,
+                                if (hasUpdate) R.color.accent_emerald else R.color.accent_cyan_glow
+                            )
+                        )
+                        refreshSettingsAttentionDot()
                     }
                 }
                 launch {
@@ -1141,85 +1092,13 @@ class MainActivity : AppCompatActivity() {
                             }
                             is UpdateCheckEvent.UpdateFound -> {
                                 viewModel.consumeUpdateEvent()
+                                openSettings(scrollToUpdates = true)
                             }
                             null -> Unit
                         }
                     }
                 }
             }
-        }
-    }
-
-    private fun renderUpdateState(update: UpdateUiState) {
-        val info = update.availableUpdate
-        if (info == null) {
-            binding.cardUpdateAvailable.visibility = View.GONE
-            return
-        }
-
-        binding.cardUpdateAvailable.visibility = View.VISIBLE
-        binding.tvUpdateTagMono.text = info.tagName
-        binding.tvUpdateTitle.text = getString(R.string.update_card_title, info.versionName)
-
-        val sizeMb = info.apkAsset.size / (1024.0 * 1024.0)
-        binding.tvUpdateSubtitle.text = getString(R.string.update_card_subtitle_size, sizeMb)
-
-        if (info.releaseNotes.isNotBlank()) {
-            binding.tvUpdateNotes.visibility = View.VISIBLE
-            binding.tvUpdateNotes.text = info.releaseNotes
-        } else {
-            binding.tvUpdateNotes.visibility = View.GONE
-        }
-
-        if (update.isDownloading) {
-            binding.progressUpdateDownload.visibility = View.VISIBLE
-            binding.progressUpdateDownload.isIndeterminate = update.downloadPercent == 0
-            binding.progressUpdateDownload.setProgressCompat(update.downloadPercent, true)
-            binding.tvUpdateProgress.visibility = View.VISIBLE
-            binding.tvUpdateProgress.text = getString(
-                R.string.update_downloading,
-                update.downloadPercent,
-                update.downloadedMb,
-                update.totalMb
-            )
-            binding.btnDownloadUpdate.isEnabled = false
-            binding.btnDownloadUpdate.alpha = 0.65f
-        } else {
-            binding.progressUpdateDownload.visibility = View.GONE
-            binding.tvUpdateProgress.visibility = if (update.errorMessage != null) View.VISIBLE else View.GONE
-            if (update.errorMessage != null) {
-                binding.tvUpdateProgress.text = update.errorMessage
-            }
-            binding.btnDownloadUpdate.isEnabled = true
-            binding.btnDownloadUpdate.alpha = 1f
-            binding.btnDownloadUpdate.setText(
-                if (update.downloadedApkFile != null) R.string.update_btn_install
-                else R.string.update_btn_download
-            )
-        }
-    }
-
-    private fun installDownloadedApk(apkFile: File) {
-        if (!apkUpdateManager.canRequestPackageInstalls()) {
-            pendingInstallApk = apkFile
-            MaterialAlertDialogBuilder(this)
-                .setTitle(R.string.update_btn_install)
-                .setMessage(R.string.update_install_perm_msg)
-                .setPositiveButton(R.string.perm_open_settings) { _, _ ->
-                    installPermissionLauncher.launch(apkUpdateManager.buildInstallPermissionIntent())
-                }
-                .setNegativeButton(android.R.string.cancel, null)
-                .show()
-            return
-        }
-        launchApkInstaller(apkFile)
-    }
-
-    private fun launchApkInstaller(apkFile: File) {
-        runCatching {
-            startActivity(apkUpdateManager.buildInstallApkIntent(apkFile))
-        }.onFailure {
-            Toast.makeText(this, R.string.update_check_failed, Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -1471,8 +1350,23 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        fun syncQuickAssignIcon() {
+            val (iconRes, tintColorRes) = when (selectedCategory) {
+                FavoriteCategory.HOME -> R.drawable.ic_home to R.color.accent_emerald
+                FavoriteCategory.WORK -> R.drawable.ic_work to R.color.accent_amber
+                FavoriteCategory.STATION -> R.drawable.ic_train to R.color.accent_cyan_glow
+                FavoriteCategory.CUSTOM -> R.drawable.ic_star to R.color.accent_cyan_glow
+                FavoriteCategory.NONE -> R.drawable.ic_alarm_bell to R.color.accent_cyan
+            }
+            dialogBinding.ivQuickAssignIcon.setImageResource(iconRes)
+            dialogBinding.ivQuickAssignIcon.setColorFilter(
+                ContextCompat.getColor(this, tintColorRes)
+            )
+        }
+
         dialogBinding.chipAssignHome.isChecked = true
         applyCategoryTitleIfUntouched()
+        syncQuickAssignIcon()
 
         dialogBinding.chipGroupQuickAssign.setOnCheckedStateChangeListener { _, checkedIds ->
             val checkedId = checkedIds.firstOrNull() ?: return@setOnCheckedStateChangeListener
@@ -1480,9 +1374,11 @@ class MainActivity : AppCompatActivity() {
                 R.id.chipAssignHome -> FavoriteCategory.HOME
                 R.id.chipAssignWork -> FavoriteCategory.WORK
                 R.id.chipAssignStation -> FavoriteCategory.STATION
+                R.id.chipAssignPin -> FavoriteCategory.NONE
                 else -> FavoriteCategory.CUSTOM
             }
             applyCategoryTitleIfUntouched()
+            syncQuickAssignIcon()
         }
 
         dialogBinding.tvQuickAssignRadius.text = DistanceFormatter.formatRadiusSliderValue(
@@ -1566,30 +1462,18 @@ class MainActivity : AppCompatActivity() {
         dialog.show()
     }
 
-    private fun refreshPermissionCard() {
-        val status = PermissionHelper.checkStatus(this)
-        binding.cardPermissions.visibility = if (status.allGranted) View.GONE else View.VISIBLE
-        if (status.allGranted) return
-
-        updatePermissionPill(binding.btnPermFineLocation, status.hasFineLocation)
-        updatePermissionPill(binding.btnPermBackgroundLocation, status.hasBackgroundLocation)
-        updatePermissionPill(binding.btnPermNotifications, status.hasNotifications)
-        updatePermissionPill(binding.btnPermFullScreen, status.hasFullScreenIntent)
-        updatePermissionPill(binding.btnPermBattery, status.isBatteryUnrestricted)
+    private fun refreshSettingsAttentionDot() {
+        val missingPerms = !PermissionHelper.checkStatus(this).allGranted
+        val hasUpdate = viewModel.updateState.value.availableUpdate != null
+        binding.dotSettingsAttention.visibility =
+            if (missingPerms || hasUpdate) View.VISIBLE else View.GONE
     }
 
-    private fun updatePermissionPill(button: TextView, granted: Boolean) {
-        if (granted) {
-            button.setText(R.string.perm_status_granted)
-            button.setBackgroundResource(R.drawable.bg_badge_emerald)
-            button.setTextColor(ContextCompat.getColor(this, R.color.accent_emerald))
-            button.isEnabled = false
-        } else {
-            button.setText(R.string.perm_status_grant)
-            button.setBackgroundResource(R.drawable.bg_badge_cyan)
-            button.setTextColor(ContextCompat.getColor(this, R.color.accent_cyan_glow))
-            button.isEnabled = true
+    private fun openSettings(scrollToUpdates: Boolean = false) {
+        val intent = Intent(this, SettingsActivity::class.java).apply {
+            putExtra(SettingsActivity.EXTRA_SCROLL_TO_UPDATES, scrollToUpdates)
         }
+        startActivity(intent)
     }
 
     private fun requestFineLocation() {
@@ -1599,32 +1483,6 @@ class MainActivity : AppCompatActivity() {
                 Manifest.permission.ACCESS_COARSE_LOCATION
             )
         )
-    }
-
-    private fun requestBackgroundLocation() {
-        val status = PermissionHelper.checkStatus(this)
-        if (!status.hasFineLocation) {
-            requestFineLocation()
-            return
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            MaterialAlertDialogBuilder(this)
-                .setTitle(R.string.perm_background_location)
-                .setMessage(R.string.perm_rationale_background)
-                .setPositiveButton(R.string.perm_status_grant) { _, _ ->
-                    backgroundLocationLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
-                }
-                .setNegativeButton(R.string.perm_open_settings) { _, _ ->
-                    startActivity(PermissionHelper.buildAppSettingsIntent(this))
-                }
-                .show()
-        }
-    }
-
-    private fun requestNotifications() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-        }
     }
 
     private fun syncTrackingServiceIfPossible() {

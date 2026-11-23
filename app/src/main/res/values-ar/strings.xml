@@ -137,4 +137,25 @@
     <string name="quick_assign_save">تثبيت على الخريطة</string>
     <string name="quick_assign_saved_toast">تم تثبيت %1$s على الخريطة بنجاح</string>
     <string name="quick_assign_hold_hint">اضغط مطولاً 1ث لتثبيت مكان</string>
+
+    <!-- شاشة الإعدادات -->
+    <string name="settings_title">الإعدادات</string>
+    <string name="cd_settings">فتح إعدادات التطبيق</string>
+    <string name="settings_section_language">لغة التطبيق</string>
+    <string name="settings_language_subtitle">اختر لغة واجهة التطبيق وعناوين الخريطة</string>
+    <string name="settings_lang_english">English</string>
+    <string name="settings_lang_arabic">العربية</string>
+    <string name="settings_section_map">مظهر الخريطة والعرض ثلاثي الأبعاد</string>
+    <string name="settings_map_subtitle">تخصيص نمط الخريطة والمباني ثلاثية الأبعاد في كامل التطبيق</string>
+    <string name="settings_perm_all_ready">جاهز بالكامل</string>
+    <string name="settings_perm_needed">مطلوب %1$d</string>
+    <string name="settings_open_android_settings">فتح إعدادات التطبيق في أندرويد</string>
+    <string name="settings_section_updates">تحديثات التطبيق</string>
+    <string name="settings_current_version">الإصدار المثبّت v%1$s</string>
+    <string name="settings_btn_check_updates">البحث عن تحديثات</string>
+    <string name="settings_section_data">الرحلات وسجل الوصول</string>
+    <string name="settings_history_count">%1$d رحلة مسجلة</string>
+    <string name="settings_history_empty">لا يوجد سجل وصول مسجّل</string>
+    <string name="settings_clear_history">مسح</string>
+    <string name="settings_history_cleared_toast">تم مسح سجل الوصول</string>
 </resources>

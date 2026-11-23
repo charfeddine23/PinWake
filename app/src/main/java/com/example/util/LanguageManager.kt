@@ -24,14 +24,19 @@ object LanguageManager {
         }
     }
 
+    fun setLanguage(context: Context, languageCode: String): String {
+        val normalized = if (languageCode == "ar") "ar" else "en"
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putString(KEY_LANG, normalized)
+            .apply()
+        AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(normalized))
+        return normalized
+    }
+
     fun toggleLanguage(context: Context): String {
         val current = getCurrentLanguageCode(context)
         val next = if (current == "ar") "en" else "ar"
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .edit()
-            .putString(KEY_LANG, next)
-            .apply()
-        AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(next))
-        return next
+        return setLanguage(context, next)
     }
 }

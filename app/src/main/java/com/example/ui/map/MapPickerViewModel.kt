@@ -47,6 +47,12 @@ class MapPickerViewModel(
         initialValue = emptyList()
     )
 
+    val allMapPins: StateFlow<List<GeoAlarmEntity>> = repository.allAlarms.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000L),
+        initialValue = emptyList()
+    )
+
     private val searchQueryFlow = MutableStateFlow("")
     private var currentLanguage = "en"
     private var reverseJob: Job? = null
