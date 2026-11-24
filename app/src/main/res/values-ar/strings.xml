@@ -49,8 +49,11 @@
     <string name="action_delete_alarm">حذف</string>
 
     <!-- Trip History -->
-    <string name="section_trip_history">سجل الوصول الأخير</string>
+    <string name="section_trip_history">الرحلات والسجل</string>
     <string name="action_clear_history">مسح</string>
+    <string name="action_rearm_trip">إعادة تفعيل</string>
+    <string name="cd_rearm_trip">إعادة تفعيل المنبه لهذه الرحلة</string>
+    <string name="trip_rearmed_toast">تمت إعادة تفعيل المنبه لـ %1$s</string>
     <string name="outcome_arrived">تم الوصول</string>
     <string name="outcome_snoozed">غفوة 500م</string>
     <string name="outcome_cancelled">تم الإلغاء</string>
@@ -77,17 +80,22 @@
     <string name="notif_channel_tracking_desc">يعرض المسافة المتبقية وحالة تتبع GPS التكيّفي.</string>
     <string name="notif_channel_alarm_name">تنبيهات الوصول Pin Wake</string>
     <string name="notif_channel_alarm_desc">تنبيهات ملء الشاشة عند دخول نطاق وجهتك.</string>
+    <string name="notif_channel_pre_alert_name">تنبيهات الاقتراب المبكر</string>
+    <string name="notif_channel_pre_alert_desc">إشعار تنبيهي مسبق قبل دخول نطاق المنبه الجغرافي.</string>
     <string name="notif_tracking_title">تتبع: %1$s</string>
     <string name="notif_tracking_body_dist">متبقي %1$s · %2$s</string>
     <string name="notif_tracking_body_waiting">جاري التقاط إشارة GPS · %1$s</string>
     <string name="notif_action_cancel">إلغاء المنبه</string>
+    <string name="notif_action_dismiss">إيقاف</string>
+    <string name="notif_pre_alert_title">اقتربت من %1$s</string>
+    <string name="notif_pre_alert_body">متبقي حوالي %1$s · ستدخل نطاق %2$d م قريباً</string>
     <string name="notif_alarm_arrived_title">وصلت إلى %1$s</string>
     <string name="notif_alarm_arrived_body">لقد دخلت نطاق %1$d م. اضغط لفتح المنبه.</string>
 
     <!-- Alarm Ringing Screen -->
     <string name="alarm_ringing_badge">تم الوصول للوجهة</string>
     <string name="alarm_ringing_subtitle">داخل نطاق التنبيه %1$d م</string>
-    <string name="alarm_snooze_500m">غفوة (500م)</string>
+    <string name="alarm_snooze_500m">غفوة +500م</string>
     <string name="alarm_slide_to_dismiss">اسحب لإيقاف المنبه</string>
     <string name="alarm_snooze_toast">تم التأجيل — سيعاد التنبيه على بُعد 500م أقرب</string>
     <string name="alarm_dismissed_toast">تم إيقاف المنبه. رحلة سعيدة!</string>
@@ -158,4 +166,30 @@
     <string name="settings_history_empty">لا يوجد سجل وصول مسجّل</string>
     <string name="settings_clear_history">مسح</string>
     <string name="settings_history_cleared_toast">تم مسح سجل الوصول</string>
+
+    <!-- التنبيه المبكر قبل الوصول -->
+    <string name="settings_section_pre_alert">التنبيه المبكر قبل الوصول</string>
+    <string name="settings_pre_alert_subtitle">إرسال إشعار تحذيري مسبق قبل دخول نطاق المنبه</string>
+    <string name="pre_alert_off">إيقاف</string>
+    <string name="pre_alert_300m">+300 م</string>
+    <string name="pre_alert_500m">+500 م</string>
+    <string name="pre_alert_1km">+1 كم</string>
+
+    <!-- مشاركة الوجهة وحالة الرحلة -->
+    <string name="cd_share_destination">مشاركة الوجهة أو حالة الرحلة</string>
+    <string name="share_chooser_title">مشاركة وجهة Pin Wake</string>
+    <string name="share_destination_template">Pin Wake · %1$s (%2$s)\n%3$s</string>
+    <string name="share_trip_live_template">Pin Wake · متجه إلى %1$s · متبقي %2$s (%3$s)\n%4$s</string>
+    <string name="share_to_pin_loaded">تم فتح الوجهة المشاركة على الخريطة</string>
+    <string name="share_to_pin_search">جاري البحث عن الوجهة المشاركة على الخريطة</string>
+
+    <!-- النسخ الاحتياطي المحلي JSON -->
+    <string name="settings_section_backup">نسخ احتياطي محلي (JSON)</string>
+    <string name="settings_backup_subtitle">تصدير أو استعادة المنبهات والأماكن المفضلة محلياً</string>
+    <string name="settings_btn_export_json">تصدير JSON</string>
+    <string name="settings_btn_import_json">استيراد JSON</string>
+    <string name="backup_export_success">تم تصدير %1$d نقطة إلى ملف JSON</string>
+    <string name="backup_export_empty">لا توجد منبهات أو أماكن محفوظة للتصدير</string>
+    <string name="backup_import_success">تمت استعادة %1$d نقطة من النسخة الاحتياطية</string>
+    <string name="backup_import_failed">تعذّرت قراءة ملف نسخ احتياطي صالح</string>
 </resources>

@@ -15,6 +15,7 @@ import com.example.util.DistanceFormatter
 class AlarmAdapter(
     private val onToggleActive: (GeoAlarmEntity, Boolean) -> Unit,
     private val onEditClick: (GeoAlarmEntity) -> Unit,
+    private val onShareClick: (GeoAlarmEntity) -> Unit,
     private val onDeleteClick: (GeoAlarmEntity) -> Unit
 ) : ListAdapter<GeoAlarmEntity, AlarmAdapter.AlarmViewHolder>(AlarmDiffCallback) {
 
@@ -87,6 +88,7 @@ class AlarmAdapter(
             }
 
             binding.btnEditAlarm.setOnClickListener { onEditClick(item) }
+            binding.btnShareAlarm.setOnClickListener { onShareClick(item) }
             binding.btnDeleteAlarm.setOnClickListener { onDeleteClick(item) }
             binding.cardAlarmRoot.setOnClickListener { onEditClick(item) }
         }

@@ -21,6 +21,9 @@ interface GeoAlarmDao {
     @Query("SELECT * FROM geo_alarms WHERE isFavorite = 1 ORDER BY updatedAt DESC")
     fun observeFavorites(): Flow<List<GeoAlarmEntity>>
 
+    @Query("SELECT * FROM geo_alarms ORDER BY isActive DESC, updatedAt DESC")
+    suspend fun getAllAlarmsOnce(): List<GeoAlarmEntity>
+
     @Query("SELECT * FROM geo_alarms WHERE isActive = 1")
     suspend fun getActiveAlarmsOnce(): List<GeoAlarmEntity>
 

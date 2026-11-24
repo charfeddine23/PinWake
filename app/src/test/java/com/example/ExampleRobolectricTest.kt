@@ -223,4 +223,140 @@ class ExampleRobolectricTest {
             db.close()
         }
     }
+
+    @Test
+    fun `mapLinkParser extracts coordinates and labels across geo and map urls`() {
+        val geo = com.example.util.MapLinkParser.parse("geo:0,0?q=36.7538,3.0588(Central+Station)")
+        assertEquals(36.7538, geo?.latitude ?: 0.0, 0.0001)
+        assertEquals(3.0588, geo?.longitude ?: 0.0, 0.0001)
+        assertEquals("Central Station", geo?.label)
+
+        val gmaps = com.example.util.MapLinkParser.parse(
+            "https://www.google.com/maps/place/Algiers+Port/@36.7650,3.0620,16z/data=!3d36.7642!4d3.0631"
+        )
+        assertEquals(36.7642, gmaps?.latitude ?: 0.0, 0.0001)
+        assertEquals(3.0631, gmaps?.longitude ?: 0.0, 0.0001)
+        assertEquals("Algiers Port", gmaps?.label)
+
+        val osm = com.example.util.MapLinkParser.parse(
+            "https://www.openstreetmap.org/?mlat=48.8566&mlon=2.3522#map=16/48.8566/2.3522"
+        )
+        assertEquals(48.8566, osm?.latitude ?: 0.0, 0.0001)
+        assertEquals(2.3522, osm?.longitude ?: 0.0, 0.0001)
+
+        val raw = com.example.util.MapLinkParser.parse("Meet at 36.7400, 3.0300 please")
+        assertEquals(36.7400, raw?.latitude ?: 0.0, 0.0001)
+        assertEquals(3.0300, raw?.longitude ?: 0.0, 0.0001)
+
+        val tifinaghLabel = com.example.util.MapLinkParser.parse("geo:0,0?q=36.75,3.05(Alger+%E2%B4%B7%E2%B5%A3)")
+        assertFalse(tifinaghLabel?.label?.any { it in '\u2D30'..'\u2D7F' } == true)
+    }
+
+    @Test
+    fun `preAlertPreferences persists and normalizes supported early warning distances`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        assertEquals(
+            com.example.util.PreAlertPreferences.PRE_ALERT_300M,
+            com.example.util.PreAlertPreferences.getPreAlertDistanceMeters(context)
+        )
+
+        com.example.util.PreAlertPreferences.setPreAlertDistanceMeters(context, 1000)
+        assertEquals(1000, com.example.util.PreAlertPreferences.getPreAlertDistanceMeters(context))
+
+        com.example.util.PreAlertPreferences.setPreAlertDistanceMeters(context, 0)
+        assertEquals(0, com.example.util.PreAlertPreferences.getPreAlertDistanceMeters(context))
+
+        com.example.util.PreAlertPreferences.setPreAlertDistanceMeters(context, 999)
+        assertEquals(
+            com.example.util.PreAlertPreferences.DEFAULT_PRE_ALERT_METERS,
+            com.example.util.PreAlertPreferences.getPreAlertDistanceMeters(context)
+        )
+    }
+
+    @Test
+    fun `backupManager exports and restores alarms and favorites without duplicates`() = kotlinx.coroutines.runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val sampleAlarms = listOf(
+            com.example.data.local.entity.GeoAlarmEntity(
+                title = "Home",
+                address = "Algiers / ⴷⵣⴰⵢⵔ",
+                latitude = 36.7538,
+                longitude = 3.0588,
+                radiusMeters = 500,
+                isActive = true,
+                isFavorite = true,
+                favoriteCategory = com.example.data.local.entity.FavoriteCategory.HOME
+            ),
+            com.example.data.local.entity.GeoAlarmEntity(
+                title = "Train Hub",
+                address = "Central",
+                latitude = 36.7600,
+                longitude = 3.0650,
+                radiusMeters = 350,
+                isActive = false,
+                isFavorite = true,
+                favoriteCategory = com.example.data.local.entity.FavoriteCategory.STATION
+            )
+        )
+
+        val json = com.example.util.BackupManager.serializeToJson(sampleAlarms, preAlertMeters = 500)
+        val parsed = com.example.util.BackupManager.parseFromJson(json).getOrThrow()
+        assertEquals(500, parsed.preAlertMeters)
+        assertEquals(2, parsed.alarms.size)
+        assertFalse(parsed.alarms[0].address.any { it in '\u2D30'..'\u2D7F' })
+
+        val db = androidx.room.Room.inMemoryDatabaseBuilder(
+            context,
+            com.example.data.local.AppDatabase::class.java
+        ).allowMainThreadQueries().build()
+
+        try {
+            val repo = com.example.data.repository.PinWakeRepository(
+                geoAlarmDao = db.geoAlarmDao(),
+                tripHistoryDao = db.tripHistoryDao(),
+                nominatimApi = com.example.data.remote.NominatimApiService.create(),
+                trackingStateManager = com.example.data.repository.TrackingStateManager()
+            )
+            assertEquals(2, repo.importBackupAlarms(parsed.alarms))
+            assertEquals(2, repo.importBackupAlarms(parsed.alarms))
+            assertEquals(2, repo.getAllAlarmsOnce().size)
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
+    fun `replayTrip reactivates existing alarm or recreates snapshot if deleted`() = kotlinx.coroutines.runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val db = androidx.room.Room.inMemoryDatabaseBuilder(
+            context,
+            com.example.data.local.AppDatabase::class.java
+        ).allowMainThreadQueries().build()
+
+        try {
+            val repo = com.example.data.repository.PinWakeRepository(
+                geoAlarmDao = db.geoAlarmDao(),
+                tripHistoryDao = db.tripHistoryDao(),
+                nominatimApi = com.example.data.remote.NominatimApiService.create(),
+                trackingStateManager = com.example.data.repository.TrackingStateManager()
+            )
+            val tripForDeletedAlarm = com.example.data.local.entity.TripHistoryEntity(
+                alarmId = 999L,
+                alarmTitle = "Old Station",
+                address = "Main Concourse",
+                latitude = 36.7580,
+                longitude = 3.0590,
+                radiusMeters = 450,
+                outcome = com.example.data.local.entity.TripOutcome.ARRIVED,
+                triggeredAt = System.currentTimeMillis() - 60_000L
+            )
+            val rearmed = repo.replayTrip(tripForDeletedAlarm)
+            assertTrue(rearmed.isActive)
+            assertEquals("Old Station", rearmed.title)
+            assertEquals(450, rearmed.radiusMeters)
+            assertEquals(1, repo.getActiveAlarmsOnce().size)
+        } finally {
+            db.close()
+        }
+    }
 }

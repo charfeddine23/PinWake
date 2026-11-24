@@ -1,7 +1,10 @@
 package com.example.ui.alarm
 
 import android.app.KeyguardManager
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.media.AudioAttributes
 import android.media.MediaPlayer
 import android.media.RingtoneManager
@@ -15,6 +18,7 @@ import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.lifecycleScope
 import com.example.R
@@ -36,6 +40,15 @@ class AlarmRingingActivity : AppCompatActivity() {
     private var alarmId: Long = -1L
     private var currentDistanceMeters: Float = 0f
 
+    private val finishRingingReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == PinWakeService.ACTION_FINISH_RINGING_UI) {
+                stopAudioAndVibration()
+                finish()
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         configureLockScreenBehavior()
@@ -50,6 +63,13 @@ class AlarmRingingActivity : AppCompatActivity() {
                 // Intentionally blocked: user must slide to dismiss or tap Snooze (500m)
             }
         })
+
+        ContextCompat.registerReceiver(
+            this,
+            finishRingingReceiver,
+            IntentFilter(PinWakeService.ACTION_FINISH_RINGING_UI),
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
 
         bindAlarmIntent(intent)
 
@@ -206,6 +226,7 @@ class AlarmRingingActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        runCatching { unregisterReceiver(finishRingingReceiver) }
         stopAudioAndVibration()
         super.onDestroy()
     }

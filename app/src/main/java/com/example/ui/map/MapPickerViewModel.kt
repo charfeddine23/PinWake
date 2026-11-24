@@ -180,24 +180,41 @@ class MapPickerViewModel(
         val address = state.resolvedAddress.ifBlank { fallbackAddress }
         val category = state.selectedCategory
         val existing = state.existingAlarm
-        val entity = GeoAlarmEntity(
-            id = existing?.id ?: 0L,
-            title = title.trim(),
-            address = address,
-            latitude = state.latitude,
-            longitude = state.longitude,
-            radiusMeters = state.radiusMeters,
-            isActive = true,
-            isFavorite = category != FavoriteCategory.NONE,
-            favoriteCategory = category,
-            vibrateEnabled = existing?.vibrateEnabled ?: true,
-            lastDistanceMeters = null,
-            snoozedUntilMs = 0L,
-            createdAt = existing?.createdAt ?: System.currentTimeMillis(),
-            updatedAt = System.currentTimeMillis()
-        )
+        val isCanonicalSlot = existing == null && (
+            category == FavoriteCategory.HOME ||
+                category == FavoriteCategory.WORK ||
+                category == FavoriteCategory.STATION
+            )
         viewModelScope.launch {
-            val savedId = repository.saveAlarm(entity)
+            val savedId = if (isCanonicalSlot) {
+                repository.saveQuickAssignedLocation(
+                    category = category,
+                    title = title.trim(),
+                    address = address,
+                    latitude = state.latitude,
+                    longitude = state.longitude,
+                    radiusMeters = state.radiusMeters,
+                    isActive = true
+                )
+            } else {
+                val entity = GeoAlarmEntity(
+                    id = existing?.id ?: 0L,
+                    title = title.trim(),
+                    address = address,
+                    latitude = state.latitude,
+                    longitude = state.longitude,
+                    radiusMeters = state.radiusMeters,
+                    isActive = true,
+                    isFavorite = category != FavoriteCategory.NONE,
+                    favoriteCategory = category,
+                    vibrateEnabled = existing?.vibrateEnabled ?: true,
+                    lastDistanceMeters = null,
+                    snoozedUntilMs = 0L,
+                    createdAt = existing?.createdAt ?: System.currentTimeMillis(),
+                    updatedAt = System.currentTimeMillis()
+                )
+                repository.saveAlarm(entity)
+            }
             onSaved(savedId)
         }
     }

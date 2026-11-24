@@ -47,16 +47,17 @@ import com.example.ui.dashboard.AlarmAdapter
 import com.example.ui.dashboard.DashboardUiState
 import com.example.ui.dashboard.DashboardViewModel
 import com.example.ui.dashboard.TripHistoryAdapter
-import com.example.ui.dashboard.UpdateCheckEvent
 import com.example.ui.map.MapPickerActivity
 import com.example.ui.settings.SettingsActivity
 import com.example.util.DistanceFormatter
 import com.example.util.LanguageManager
+import com.example.util.MapLinkParser
 import com.example.util.MapStyleHelper
 import com.example.util.OpenFreeMapStyle
 import com.example.util.OpenFreeMapStyles
 import com.example.util.PermissionHelper
 import com.example.util.SafeMapLocationEngine
+import com.example.util.ShareTripHelper
 import kotlinx.coroutines.launch
 import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraPosition
@@ -140,16 +141,26 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         binding.dashboardMapView.onCreate(savedInstanceState)
-        binding.tvAppVersionPill.text =
-            getString(R.string.update_pill_version, BuildConfig.VERSION_NAME)
 
         onBackPressedDispatcher.addCallback(this, restoreSheetBackCallback)
+        binding.tvTopVersionBadge.text =
+            getString(R.string.update_pill_version, BuildConfig.VERSION_NAME)
         setupBottomSheet(savedInstanceState == null)
         applyEdgeToEdgeInsets()
         setupHeroMap()
         setupRecyclerViews()
         setupClicks()
         observeDashboard()
+
+        if (savedInstanceState == null) {
+            handleIncomingShareIntent(intent)
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIncomingShareIntent(intent)
     }
 
     private fun setupBottomSheet(initialHalfExpanded: Boolean) {
@@ -416,15 +427,17 @@ class MainActivity : AppCompatActivity() {
             (28f * density)
         }
         val gap = 12f * density
+        val barBottom = binding.topFloatingBar.bottom.toFloat()
+            .coerceAtLeast(sysTopInset + 68f * density)
+        val minRadarTop = barBottom + 10f * density
+        val halfRadarY = (sheetTop - pillH - gap).coerceAtLeast(minRadarTop)
         binding.pillLiveRadar.translationY =
-            (sheetTop - pillH - gap).coerceAtLeast(sysTopInset + 64f * density)
+            minRadarTop + (halfRadarY - minRadarTop) * collapseFactor
 
         val aboveHalfRange = (1f - half).coerceAtLeast(0.1f)
-        val upperFade = 1f - ((safeSlide - half) / (aboveHalfRange * 0.36f)).coerceIn(0f, 1f)
-        val lowerFade = ((collapseFactor - 0.25f) / 0.50f).coerceIn(0f, 1f)
-        val pillAlpha = (upperFade * lowerFade).coerceIn(0f, 1f)
-        binding.pillLiveRadar.alpha = pillAlpha
-        val pillVis = if (pillAlpha <= 0.02f) View.INVISIBLE else View.VISIBLE
+        val upperFade = 1f - ((safeSlide - half) / (aboveHalfRange * 0.28f)).coerceIn(0f, 1f)
+        binding.pillLiveRadar.alpha = upperFade
+        val pillVis = if (upperFade <= 0.02f) View.INVISIBLE else View.VISIBLE
         if (binding.pillLiveRadar.visibility != pillVis) {
             binding.pillLiveRadar.visibility = pillVis
         }
@@ -524,7 +537,12 @@ class MainActivity : AppCompatActivity() {
                     return@addOnMapClickListener false
                 }
                 val screenPt = map.projection.toScreenLocation(point)
-                val features = map.queryRenderedFeatures(screenPt, HERO_SAVED_PLACES_SYMBOL_ID)
+                val features = map.queryRenderedFeatures(
+                    screenPt,
+                    HERO_SAVED_PLACES_SYMBOL_ID,
+                    HERO_SAVED_PLACES_HALO_ID,
+                    "$HERO_SAVED_PLACES_SYMBOL_ID-labels"
+                )
                 val clickedId = features.firstOrNull()?.getNumberProperty("alarmId")?.toLong()
                 if (clickedId != null && clickedId > 0L) {
                     openMapPicker(alarmId = clickedId)
@@ -758,6 +776,13 @@ class MainActivity : AppCompatActivity() {
             onEditClick = { alarm ->
                 openMapPicker(alarmId = alarm.id)
             },
+            onShareClick = { alarm ->
+                ShareTripHelper.launchShareSheet(
+                    context = this,
+                    text = ShareTripHelper.buildAlarmShareText(this, alarm),
+                    chooserTitle = getString(R.string.share_chooser_title)
+                )
+            },
             onDeleteClick = { alarm ->
                 viewModel.deleteAlarm(alarm.id) { hasActive ->
                     if (!hasActive) {
@@ -773,7 +798,24 @@ class MainActivity : AppCompatActivity() {
             itemAnimator = null
         }
 
-        historyAdapter = TripHistoryAdapter()
+        historyAdapter = TripHistoryAdapter { trip ->
+            if (!PermissionHelper.checkStatus(this).hasFineLocation) {
+                requestFineLocation()
+            }
+            viewModel.replayTrip(trip) { rearmedAlarm, hasActive ->
+                if (isDestroyed || isFinishing) return@replayTrip
+                focusedPlaceLockId = rearmedAlarm.id
+                lastHeroCameraKey = null
+                if (hasActive && PermissionHelper.checkStatus(this).hasFineLocation) {
+                    PinWakeService.startOrSync(this)
+                }
+                Toast.makeText(
+                    this,
+                    getString(R.string.trip_rearmed_toast, rearmedAlarm.title),
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
         binding.rvTripHistory.apply {
             layoutManager = LinearLayoutManager(this@MainActivity)
             adapter = historyAdapter
@@ -792,7 +834,6 @@ class MainActivity : AppCompatActivity() {
             binding.btnMyLocationFullMap,
             binding.btnQuickWorkFullMap,
             binding.btnQuickHomeFullMap,
-            binding.btnCheckUpdates,
             binding.btnSettings
         ).forEach { attachLuxuryPressFeedback(it) }
 
@@ -806,15 +847,6 @@ class MainActivity : AppCompatActivity() {
 
         binding.btnSettings.setOnClickListener {
             openSettings()
-        }
-
-        binding.btnCheckUpdates.setOnClickListener {
-            if (viewModel.updateState.value.availableUpdate != null) {
-                openSettings(scrollToUpdates = true)
-            } else {
-                Toast.makeText(this, R.string.update_checking, Toast.LENGTH_SHORT).show()
-                viewModel.checkForUpdates(manual = true)
-            }
         }
 
         binding.btnClearHistory.setOnClickListener {
@@ -1060,42 +1092,8 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
                 launch {
-                    viewModel.updateState.collect { update ->
-                        val hasUpdate = update.availableUpdate != null
-                        binding.tvAppVersionPill.setTextColor(
-                            ContextCompat.getColor(
-                                this@MainActivity,
-                                if (hasUpdate) R.color.accent_emerald else R.color.accent_cyan_glow
-                            )
-                        )
+                    viewModel.updateState.collect {
                         refreshSettingsAttentionDot()
-                    }
-                }
-                launch {
-                    viewModel.updateEvent.collect { event ->
-                        when (event) {
-                            is UpdateCheckEvent.UpToDate -> {
-                                Toast.makeText(
-                                    this@MainActivity,
-                                    getString(R.string.update_up_to_date, BuildConfig.VERSION_NAME),
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                                viewModel.consumeUpdateEvent()
-                            }
-                            is UpdateCheckEvent.Failed -> {
-                                Toast.makeText(
-                                    this@MainActivity,
-                                    R.string.update_check_failed,
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                                viewModel.consumeUpdateEvent()
-                            }
-                            is UpdateCheckEvent.UpdateFound -> {
-                                viewModel.consumeUpdateEvent()
-                                openSettings(scrollToUpdates = true)
-                            }
-                            null -> Unit
-                        }
                     }
                 }
             }
@@ -1175,6 +1173,28 @@ class MainActivity : AppCompatActivity() {
             binding.tvPollingTierBadge.setTextColor(
                 ContextCompat.getColor(this, R.color.accent_emerald)
             )
+            val targetAlarm = state.alarms.firstOrNull { it.id == telemetry.closestAlarmId }
+                ?: state.alarms.firstOrNull { it.isActive }
+            if (targetAlarm != null) {
+                binding.btnShareTripStatus.visibility = View.VISIBLE
+                binding.btnShareTripStatus.setOnClickListener {
+                    val shareText = ShareTripHelper.buildDestinationShareText(
+                        context = this,
+                        title = targetAlarm.title,
+                        latitude = targetAlarm.latitude,
+                        longitude = targetAlarm.longitude,
+                        radiusMeters = targetAlarm.radiusMeters,
+                        distanceMeters = telemetry.closestDistanceMeters
+                    )
+                    ShareTripHelper.launchShareSheet(
+                        context = this,
+                        text = shareText,
+                        chooserTitle = getString(R.string.share_chooser_title)
+                    )
+                }
+            } else {
+                binding.btnShareTripStatus.visibility = View.GONE
+            }
         } else {
             binding.cardLiveTelemetry.setBackgroundResource(R.drawable.bg_liquid_glass_card)
             binding.viewTrackingDot.setBackgroundResource(R.drawable.bg_badge_cyan)
@@ -1188,6 +1208,7 @@ class MainActivity : AppCompatActivity() {
             binding.tvPollingTierBadge.setTextColor(
                 ContextCompat.getColor(this, R.color.accent_cyan_glow)
             )
+            binding.btnShareTripStatus.visibility = View.GONE
         }
     }
 
@@ -1504,6 +1525,34 @@ class MainActivity : AppCompatActivity() {
 
     private fun isRobolectric(): Boolean {
         return "robolectric".equals(Build.FINGERPRINT, ignoreCase = true)
+    }
+
+    private fun handleIncomingShareIntent(incoming: Intent?) {
+        if (incoming == null) return
+        val action = incoming.action
+        if (action != Intent.ACTION_VIEW && action != Intent.ACTION_SEND) return
+
+        val rawText = when (action) {
+            Intent.ACTION_VIEW -> incoming.dataString
+            Intent.ACTION_SEND -> incoming.getStringExtra(Intent.EXTRA_TEXT)
+                ?: incoming.getStringExtra(Intent.EXTRA_SUBJECT)
+            else -> null
+        }?.trim().orEmpty()
+
+        if (rawText.isBlank()) return
+
+        val parsed = MapLinkParser.parse(rawText)
+        val pickerIntent = Intent(this, MapPickerActivity::class.java).apply {
+            putExtra(MapPickerActivity.EXTRA_DEFAULT_CATEGORY, FavoriteCategory.NONE.name)
+            if (parsed != null) {
+                putExtra(MapPickerActivity.EXTRA_SHARED_LAT, parsed.latitude)
+                putExtra(MapPickerActivity.EXTRA_SHARED_LON, parsed.longitude)
+                parsed.label?.let { putExtra(MapPickerActivity.EXTRA_SHARED_LABEL, it) }
+            } else {
+                putExtra(MapPickerActivity.EXTRA_SHARED_SEARCH_QUERY, rawText.take(120))
+            }
+        }
+        startActivity(pickerIntent)
     }
 
     private fun openMapPicker(

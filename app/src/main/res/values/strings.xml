@@ -49,8 +49,11 @@
     <string name="action_delete_alarm">Delete</string>
 
     <!-- Trip History -->
-    <string name="section_trip_history">Recent Arrivals</string>
+    <string name="section_trip_history">Trips &amp; History</string>
     <string name="action_clear_history">Clear</string>
+    <string name="action_rearm_trip">Re-arm</string>
+    <string name="cd_rearm_trip">Re-arm alarm for this trip</string>
+    <string name="trip_rearmed_toast">Re-armed wake alarm for %1$s</string>
     <string name="outcome_arrived">ARRIVED</string>
     <string name="outcome_snoozed">SNOOZED</string>
     <string name="outcome_cancelled">CANCELLED</string>
@@ -77,17 +80,22 @@
     <string name="notif_channel_tracking_desc">Shows remaining distance and adaptive GPS tracking status.</string>
     <string name="notif_channel_alarm_name">Pin Wake Arrival Alarms</string>
     <string name="notif_channel_alarm_desc">High-priority full-screen alerts when entering your destination geofence.</string>
+    <string name="notif_channel_pre_alert_name">Early Arrival Warnings</string>
+    <string name="notif_channel_pre_alert_desc">Heads-up early notice before reaching your destination wake zone.</string>
     <string name="notif_tracking_title">Tracking: %1$s</string>
     <string name="notif_tracking_body_dist">%1$s remaining · %2$s</string>
     <string name="notif_tracking_body_waiting">Acquiring GPS fix · %1$s</string>
     <string name="notif_action_cancel">Cancel Alarm</string>
+    <string name="notif_action_dismiss">Dismiss</string>
+    <string name="notif_pre_alert_title">Approaching %1$s</string>
+    <string name="notif_pre_alert_body">About %1$s away · Entering %2$d m wake zone soon</string>
     <string name="notif_alarm_arrived_title">Arriving at %1$s</string>
     <string name="notif_alarm_arrived_body">You entered the %1$d m wake zone. Tap to open alarm.</string>
 
     <!-- Alarm Ringing Screen -->
     <string name="alarm_ringing_badge">DESTINATION REACHED</string>
     <string name="alarm_ringing_subtitle">Inside %1$d m wake geofence</string>
-    <string name="alarm_snooze_500m">Snooze (500m)</string>
+    <string name="alarm_snooze_500m">Snooze +500m</string>
     <string name="alarm_slide_to_dismiss">Slide to Dismiss</string>
     <string name="alarm_snooze_toast">Snoozed — will re-alert 500m closer</string>
     <string name="alarm_dismissed_toast">Alarm dismissed. Have a safe trip!</string>
@@ -158,4 +166,30 @@
     <string name="settings_history_empty">No arrival history recorded</string>
     <string name="settings_clear_history">Clear</string>
     <string name="settings_history_cleared_toast">Arrival history cleared</string>
+
+    <!-- Early Arrival Warning (Pre-Alert) -->
+    <string name="settings_section_pre_alert">Early Arrival Warning</string>
+    <string name="settings_pre_alert_subtitle">Send a gentle heads-up notification before entering the wake zone</string>
+    <string name="pre_alert_off">Off</string>
+    <string name="pre_alert_300m">+300 m</string>
+    <string name="pre_alert_500m">+500 m</string>
+    <string name="pre_alert_1km">+1 km</string>
+
+    <!-- Share-to-Pin & Trip Status Share -->
+    <string name="cd_share_destination">Share destination or trip status</string>
+    <string name="share_chooser_title">Share Pin Wake Destination</string>
+    <string name="share_destination_template">Pin Wake · %1$s (%2$s)\n%3$s</string>
+    <string name="share_trip_live_template">Pin Wake · Heading to %1$s · %2$s remaining (%3$s)\n%4$s</string>
+    <string name="share_to_pin_loaded">Loaded shared destination on map</string>
+    <string name="share_to_pin_search">Searching shared destination on map</string>
+
+    <!-- Local JSON Backup & Restore -->
+    <string name="settings_section_backup">Local JSON Backup</string>
+    <string name="settings_backup_subtitle">Export or restore your alarms and saved favorites locally</string>
+    <string name="settings_btn_export_json">Export JSON</string>
+    <string name="settings_btn_import_json">Import JSON</string>
+    <string name="backup_export_success">Exported %1$d pins to JSON backup</string>
+    <string name="backup_export_empty">No saved alarms or favorites to export yet</string>
+    <string name="backup_import_success">Restored %1$d pins from backup</string>
+    <string name="backup_import_failed">Could not read valid Pin Wake JSON backup</string>
 </resources>

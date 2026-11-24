@@ -340,6 +340,20 @@
                 android:textColor="@color/accent_cyan_glow"
                 android:textSize="10sp"
                 tools:text="48.85660, 2.35220" />
+
+            <ImageButton
+                android:id="@+id/btnSharePin"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginStart="6dp"
+                android:background="@drawable/bg_luxury_glass_pill"
+                android:contentDescription="@string/cd_share_destination"
+                android:minWidth="48dp"
+                android:minHeight="48dp"
+                android:padding="10dp"
+                android:scaleType="centerInside"
+                android:src="@drawable/ic_share"
+                app:tint="@color/accent_cyan_glow" />
         </LinearLayout>
 
         <!-- Resolved Address -->

@@ -19,11 +19,19 @@ class AlarmActionReceiver : BroadcastReceiver() {
                 val alarmId = intent.getLongExtra(PinWakeService.EXTRA_ALARM_ID, -1L)
                 PinWakeService.dismissAlarm(context, alarmId)
             }
+            ACTION_SNOOZE_500M -> {
+                val alarmId = intent.getLongExtra(PinWakeService.EXTRA_ALARM_ID, -1L)
+                val dist = intent.getFloatExtra(PinWakeService.EXTRA_DISTANCE_METERS, 0f)
+                if (alarmId > 0L) {
+                    PinWakeService.snooze500m(context, alarmId, dist)
+                }
+            }
         }
     }
 
     companion object {
         const val ACTION_CANCEL_ALARM = "com.example.ACTION_CANCEL_ALARM"
+        const val ACTION_SNOOZE_500M = "com.example.ACTION_SNOOZE_500M"
         const val ACTION_DISMISS_ALARM = "com.example.ACTION_DISMISS_ALARM"
     }
 }

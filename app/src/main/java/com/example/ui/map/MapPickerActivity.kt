@@ -40,6 +40,7 @@ import com.example.util.OpenFreeMapStyle
 import com.example.util.OpenFreeMapStyles
 import com.example.util.PermissionHelper
 import com.example.util.SafeMapLocationEngine
+import com.example.util.ShareTripHelper
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -114,29 +115,60 @@ class MapPickerActivity : AppCompatActivity() {
         val defaultCategory = runCatching {
             FavoriteCategory.valueOf(categoryName ?: FavoriteCategory.NONE.name)
         }.getOrDefault(FavoriteCategory.NONE)
+        val hasSharedCoords = intent.hasExtra(EXTRA_SHARED_LAT) && intent.hasExtra(EXTRA_SHARED_LON)
+        val sharedLat = intent.getDoubleExtra(EXTRA_SHARED_LAT, DEFAULT_LAT)
+        val sharedLon = intent.getDoubleExtra(EXTRA_SHARED_LON, DEFAULT_LON)
+        val sharedLabel = intent.getStringExtra(EXTRA_SHARED_LABEL)
+        val sharedSearchQuery = intent.getStringExtra(EXTRA_SHARED_SEARCH_QUERY)
 
         val lang = LanguageManager.getCurrentLanguageCode(this)
         viewModel.initialize(alarmId, defaultCategory, lang) { existing ->
             if (isDestroyed || isFinishing) return@initialize
-            if (existing != null) {
-                userEditedTitle = true
-                suppressNextIdleGeocode = true
-                setTitleProgrammatically(existing.title)
-                binding.sliderRadius.value = existing.radiusMeters.toFloat().coerceIn(200f, 5000f)
-                binding.tvRadiusValue.text = DistanceFormatter.formatRadiusSliderValue(this, existing.radiusMeters)
-                binding.btnSaveAlarm.setText(R.string.map_update_alarm)
-                selectCategoryChip(existing.favoriteCategory)
-                moveCameraTo(
-                    lat = existing.latitude,
-                    lon = existing.longitude,
-                    zoom = 16.0,
-                    animate = false,
-                    triggerReverseGeocode = false
-                )
-            } else {
-                selectCategoryChip(defaultCategory)
-                preFillCategoryTitle(defaultCategory)
-                centerOnCurrentLocation(silentIfUnavailable = true)
+            when {
+                existing != null -> {
+                    userEditedTitle = true
+                    suppressNextIdleGeocode = true
+                    setTitleProgrammatically(existing.title)
+                    binding.sliderRadius.value = existing.radiusMeters.toFloat().coerceIn(200f, 5000f)
+                    binding.tvRadiusValue.text = DistanceFormatter.formatRadiusSliderValue(this, existing.radiusMeters)
+                    binding.btnSaveAlarm.setText(R.string.map_update_alarm)
+                    selectCategoryChip(existing.favoriteCategory)
+                    moveCameraTo(
+                        lat = existing.latitude,
+                        lon = existing.longitude,
+                        zoom = 16.0,
+                        animate = false,
+                        triggerReverseGeocode = false
+                    )
+                    updateCircleOverlay(existing.latitude, existing.longitude, existing.radiusMeters)
+                }
+                hasSharedCoords -> {
+                    selectCategoryChip(defaultCategory)
+                    if (!sharedLabel.isNullOrBlank()) {
+                        userEditedTitle = true
+                        setTitleProgrammatically(sharedLabel)
+                    }
+                    moveCameraTo(
+                        lat = sharedLat,
+                        lon = sharedLon,
+                        zoom = 16.0,
+                        animate = false,
+                        triggerReverseGeocode = true
+                    )
+                    Toast.makeText(this, R.string.share_to_pin_loaded, Toast.LENGTH_SHORT).show()
+                }
+                !sharedSearchQuery.isNullOrBlank() -> {
+                    selectCategoryChip(defaultCategory)
+                    preFillCategoryTitle(defaultCategory)
+                    binding.etSearchPlace.setText(sharedSearchQuery)
+                    binding.etSearchPlace.setSelection(sharedSearchQuery.length)
+                    Toast.makeText(this, R.string.share_to_pin_search, Toast.LENGTH_SHORT).show()
+                }
+                else -> {
+                    selectCategoryChip(defaultCategory)
+                    preFillCategoryTitle(defaultCategory)
+                    centerOnCurrentLocation(silentIfUnavailable = true)
+                }
             }
         }
     }
@@ -491,6 +523,25 @@ class MapPickerActivity : AppCompatActivity() {
             if (!userEditedTitle) {
                 preFillCategoryTitle(cat)
             }
+        }
+
+        binding.btnSharePin.setOnClickListener {
+            val state = viewModel.uiState.value
+            val label = binding.etAlarmTitle.text?.toString()?.trim()
+                ?.takeIf { it.isNotBlank() }
+                ?: state.suggestedTitle.ifBlank { state.resolvedAddress }
+            val shareText = ShareTripHelper.buildDestinationShareText(
+                context = this,
+                title = label,
+                latitude = currentLat,
+                longitude = currentLon,
+                radiusMeters = state.radiusMeters
+            )
+            ShareTripHelper.launchShareSheet(
+                context = this,
+                text = shareText,
+                chooserTitle = getString(R.string.share_chooser_title)
+            )
         }
 
         binding.btnSaveAlarm.setOnClickListener {
@@ -849,6 +900,10 @@ class MapPickerActivity : AppCompatActivity() {
     companion object {
         const val EXTRA_ALARM_ID = "extra_alarm_id"
         const val EXTRA_DEFAULT_CATEGORY = "extra_default_category"
+        const val EXTRA_SHARED_LAT = "extra_shared_lat"
+        const val EXTRA_SHARED_LON = "extra_shared_lon"
+        const val EXTRA_SHARED_LABEL = "extra_shared_label"
+        const val EXTRA_SHARED_SEARCH_QUERY = "extra_shared_search_query"
 
         private const val DEFAULT_LAT = 48.8566
         private const val DEFAULT_LON = 2.3522

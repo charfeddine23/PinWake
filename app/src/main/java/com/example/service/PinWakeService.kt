@@ -18,6 +18,9 @@ import android.os.Bundle
 import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
@@ -30,6 +33,7 @@ import com.example.data.repository.PinWakeRepository
 import com.example.data.repository.PollingTier
 import com.example.ui.alarm.AlarmRingingActivity
 import com.example.util.DistanceFormatter
+import com.example.util.PreAlertPreferences
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -54,6 +58,7 @@ class PinWakeService : Service() {
     private var lastKnownLocation: Location? = null
     private var isForegroundStarted = false
     private val triggeredLock = mutableSetOf<Long>()
+    private val preAlertSentLock = mutableSetOf<Long>()
 
     private val locationListener = object : LocationListener {
         override fun onLocationChanged(location: Location) {
@@ -94,7 +99,12 @@ class PinWakeService : Service() {
             ACTION_DISMISS_ALARM -> {
                 notificationManager.cancel(NOTIFICATION_ALARM_ID)
                 val alarmId = intent.getLongExtra(EXTRA_ALARM_ID, -1L)
-                if (alarmId > 0L) triggeredLock.remove(alarmId)
+                if (alarmId > 0L) {
+                    triggeredLock.remove(alarmId)
+                    preAlertSentLock.remove(alarmId)
+                    notificationManager.cancel(preAlertNotificationId(alarmId))
+                }
+                sendBroadcast(Intent(ACTION_FINISH_RINGING_UI).setPackage(packageName))
                 observeActiveAlarms()
                 return START_STICKY
             }
@@ -102,9 +112,12 @@ class PinWakeService : Service() {
                 notificationManager.cancel(NOTIFICATION_ALARM_ID)
                 val alarmId = intent.getLongExtra(EXTRA_ALARM_ID, -1L)
                 val dist = intent.getFloatExtra(EXTRA_DISTANCE_METERS, -1f).let { if (it >= 0f) it else null }
+                sendBroadcast(Intent(ACTION_FINISH_RINGING_UI).setPackage(packageName))
                 serviceScope.launch {
                     if (alarmId > 0L) {
                         triggeredLock.remove(alarmId)
+                        preAlertSentLock.remove(alarmId)
+                        notificationManager.cancel(preAlertNotificationId(alarmId))
                         repository.getAlarmById(alarmId)?.let { alarm ->
                             repository.applySnooze500m(alarm, dist)
                         }
@@ -224,14 +237,28 @@ class PinWakeService : Service() {
                 location.provider == LocationManager.GPS_PROVIDER ||
                 location.accuracy <= (alarm.radiusMeters * 1.5f).coerceAtLeast(500f)
 
+            val preAlertOffset = PreAlertPreferences.getPreAlertDistanceMeters(this@PinWakeService)
             if (dist <= alarm.radiusMeters &&
                 now >= alarm.snoozedUntilMs &&
                 accuracyAcceptable &&
                 triggeredLock.add(alarm.id)
             ) {
+                preAlertSentLock.remove(alarm.id)
+                notificationManager.cancel(preAlertNotificationId(alarm.id))
                 repository.setAlarmActive(alarm.id, active = false, lastDistanceMeters = dist)
                 repository.recordTripOutcome(alarm, TripOutcome.ARRIVED)
                 triggerUnmissableAlarm(alarm, dist)
+            } else if (preAlertOffset > 0 &&
+                dist > alarm.radiusMeters &&
+                dist <= alarm.radiusMeters + preAlertOffset &&
+                now >= alarm.snoozedUntilMs &&
+                accuracyAcceptable &&
+                !triggeredLock.contains(alarm.id) &&
+                preAlertSentLock.add(alarm.id)
+            ) {
+                triggerPreAlertNotification(alarm, dist)
+            } else if (preAlertOffset == 0 || dist > alarm.radiusMeters + preAlertOffset + 150f) {
+                preAlertSentLock.remove(alarm.id)
             }
         }
 
@@ -363,6 +390,29 @@ class PinWakeService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        val snoozeIntent = Intent(this, AlarmActionReceiver::class.java).apply {
+            action = AlarmActionReceiver.ACTION_SNOOZE_500M
+            putExtra(EXTRA_ALARM_ID, alarm.id)
+            putExtra(EXTRA_DISTANCE_METERS, distanceMeters)
+        }
+        val snoozePending = PendingIntent.getBroadcast(
+            this,
+            (alarm.id.toInt() shl 4) + 1,
+            snoozeIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val dismissIntent = Intent(this, AlarmActionReceiver::class.java).apply {
+            action = AlarmActionReceiver.ACTION_DISMISS_ALARM
+            putExtra(EXTRA_ALARM_ID, alarm.id)
+        }
+        val dismissPending = PendingIntent.getBroadcast(
+            this,
+            (alarm.id.toInt() shl 4) + 2,
+            dismissIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
         val alarmNotification = NotificationCompat.Builder(this, PinWakeApplication.CHANNEL_ALARM)
             .setSmallIcon(R.drawable.ic_pin_wake)
             .setContentTitle(getString(R.string.notif_alarm_arrived_title, alarm.title))
@@ -374,6 +424,16 @@ class PinWakeService : Service() {
             .setAutoCancel(false)
             .setFullScreenIntent(fullScreenPendingIntent, true)
             .setContentIntent(fullScreenPendingIntent)
+            .addAction(
+                R.drawable.ic_snooze,
+                getString(R.string.alarm_snooze_500m),
+                snoozePending
+            )
+            .addAction(
+                R.drawable.ic_close,
+                getString(R.string.notif_action_dismiss),
+                dismissPending
+            )
             .build()
 
         notificationManager.notify(NOTIFICATION_ALARM_ID, alarmNotification)
@@ -382,6 +442,54 @@ class PinWakeService : Service() {
             startActivity(alarmIntent)
         }
     }
+
+    private fun triggerPreAlertNotification(alarm: GeoAlarmEntity, distanceMeters: Float) {
+        val openIntent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val openPending = PendingIntent.getActivity(
+            this,
+            preAlertNotificationId(alarm.id),
+            openIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val distLabel = DistanceFormatter.formatCompactDistance(distanceMeters)
+        val notification = NotificationCompat.Builder(this, PinWakeApplication.CHANNEL_PRE_ALERT)
+            .setSmallIcon(R.drawable.ic_pin_wake)
+            .setContentTitle(getString(R.string.notif_pre_alert_title, alarm.title))
+            .setContentText(getString(R.string.notif_pre_alert_body, distLabel, alarm.radiusMeters))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setAutoCancel(true)
+            .setContentIntent(openPending)
+            .build()
+
+        notificationManager.notify(preAlertNotificationId(alarm.id), notification)
+
+        if (alarm.vibrateEnabled) {
+            runCatching {
+                val vib = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    getSystemService(VibratorManager::class.java)?.defaultVibrator
+                } else {
+                    @Suppress("DEPRECATION")
+                    getSystemService(Vibrator::class.java)
+                }
+                if (vib?.hasVibrator() == true) {
+                    vib.vibrate(
+                        VibrationEffect.createWaveform(
+                            longArrayOf(0L, 180L, 120L, 180L),
+                            -1
+                        )
+                    )
+                }
+            }
+        }
+    }
+
+    private fun preAlertNotificationId(alarmId: Long): Int =
+        NOTIFICATION_PRE_ALERT_BASE_ID + (alarmId.toInt() and 0x0FFF)
 
     private fun updateTrackingNotification(
         targetTitle: String,
@@ -471,11 +579,13 @@ class PinWakeService : Service() {
     companion object {
         const val NOTIFICATION_TRACKING_ID = 4001
         const val NOTIFICATION_ALARM_ID = 4002
+        const val NOTIFICATION_PRE_ALERT_BASE_ID = 4500
 
         const val ACTION_SYNC_TRACKING = "com.example.service.ACTION_SYNC_TRACKING"
         const val ACTION_CANCEL_ALL = "com.example.service.ACTION_CANCEL_ALL"
         const val ACTION_SNOOZE_500M = "com.example.service.ACTION_SNOOZE_500M"
         const val ACTION_DISMISS_ALARM = "com.example.service.ACTION_DISMISS_ALARM"
+        const val ACTION_FINISH_RINGING_UI = "com.example.service.ACTION_FINISH_RINGING_UI"
 
         const val EXTRA_ALARM_ID = "extra_alarm_id"
         const val EXTRA_ALARM_TITLE = "extra_alarm_title"

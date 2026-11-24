@@ -56,12 +56,23 @@ class PinWakeApplication : Application() {
             setSound(alarmSound, alarmAttributes)
         }
 
+        val preAlertChannel = NotificationChannel(
+            CHANNEL_PRE_ALERT,
+            getString(R.string.notif_channel_pre_alert_name),
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = getString(R.string.notif_channel_pre_alert_desc)
+            enableVibration(true)
+        }
+
         manager.createNotificationChannel(trackingChannel)
         manager.createNotificationChannel(alarmChannel)
+        manager.createNotificationChannel(preAlertChannel)
     }
 
     companion object {
         const val CHANNEL_TRACKING = "pin_wake_tracking_channel"
         const val CHANNEL_ALARM = "pin_wake_alarm_channel"
+        const val CHANNEL_PRE_ALERT = "pin_wake_pre_alert_channel"
     }
 }

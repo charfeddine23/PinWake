@@ -10,6 +10,7 @@ import com.example.data.repository.PinWakeRepository
 import com.example.data.repository.TrackingTelemetry
 import com.example.util.ApkUpdateManager
 import com.example.util.AppUpdateInfo
+import com.example.util.BackupManager
 import com.example.util.UpdateDownloadState
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -186,6 +187,37 @@ class DashboardViewModel(
                 repository.trackingStateManager.resetToStandby()
             }
             onDone(hasAnyActive)
+        }
+    }
+
+    fun replayTrip(trip: TripHistoryEntity, onDone: (GeoAlarmEntity, Boolean) -> Unit) {
+        viewModelScope.launch {
+            val rearmed = repository.replayTrip(trip)
+            val hasAnyActive = repository.getActiveAlarmsOnce().isNotEmpty()
+            onDone(rearmed, hasAnyActive)
+        }
+    }
+
+    fun exportBackupJson(preAlertMeters: Int, onReady: (count: Int, json: String) -> Unit) {
+        viewModelScope.launch {
+            val alarms = repository.getAllAlarmsOnce()
+            val json = BackupManager.serializeToJson(alarms, preAlertMeters)
+            onReady(alarms.size, json)
+        }
+    }
+
+    fun importBackupJson(
+        rawJson: String,
+        onResult: (Result<Pair<Int, Int?>>) -> Unit
+    ) {
+        viewModelScope.launch {
+            val parsedResult = BackupManager.parseFromJson(rawJson)
+            parsedResult.onSuccess { payload ->
+                val count = repository.importBackupAlarms(payload.alarms)
+                onResult(Result.success(count to payload.preAlertMeters))
+            }.onFailure { err ->
+                onResult(Result.failure(err))
+            }
         }
     }
 

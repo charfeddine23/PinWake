@@ -13,8 +13,9 @@ import com.example.data.local.entity.TripOutcome
 import com.example.databinding.ItemTripHistoryBinding
 import java.util.Date
 
-class TripHistoryAdapter :
-    ListAdapter<TripHistoryEntity, TripHistoryAdapter.HistoryViewHolder>(DiffCallback) {
+class TripHistoryAdapter(
+    private val onReplayClick: (TripHistoryEntity) -> Unit = {}
+) : ListAdapter<TripHistoryEntity, TripHistoryAdapter.HistoryViewHolder>(DiffCallback) {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): HistoryViewHolder {
         val binding = ItemTripHistoryBinding.inflate(
@@ -63,6 +64,9 @@ class TripHistoryAdapter :
                     binding.tvHistoryOutcome.setText(R.string.outcome_cancelled)
                 }
             }
+
+            binding.btnReplayTrip.setOnClickListener { onReplayClick(item) }
+            binding.cardHistoryRoot.setOnClickListener { onReplayClick(item) }
         }
     }
 

@@ -119,47 +119,26 @@
                 android:textAppearance="@style/TextAppearance.PinWake.Title"
                 android:textSize="16sp"
                 android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tvTopVersionBadge"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:background="@drawable/bg_badge_cyan"
+                android:paddingHorizontal="7dp"
+                android:paddingVertical="2dp"
+                android:textAppearance="@style/TextAppearance.PinWake.Mono"
+                android:textColor="@color/accent_cyan_glow"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                tools:text="v1.0.11" />
         </LinearLayout>
 
         <View
             android:layout_width="0dp"
             android:layout_height="0dp"
             android:layout_weight="1" />
-
-        <LinearLayout
-            android:id="@+id/btnCheckUpdates"
-            android:layout_width="wrap_content"
-            android:layout_height="46dp"
-            android:layout_marginEnd="8dp"
-            android:background="@drawable/bg_luxury_glass_pill"
-            android:clickable="true"
-            android:contentDescription="@string/cd_check_updates"
-            android:elevation="6dp"
-            android:focusable="true"
-            android:gravity="center"
-            android:minWidth="48dp"
-            android:minHeight="48dp"
-            android:orientation="horizontal"
-            android:paddingHorizontal="13dp">
-
-            <ImageView
-                android:layout_width="16dp"
-                android:layout_height="16dp"
-                android:contentDescription="@string/cd_check_updates"
-                android:src="@drawable/ic_update"
-                app:tint="@color/accent_cyan_glow" />
-
-            <TextView
-                android:id="@+id/tvAppVersionPill"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="6dp"
-                android:textAppearance="@style/TextAppearance.PinWake.Mono"
-                android:textColor="@color/accent_cyan_glow"
-                android:textSize="11sp"
-                android:textStyle="bold"
-                tools:text="v1.0.0" />
-        </LinearLayout>
 
         <FrameLayout
             android:id="@+id/btnSettings"
@@ -361,6 +340,22 @@
                     android:textAppearance="@style/TextAppearance.PinWake.Mono"
                     android:textColor="@color/accent_cyan_glow"
                     android:textSize="11sp" />
+
+                <ImageButton
+                    android:id="@+id/btnShareTripStatus"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:layout_marginStart="6dp"
+                    android:background="@drawable/bg_luxury_glass_pill"
+                    android:contentDescription="@string/cd_share_destination"
+                    android:minWidth="48dp"
+                    android:minHeight="48dp"
+                    android:padding="10dp"
+                    android:scaleType="centerInside"
+                    android:src="@drawable/ic_share"
+                    android:visibility="gone"
+                    app:tint="@color/accent_cyan_glow"
+                    tools:visibility="visible" />
             </LinearLayout>
 
             <!-- Quick Favorite Destinations Strip (Uber / Yassir Shortcuts) -->

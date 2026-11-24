@@ -36,9 +36,15 @@ import com.example.util.LanguageManager
 import com.example.util.OpenFreeMapStyle
 import com.example.util.OpenFreeMapStyles
 import com.example.util.PermissionHelper
+import com.example.util.PreAlertPreferences
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class SettingsActivity : AppCompatActivity() {
 
@@ -53,6 +59,7 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private var pendingInstallApk: File? = null
+    private var pendingExportJson: String? = null
     private var isSyncing3dSwitch = false
 
     private val fineLocationLauncher = registerForActivityResult(
@@ -87,6 +94,24 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
 
+    private val exportBackupLauncher = registerForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        val json = pendingExportJson
+        pendingExportJson = null
+        if (uri != null && json != null) {
+            writeBackupToUri(uri, json)
+        }
+    }
+
+    private val importBackupLauncher = registerForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            readAndRestoreBackupFromUri(uri)
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -97,6 +122,7 @@ class SettingsActivity : AppCompatActivity() {
         setupControls()
         syncLanguageUi()
         syncMapStyleUi()
+        syncPreAlertUi()
         refreshPermissionsUi()
         binding.tvSettingsCurrentVersion.text =
             getString(R.string.settings_current_version, BuildConfig.VERSION_NAME)
@@ -120,24 +146,31 @@ class SettingsActivity : AppCompatActivity() {
     private fun applyInsets() {
         val density = resources.displayMetrics.density
         val baseTopBarPad = binding.settingsTopBar.paddingTop
-        val baseScrollTop = (78f * density).toInt()
         val baseScrollBottom = (32f * density).toInt()
+        var currentBottomInset = 0
+        var currentTopInset = 0
+
+        fun updateScrollTopClearance() {
+            val headerH = binding.settingsTopBar.height
+            val minHeader = (72f * density).toInt() + currentTopInset
+            val targetTop = maxOf(headerH, minHeader) + (6f * density).toInt()
+            if (binding.scrollSettings.paddingTop != targetTop) {
+                binding.scrollSettings.updatePadding(top = targetTop)
+            }
+        }
+
+        binding.settingsTopBar.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+            updateScrollTopClearance()
+        }
 
         ViewCompat.setOnApplyWindowInsetsListener(binding.rootSettings) { _, insets ->
             val sysBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            currentTopInset = sysBars.top
+            currentBottomInset = sysBars.bottom
 
             binding.settingsTopBar.updatePadding(top = baseTopBarPad + sysBars.top)
-            binding.scrollSettings.updatePadding(
-                top = baseScrollTop + sysBars.top,
-                bottom = baseScrollBottom + sysBars.bottom
-            )
-
-            val blurParams = binding.settingsTopGlassBlur.layoutParams
-            val targetBlurH = (96f * density).toInt() + sysBars.top
-            if (blurParams.height != targetBlurH) {
-                blurParams.height = targetBlurH
-                binding.settingsTopGlassBlur.layoutParams = blurParams
-            }
+            binding.scrollSettings.updatePadding(bottom = baseScrollBottom + currentBottomInset)
+            updateScrollTopClearance()
             insets
         }
     }
@@ -151,11 +184,17 @@ class SettingsActivity : AppCompatActivity() {
             binding.optLangArabic,
             binding.optSettingsMapDark,
             binding.optSettingsMapLight,
+            binding.optPreAlertOff,
+            binding.optPreAlert300,
+            binding.optPreAlert500,
+            binding.optPreAlert1000,
             binding.btnOpenAndroidAppSettings,
             binding.btnSettingsCheckUpdates,
             binding.btnDownloadUpdate,
             binding.btnOpenGithubRelease,
-            binding.btnSettingsClearHistory
+            binding.btnSettingsClearHistory,
+            binding.btnExportBackupJson,
+            binding.btnImportBackupJson
         ).forEach { attachLuxuryPressFeedback(it) }
 
         // Language
@@ -186,6 +225,12 @@ class SettingsActivity : AppCompatActivity() {
             if (isSyncing3dSwitch) return@setOnCheckedChangeListener
             OpenFreeMapStyles.set3dBuildingsEnabled(this, isChecked)
         }
+
+        // Configurable Early Arrival Warning (Pre-Alert)
+        binding.optPreAlertOff.setOnClickListener { updatePreAlertMeters(PreAlertPreferences.PRE_ALERT_OFF) }
+        binding.optPreAlert300.setOnClickListener { updatePreAlertMeters(PreAlertPreferences.PRE_ALERT_300M) }
+        binding.optPreAlert500.setOnClickListener { updatePreAlertMeters(PreAlertPreferences.PRE_ALERT_500M) }
+        binding.optPreAlert1000.setOnClickListener { updatePreAlertMeters(PreAlertPreferences.PRE_ALERT_1000M) }
 
         // Background Permissions
         binding.btnPermFineLocation.setOnClickListener { requestFineLocation() }
@@ -221,6 +266,23 @@ class SettingsActivity : AppCompatActivity() {
         binding.btnSettingsClearHistory.setOnClickListener {
             viewModel.clearHistory()
             Toast.makeText(this, R.string.settings_history_cleared_toast, Toast.LENGTH_SHORT).show()
+        }
+
+        // Local JSON Backup & Restore
+        binding.btnExportBackupJson.setOnClickListener {
+            val preAlert = PreAlertPreferences.getPreAlertDistanceMeters(this)
+            viewModel.exportBackupJson(preAlert) { count, json ->
+                if (count == 0) {
+                    Toast.makeText(this, R.string.backup_export_empty, Toast.LENGTH_SHORT).show()
+                    return@exportBackupJson
+                }
+                pendingExportJson = json
+                val stamp = SimpleDateFormat("yyyyMMdd-HHmm", Locale.US).format(Date())
+                exportBackupLauncher.launch("pinwake-backup-$stamp.json")
+            }
+        }
+        binding.btnImportBackupJson.setOnClickListener {
+            importBackupLauncher.launch(arrayOf("application/json", "text/*"))
         }
     }
 
@@ -299,6 +361,86 @@ class SettingsActivity : AppCompatActivity() {
         isSyncing3dSwitch = true
         binding.switchSettings3dBuildings.isChecked = enable3d
         isSyncing3dSwitch = false
+    }
+
+    private fun updatePreAlertMeters(meters: Int) {
+        PreAlertPreferences.setPreAlertDistanceMeters(this, meters)
+        syncPreAlertUi()
+    }
+
+    private fun syncPreAlertUi() {
+        val selected = PreAlertPreferences.getPreAlertDistanceMeters(this)
+        applySelectionPillStyle(binding.optPreAlertOff, selected == PreAlertPreferences.PRE_ALERT_OFF)
+        applySelectionPillStyle(binding.optPreAlert300, selected == PreAlertPreferences.PRE_ALERT_300M)
+        applySelectionPillStyle(binding.optPreAlert500, selected == PreAlertPreferences.PRE_ALERT_500M)
+        applySelectionPillStyle(binding.optPreAlert1000, selected == PreAlertPreferences.PRE_ALERT_1000M)
+    }
+
+    private fun writeBackupToUri(uri: Uri, json: String) {
+        lifecycleScope.launch {
+            val success = withContext(Dispatchers.IO) {
+                runCatching {
+                    contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { writer ->
+                        writer.write(json)
+                    } ?: error("Cannot open output stream")
+                }.isSuccess
+            }
+            if (success) {
+                val count = viewModel.uiState.value.alarms.size
+                Toast.makeText(
+                    this@SettingsActivity,
+                    getString(R.string.backup_export_success, count),
+                    Toast.LENGTH_SHORT
+                ).show()
+            } else {
+                Toast.makeText(
+                    this@SettingsActivity,
+                    R.string.backup_import_failed,
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+    }
+
+    private fun readAndRestoreBackupFromUri(uri: Uri) {
+        lifecycleScope.launch {
+            val rawJson = withContext(Dispatchers.IO) {
+                runCatching {
+                    contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                }.getOrNull()
+            }
+            if (rawJson.isNullOrBlank()) {
+                Toast.makeText(
+                    this@SettingsActivity,
+                    R.string.backup_import_failed,
+                    Toast.LENGTH_SHORT
+                ).show()
+                return@launch
+            }
+            viewModel.importBackupJson(rawJson) { result ->
+                result.onSuccess { (count, restoredPreAlert) ->
+                    if (restoredPreAlert != null) {
+                        PreAlertPreferences.setPreAlertDistanceMeters(
+                            this@SettingsActivity,
+                            restoredPreAlert
+                        )
+                        syncPreAlertUi()
+                    }
+                    syncTrackingServiceIfPossible()
+                    Toast.makeText(
+                        this@SettingsActivity,
+                        getString(R.string.backup_import_success, count),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }.onFailure {
+                    Toast.makeText(
+                        this@SettingsActivity,
+                        R.string.backup_import_failed,
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+        }
     }
 
     private fun applySelectionPillStyle(view: TextView, selected: Boolean) {

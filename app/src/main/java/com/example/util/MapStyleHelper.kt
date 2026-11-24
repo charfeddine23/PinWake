@@ -12,6 +12,7 @@ import androidx.core.graphics.drawable.DrawableCompat
 import com.example.R
 import com.example.data.local.entity.FavoriteCategory
 import com.example.data.local.entity.GeoAlarmEntity
+import com.example.data.remote.dto.NominatimPlaceDto
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
@@ -239,20 +240,19 @@ object MapStyleHelper {
         // 2D building footprint subtle fill
         setFillColor(style, "building", "#1D283E", opacity = 0.85f)
 
-        // Crisp road labels & geographic names (#E2E8F0 text with #0F172A 1.5f halo)
+        // High-contrast road, place & POI labels (#F1F5F9 text, 1.0 opacity, #090D16 1.5f dark halo)
         style.layers.forEach { layer ->
-            if (layer is SymbolLayer) {
+            if (layer is SymbolLayer && !layer.id.startsWith("pinwake-")) {
                 val textColor = when {
-                    layer.id == "highway-name-major" -> "#FDE68A"
                     layer.id.startsWith("water") -> "#7DD3FC"
-                    layer.id.startsWith("poi_") -> "#CBD5E1"
-                    else -> "#E2E8F0"
+                    else -> "#F1F5F9"
                 }
                 layer.setProperties(
                     PropertyFactory.textColor(textColor),
-                    PropertyFactory.textHaloColor("#0F172A"),
+                    PropertyFactory.textOpacity(1.0f),
+                    PropertyFactory.textHaloColor("#090D16"),
                     PropertyFactory.textHaloWidth(1.5f),
-                    PropertyFactory.textHaloBlur(0.5f)
+                    PropertyFactory.textHaloBlur(0.4f)
                 )
             }
         }
@@ -342,7 +342,7 @@ object MapStyleHelper {
         setFillColor(style, "building", "#E8EAED", opacity = 0.95f)
 
         style.layers.forEach { layer ->
-            if (layer is SymbolLayer) {
+            if (layer is SymbolLayer && !layer.id.startsWith("pinwake-")) {
                 val textColor = when {
                     layer.id.startsWith("water") -> "#1967D2"
                     layer.id == "highway-name-major" -> "#78350F"
@@ -505,21 +505,13 @@ object MapStyleHelper {
                 FavoriteCategory.CUSTOM -> MARKER_IMAGE_CUSTOM
                 FavoriteCategory.NONE -> MARKER_IMAGE_ALARM
             }
-            val haloHex = when (place.favoriteCategory) {
-                FavoriteCategory.HOME -> "#10B981"
-                FavoriteCategory.WORK -> "#F59E0B"
-                FavoriteCategory.STATION -> "#06B6D4"
-                FavoriteCategory.CUSTOM -> "#38BDF8"
-                FavoriteCategory.NONE -> "#00D4FF"
-            }
             val label = buildSavedPlaceLabel(context, place)
             Feature.fromGeometry(Point.fromLngLat(place.longitude, place.latitude)).apply {
                 addStringProperty("icon", iconId)
                 addStringProperty("label", label)
-                addStringProperty("haloColor", haloHex)
+                addStringProperty("category", place.favoriteCategory.name)
+                addStringProperty("activeState", if (place.isActive) "1" else "0")
                 addNumberProperty("alarmId", place.id)
-                addNumberProperty("haloRadius", if (place.isActive) 13.0 else 9.0)
-                addNumberProperty("haloOpacity", if (place.isActive) 0.24 else 0.14)
             }
         }
         val collection = FeatureCollection.fromFeatures(features)
@@ -531,56 +523,108 @@ object MapStyleHelper {
             existingSource.setGeoJson(collection)
         }
 
+        val categoryHaloColorExpr = Expression.match(
+            Expression.get("category"),
+            Expression.color(Color.parseColor("#00D4FF")),
+            Expression.stop("HOME", Expression.color(Color.parseColor("#10B981"))),
+            Expression.stop("WORK", Expression.color(Color.parseColor("#F59E0B"))),
+            Expression.stop("STATION", Expression.color(Color.parseColor("#06B6D4"))),
+            Expression.stop("CUSTOM", Expression.color(Color.parseColor("#38BDF8")))
+        )
+        val haloRadiusExpr = Expression.match(
+            Expression.get("activeState"),
+            Expression.literal(9f),
+            Expression.stop("1", Expression.literal(13f))
+        )
+        val haloOpacityExpr = Expression.match(
+            Expression.get("activeState"),
+            Expression.literal(0.16f),
+            Expression.stop("1", Expression.literal(0.26f))
+        )
+
         if (style.getLayer(haloLayerId) == null) {
             style.addLayer(
                 CircleLayer(haloLayerId, sourceId).apply {
                     setProperties(
-                        PropertyFactory.circleRadius(Expression.get("haloRadius")),
-                        PropertyFactory.circleColor(Expression.get("haloColor")),
-                        PropertyFactory.circleOpacity(Expression.get("haloOpacity")),
-                        PropertyFactory.circleStrokeWidth(1.5f),
-                        PropertyFactory.circleStrokeColor(Expression.get("haloColor")),
-                        PropertyFactory.circleStrokeOpacity(0.70f)
+                        PropertyFactory.circleRadius(haloRadiusExpr),
+                        PropertyFactory.circleColor(categoryHaloColorExpr),
+                        PropertyFactory.circleOpacity(haloOpacityExpr),
+                        PropertyFactory.circleStrokeWidth(1.6f),
+                        PropertyFactory.circleStrokeColor(categoryHaloColorExpr),
+                        PropertyFactory.circleStrokeOpacity(0.78f)
                     )
                 }
             )
         }
 
-        val textColor = if (isDark) "#F8FAFC" else "#0F172A"
-        val haloColor = if (isDark) "#0F172A" else "#FFFFFF"
-        val existingSymbol = style.getLayerAs<SymbolLayer>(symbolLayerId)
-        if (existingSymbol == null) {
+        // 1. Icon-only SymbolLayer: zero text properties so pin icons ALWAYS render even offline or if font glyphs fail
+        val existingIconLayer = style.getLayerAs<SymbolLayer>(symbolLayerId)
+        if (existingIconLayer == null) {
             style.addLayer(
                 SymbolLayer(symbolLayerId, sourceId).apply {
                     setProperties(
                         PropertyFactory.iconImage(Expression.get("icon")),
                         PropertyFactory.iconAnchor(Property.ICON_ANCHOR_BOTTOM),
-                        PropertyFactory.iconOffset(arrayOf(0f, 3f)),
+                        PropertyFactory.iconOffset(arrayOf(0f, 2f)),
                         PropertyFactory.iconAllowOverlap(true),
-                        PropertyFactory.iconIgnorePlacement(true),
+                        PropertyFactory.iconIgnorePlacement(true)
+                    )
+                }
+            )
+        } else {
+            existingIconLayer.setProperties(
+                PropertyFactory.iconImage(Expression.get("icon")),
+                PropertyFactory.iconAnchor(Property.ICON_ANCHOR_BOTTOM),
+                PropertyFactory.iconOffset(arrayOf(0f, 2f)),
+                PropertyFactory.iconAllowOverlap(true),
+                PropertyFactory.iconIgnorePlacement(true)
+            )
+        }
+
+        // 2. Text-only SymbolLayer using OpenFreeMap Liberty's actual font stack
+        val labelLayerId = "$symbolLayerId-labels"
+        val textColor = if (isDark) "#F8FAFC" else "#0F172A"
+        val haloColor = if (isDark) "#0F172A" else "#FFFFFF"
+        val styleFontStack = resolveStyleFontStack(style)
+        val existingLabelLayer = style.getLayerAs<SymbolLayer>(labelLayerId)
+        if (existingLabelLayer == null) {
+            style.addLayer(
+                SymbolLayer(labelLayerId, sourceId).apply {
+                    setProperties(
                         PropertyFactory.textField(Expression.get("label")),
+                        PropertyFactory.textFont(styleFontStack),
                         PropertyFactory.textAnchor(Property.TEXT_ANCHOR_TOP),
-                        PropertyFactory.textOffset(arrayOf(0f, 0.45f)),
+                        PropertyFactory.textOffset(arrayOf(0f, 0.35f)),
                         PropertyFactory.textSize(12f),
                         PropertyFactory.textColor(textColor),
                         PropertyFactory.textHaloColor(haloColor),
                         PropertyFactory.textHaloWidth(1.8f),
                         PropertyFactory.textHaloBlur(0.3f),
                         PropertyFactory.textAllowOverlap(true),
-                        PropertyFactory.textOptional(false)
+                        PropertyFactory.textIgnorePlacement(true),
+                        PropertyFactory.textOptional(true)
                     )
                 }
             )
         } else {
-            existingSymbol.setProperties(
-                PropertyFactory.iconAnchor(Property.ICON_ANCHOR_BOTTOM),
-                PropertyFactory.iconOffset(arrayOf(0f, 3f)),
-                PropertyFactory.textAnchor(Property.TEXT_ANCHOR_TOP),
-                PropertyFactory.textOffset(arrayOf(0f, 0.45f)),
+            existingLabelLayer.setProperties(
+                PropertyFactory.textFont(styleFontStack),
                 PropertyFactory.textColor(textColor),
                 PropertyFactory.textHaloColor(haloColor)
             )
         }
+    }
+
+    private fun resolveStyleFontStack(style: Style): Array<String> {
+        for (layer in style.layers) {
+            if (layer is SymbolLayer && !layer.id.startsWith("pinwake-")) {
+                val fonts = layer.textFont.value
+                if (fonts != null && fonts.isNotEmpty()) {
+                    return fonts
+                }
+            }
+        }
+        return arrayOf("Noto Sans Bold", "Noto Sans Regular")
     }
 
     private fun buildSavedPlaceLabel(context: Context, place: GeoAlarmEntity): String {
@@ -591,7 +635,8 @@ object MapStyleHelper {
             FavoriteCategory.CUSTOM -> context.getString(R.string.fav_custom)
             FavoriteCategory.NONE -> ""
         }
-        val cleanTitle = place.title.trim()
+        val cleanTitle = NominatimPlaceDto.stripUnsupportedGlyphs(place.title)
+            .ifBlank { place.title.trim() }
         return when {
             categoryLabel.isBlank() -> cleanTitle
             cleanTitle.isBlank() || cleanTitle.equals(categoryLabel, ignoreCase = true) -> categoryLabel
@@ -620,23 +665,23 @@ object MapStyleHelper {
         pinColor: Int
     ): Bitmap {
         val density = context.resources.displayMetrics.density.coerceAtLeast(1.5f)
-        val widthPx = (40f * density).toInt()
-        val heightPx = (50f * density).toInt()
+        val widthPx = (44f * density).toInt()
+        val heightPx = (54f * density).toInt()
         val bitmap = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
 
         val cx = widthPx / 2f
-        val headRadius = 15f * density
+        val headRadius = 16.5f * density
         val headCy = 4f * density + headRadius
         val tipY = heightPx - 3f * density
 
         // Subtle ground shadow ellipse directly beneath pin tip
         val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.argb(115, 0, 0, 0)
+            color = Color.argb(120, 0, 0, 0)
             style = Paint.Style.FILL
         }
         canvas.drawOval(
-            RectF(cx - 7.5f * density, tipY - 2.2f * density, cx + 7.5f * density, tipY + 2.2f * density),
+            RectF(cx - 8f * density, tipY - 2.4f * density, cx + 8f * density, tipY + 2.4f * density),
             shadowPaint
         )
 
@@ -646,7 +691,7 @@ object MapStyleHelper {
         val teardropPath = Path().apply {
             moveTo(cx, tipY)
             cubicTo(
-                cx - headRadius * 0.25f, tipY - 7f * density,
+                cx - headRadius * 0.25f, tipY - 7.5f * density,
                 leftX, headCy + headRadius * 0.72f,
                 leftX, headCy
             )
@@ -658,7 +703,7 @@ object MapStyleHelper {
             )
             cubicTo(
                 rightX, headCy + headRadius * 0.72f,
-                cx + headRadius * 0.25f, tipY - 7f * density,
+                cx + headRadius * 0.25f, tipY - 7.5f * density,
                 cx, tipY
             )
             close()
@@ -671,14 +716,14 @@ object MapStyleHelper {
         canvas.drawPath(teardropPath, bodyPaint)
 
         val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor("#E6FFFFFF")
+            color = Color.parseColor("#F0FFFFFF")
             style = Paint.Style.STROKE
-            strokeWidth = 1.6f * density
+            strokeWidth = 1.8f * density
         }
         canvas.drawPath(teardropPath, strokePaint)
 
         // Crisp dark inner emblem circle holding the category symbol
-        val innerRadius = 9.5f * density
+        val innerRadius = 10.2f * density
         val innerFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.parseColor("#0F172A")
             style = Paint.Style.FILL
@@ -689,7 +734,7 @@ object MapStyleHelper {
         if (drawable != null) {
             val wrapped = DrawableCompat.wrap(drawable).mutate()
             DrawableCompat.setTint(wrapped, Color.WHITE)
-            val iconHalf = (5.8f * density).toInt()
+            val iconHalf = (6.2f * density).toInt()
             wrapped.setBounds(
                 cx.toInt() - iconHalf,
                 headCy.toInt() - iconHalf,
