@@ -25,12 +25,14 @@ object MapLinkParser {
         RegexOption.IGNORE_CASE
     )
     private val PLAIN_COORDS_REGEX = Regex(
-        """([-+]?\d{1,2}\.\d{3,}),\s*([-+]?\d{1,3}\.\d{3,})"""
+        """(?:^|[^A-Za-z0-9_.])([-+]?\d{1,2}\.\d{2,}),\s*([-+]?\d{1,3}\.\d{2,})(?:$|[^A-Za-z0-9_.-])"""
     )
+
+    private const val MAX_INPUT_LENGTH = 2048
 
     fun parse(rawInput: String?): ParsedMapDestination? {
         if (rawInput.isNullOrBlank()) return null
-        val text = rawInput.trim()
+        val text = rawInput.trim().take(MAX_INPUT_LENGTH)
 
         // 1. geo: URI (e.g. geo:36.7538,3.0588 or geo:0,0?q=36.7538,3.0588(Central Station))
         GEO_URI_REGEX.find(text)?.let { match ->

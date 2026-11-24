@@ -240,20 +240,34 @@ object MapStyleHelper {
         // 2D building footprint subtle fill
         setFillColor(style, "building", "#1D283E", opacity = 0.85f)
 
-        // High-contrast road, place & POI labels (#F1F5F9 text, 1.0 opacity, #090D16 1.5f dark halo)
+        // High-contrast road, place & POI labels (#F1F5F9 text, 1.0 opacity, #090D16 2.0f dark halo)
+        // Always keep POI/place/building labels viewport-pitched so 3D buildings never occlude or intersect them
         style.layers.forEach { layer ->
             if (layer is SymbolLayer && !layer.id.startsWith("pinwake-")) {
                 val textColor = when {
                     layer.id.startsWith("water") -> "#7DD3FC"
                     else -> "#F1F5F9"
                 }
-                layer.setProperties(
-                    PropertyFactory.textColor(textColor),
-                    PropertyFactory.textOpacity(1.0f),
-                    PropertyFactory.textHaloColor("#090D16"),
-                    PropertyFactory.textHaloWidth(1.5f),
-                    PropertyFactory.textHaloBlur(0.4f)
-                )
+                val isHighwayName = layer.id.startsWith("highway-name") || layer.id.startsWith("highway_name")
+                if (isHighwayName) {
+                    layer.setProperties(
+                        PropertyFactory.textColor(textColor),
+                        PropertyFactory.textOpacity(1.0f),
+                        PropertyFactory.textHaloColor("#090D16"),
+                        PropertyFactory.textHaloWidth(1.8f),
+                        PropertyFactory.textHaloBlur(0.4f)
+                    )
+                } else {
+                    layer.setProperties(
+                        PropertyFactory.textColor(textColor),
+                        PropertyFactory.textOpacity(1.0f),
+                        PropertyFactory.textHaloColor("#090D16"),
+                        PropertyFactory.textHaloWidth(2.0f),
+                        PropertyFactory.textHaloBlur(0.3f),
+                        PropertyFactory.textPitchAlignment(Property.TEXT_PITCH_ALIGNMENT_VIEWPORT),
+                        PropertyFactory.iconPitchAlignment(Property.ICON_PITCH_ALIGNMENT_VIEWPORT)
+                    )
+                }
             }
         }
     }
@@ -346,14 +360,28 @@ object MapStyleHelper {
                 val textColor = when {
                     layer.id.startsWith("water") -> "#1967D2"
                     layer.id == "highway-name-major" -> "#78350F"
-                    else -> "#3C4043"
+                    else -> "#1E293B"
                 }
-                layer.setProperties(
-                    PropertyFactory.textColor(textColor),
-                    PropertyFactory.textHaloColor("#FFFFFF"),
-                    PropertyFactory.textHaloWidth(1.6f),
-                    PropertyFactory.textHaloBlur(0.4f)
-                )
+                val isHighwayName = layer.id.startsWith("highway-name") || layer.id.startsWith("highway_name")
+                if (isHighwayName) {
+                    layer.setProperties(
+                        PropertyFactory.textColor(textColor),
+                        PropertyFactory.textOpacity(1.0f),
+                        PropertyFactory.textHaloColor("#FFFFFF"),
+                        PropertyFactory.textHaloWidth(1.8f),
+                        PropertyFactory.textHaloBlur(0.4f)
+                    )
+                } else {
+                    layer.setProperties(
+                        PropertyFactory.textColor(textColor),
+                        PropertyFactory.textOpacity(1.0f),
+                        PropertyFactory.textHaloColor("#FFFFFF"),
+                        PropertyFactory.textHaloWidth(2.0f),
+                        PropertyFactory.textHaloBlur(0.3f),
+                        PropertyFactory.textPitchAlignment(Property.TEXT_PITCH_ALIGNMENT_VIEWPORT),
+                        PropertyFactory.iconPitchAlignment(Property.ICON_PITCH_ALIGNMENT_VIEWPORT)
+                    )
+                }
             }
         }
     }
@@ -364,20 +392,31 @@ object MapStyleHelper {
             PropertyFactory.visibility(Property.NONE)
         )
 
+        if (style.getSource(SOURCE_OPENMAPTILES) == null) return
+
         val extrusionColor = if (isDark) "#1E293B" else "#D5DAE1"
+        val firstSymbolLayerId = style.layers.firstOrNull { it is SymbolLayer }?.id
+
         val existing = style.getLayerAs<FillExtrusionLayer>(BUILDINGS_3D_LAYER_ID)
         if (existing != null) {
             existing.minZoom = 15f
             existing.setProperties(
                 PropertyFactory.visibility(if (enabled) Property.VISIBLE else Property.NONE),
                 PropertyFactory.fillExtrusionColor(extrusionColor),
-                PropertyFactory.fillExtrusionOpacity(0.75f),
+                PropertyFactory.fillExtrusionOpacity(0.62f),
                 PropertyFactory.fillExtrusionVerticalGradient(true)
             )
+            // Ensure 3D extrusions stay strictly below ALL SymbolLayers so names never get buried
+            if (firstSymbolLayerId != null) {
+                val currentIdx = style.layers.indexOfFirst { it.id == BUILDINGS_3D_LAYER_ID }
+                val firstSymbolIdx = style.layers.indexOfFirst { it.id == firstSymbolLayerId }
+                if (currentIdx >= 0 && firstSymbolIdx >= 0 && currentIdx > firstSymbolIdx) {
+                    style.removeLayer(BUILDINGS_3D_LAYER_ID)
+                    style.addLayerBelow(existing, firstSymbolLayerId)
+                }
+            }
             return
         }
-
-        if (style.getSource(SOURCE_OPENMAPTILES) == null) return
 
         val extrusionLayer = FillExtrusionLayer(BUILDINGS_3D_LAYER_ID, SOURCE_OPENMAPTILES).apply {
             sourceLayer = SOURCE_LAYER_BUILDING
@@ -385,7 +424,7 @@ object MapStyleHelper {
             setProperties(
                 PropertyFactory.visibility(if (enabled) Property.VISIBLE else Property.NONE),
                 PropertyFactory.fillExtrusionColor(extrusionColor),
-                PropertyFactory.fillExtrusionOpacity(0.75f),
+                PropertyFactory.fillExtrusionOpacity(0.62f),
                 PropertyFactory.fillExtrusionHeight(
                     Expression.coalesce(
                         Expression.get("render_height"),
@@ -402,10 +441,10 @@ object MapStyleHelper {
             )
         }
 
-        // Insert right below street labels so road names & POIs stay sharp on top of 3D geometry
+        // Insert strictly below the first SymbolLayer so ALL road, building & POI names render on top
         when {
-            style.getLayer("highway-name-path") != null ->
-                style.addLayerBelow(extrusionLayer, "highway-name-path")
+            firstSymbolLayerId != null ->
+                style.addLayerBelow(extrusionLayer, firstSymbolLayerId)
             style.getLayer("boundary_3") != null ->
                 style.addLayerBelow(extrusionLayer, "boundary_3")
             else ->

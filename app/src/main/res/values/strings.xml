@@ -201,4 +201,8 @@
     <string name="backup_export_empty">No saved alarms or favorites to export yet</string>
     <string name="backup_import_success">Restored %1$d pins from backup</string>
     <string name="backup_import_failed">Could not read valid Pin Wake JSON backup</string>
+    <string name="backup_file_too_large">Backup file is too large (max 2 MB)</string>
+    <string name="map_search_failed">Search unavailable right now. Check connection and try again.</string>
+    <string name="perm_location_needed_to_arm">Grant location permission first so Pin Wake can monitor your arrival.</string>
+    <string name="update_signature_invalid">Update blocked: APK signature does not match this app.</string>
 </resources>

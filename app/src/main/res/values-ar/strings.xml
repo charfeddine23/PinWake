@@ -201,4 +201,8 @@
     <string name="backup_export_empty">لا توجد منبهات أو أماكن محفوظة للتصدير</string>
     <string name="backup_import_success">تمت استعادة %1$d نقطة من النسخة الاحتياطية</string>
     <string name="backup_import_failed">تعذّرت قراءة ملف نسخ احتياطي صالح</string>
+    <string name="backup_file_too_large">حجم ملف النسخ الاحتياطي كبير جداً (الحد الأقصى 2 م.ب)</string>
+    <string name="map_search_failed">البحث غير متاح حالياً. تأكد من الاتصال وحاول مجدداً.</string>
+    <string name="perm_location_needed_to_arm">يرجى منح صلاحية الموقع أولاً لتفعيل مراقبة الوصول.</string>
+    <string name="update_signature_invalid">تم حظر التحديث: توقيع الحزمة لا يطابق التطبيق الحالي.</string>
 </resources>

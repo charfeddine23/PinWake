@@ -1,5 +1,6 @@
 package com.example.data.remote
 
+import com.example.BuildConfig
 import com.example.data.remote.dto.NominatimPlaceDto
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
@@ -46,8 +47,18 @@ interface NominatimApiService {
                 chain.proceed(request)
             }
 
-            val loggingInterceptor = HttpLoggingInterceptor().apply {
-                level = HttpLoggingInterceptor.Level.BASIC
+            val loggingInterceptor = HttpLoggingInterceptor { message ->
+                if (BuildConfig.DEBUG) {
+                    val sanitized = message
+                        .replace(Regex("([?&](?:lat|lon|q)=)[^&\\s]+"), "$1<redacted>")
+                    android.util.Log.d("NominatimHttp", sanitized)
+                }
+            }.apply {
+                level = if (BuildConfig.DEBUG) {
+                    HttpLoggingInterceptor.Level.BASIC
+                } else {
+                    HttpLoggingInterceptor.Level.NONE
+                }
             }
 
             val okHttpClient = OkHttpClient.Builder()

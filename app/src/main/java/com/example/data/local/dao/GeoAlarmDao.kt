@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
 import com.example.data.local.entity.FavoriteCategory
 import com.example.data.local.entity.GeoAlarmEntity
@@ -38,6 +39,12 @@ interface GeoAlarmDao {
 
     @Update
     suspend fun updateAlarm(alarm: GeoAlarmEntity)
+
+    @Transaction
+    suspend fun applyBatchImport(toUpdate: List<GeoAlarmEntity>, toInsert: List<GeoAlarmEntity>) {
+        toUpdate.forEach { updateAlarm(it) }
+        toInsert.forEach { insertAlarm(it) }
+    }
 
     @Query("UPDATE geo_alarms SET isActive = :active, lastDistanceMeters = :lastDistance, updatedAt = :updatedAt WHERE id = :id")
     suspend fun setAlarmActive(

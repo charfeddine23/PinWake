@@ -116,11 +116,14 @@ class PinWakeRepository(
                 (currentDistanceMeters - 500f).toInt().coerceIn(200, 4500)
             alarm.radiusMeters > 700 ->
                 (alarm.radiusMeters - 500).coerceAtLeast(200)
-            else -> alarm.radiusMeters
+            alarm.radiusMeters > 200 ->
+                (alarm.radiusMeters - 300).coerceAtLeast(200)
+            else -> 200
         }
-        // Grant a 90-second cooldown when already inside tight <=700m zone so user isn't instantly re-rung
-        val snoozeCooldownMs = if (alarm.radiusMeters <= 700 && (currentDistanceMeters == null || currentDistanceMeters <= 700f)) {
-            System.currentTimeMillis() + 90_000L
+        // Only grant a short cooldown if user is already at the exact inner core (<= 220m) or radius didn't shrink below distance
+        val stillInsideNewRadius = currentDistanceMeters != null && currentDistanceMeters <= shrunkRadius
+        val snoozeCooldownMs = if (stillInsideNewRadius || shrunkRadius >= alarm.radiusMeters) {
+            System.currentTimeMillis() + 180_000L
         } else {
             0L
         }
@@ -146,7 +149,7 @@ class PinWakeRepository(
     }
 
     suspend fun recordTripOutcome(alarm: GeoAlarmEntity, outcome: TripOutcome) {
-        tripHistoryDao.insertTrip(
+        tripHistoryDao.insertTripAndPrune(
             TripHistoryEntity(
                 alarmId = alarm.id,
                 alarmTitle = alarm.title,
@@ -178,8 +181,8 @@ class PinWakeRepository(
             val cleanAddress = NominatimPlaceDto.stripUnsupportedGlyphs(trip.address)
                 .ifBlank { cleanTitle }
             val created = GeoAlarmEntity(
-                title = cleanTitle,
-                address = cleanAddress,
+                title = cleanTitle.take(120),
+                address = cleanAddress.take(240),
                 latitude = trip.latitude,
                 longitude = trip.longitude,
                 radiusMeters = trip.radiusMeters.coerceIn(200, 5000),
@@ -200,12 +203,18 @@ class PinWakeRepository(
     suspend fun importBackupAlarms(imported: List<GeoAlarmEntity>): Int {
         if (imported.isEmpty()) return 0
         val existingList = geoAlarmDao.getAllAlarmsOnce().toMutableList()
-        var restoredCount = 0
+        val toUpdate = mutableListOf<GeoAlarmEntity>()
+        val toInsert = mutableListOf<GeoAlarmEntity>()
         val now = System.currentTimeMillis()
 
-        for (item in imported) {
-            val cleanTitle = NominatimPlaceDto.stripUnsupportedGlyphs(item.title).ifBlank { item.title.trim() }
-            val cleanAddress = NominatimPlaceDto.stripUnsupportedGlyphs(item.address).ifBlank { cleanTitle }
+        for (item in imported.take(500)) {
+            val cleanTitle = NominatimPlaceDto.stripUnsupportedGlyphs(item.title)
+                .ifBlank { item.title.trim() }
+                .take(120)
+            if (cleanTitle.isBlank()) continue
+            val cleanAddress = NominatimPlaceDto.stripUnsupportedGlyphs(item.address)
+                .ifBlank { cleanTitle }
+                .take(240)
             val isCanonical = item.favoriteCategory == FavoriteCategory.HOME ||
                 item.favoriteCategory == FavoriteCategory.WORK ||
                 item.favoriteCategory == FavoriteCategory.STATION
@@ -240,11 +249,11 @@ class PinWakeRepository(
                     snoozedUntilMs = 0L,
                     updatedAt = now
                 )
-                geoAlarmDao.updateAlarm(updated)
+                toUpdate.add(updated)
                 val idx = existingList.indexOfFirst { it.id == matchByLocation.id }
                 if (idx >= 0) existingList[idx] = updated
             } else {
-                val toInsert = item.copy(
+                val toInsertItem = item.copy(
                     id = 0L,
                     title = cleanTitle,
                     address = cleanAddress,
@@ -253,12 +262,15 @@ class PinWakeRepository(
                     snoozedUntilMs = 0L,
                     updatedAt = now
                 )
-                val newId = geoAlarmDao.insertAlarm(toInsert)
-                existingList.add(toInsert.copy(id = newId))
+                toInsert.add(toInsertItem)
+                existingList.add(toInsertItem)
             }
-            restoredCount++
         }
-        return restoredCount
+
+        if (toUpdate.isNotEmpty() || toInsert.isNotEmpty()) {
+            geoAlarmDao.applyBatchImport(toUpdate, toInsert)
+        }
+        return toUpdate.size + toInsert.size
     }
 
     suspend fun clearHistory() {

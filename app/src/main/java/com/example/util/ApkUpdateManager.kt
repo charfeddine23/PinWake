@@ -2,6 +2,8 @@ package com.example.util
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageInfo
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
@@ -29,6 +31,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
 import java.io.FileOutputStream
+import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 
 data class AppUpdateInfo(
@@ -201,18 +204,25 @@ class ApkUpdateManager(
     suspend fun checkForUpdate(): Result<AppUpdateInfo?> = withContext(Dispatchers.IO) {
         runCatching {
             val release: GitHubReleaseDto = gitHubApi.getLatestRelease()
-            if (release.draft) return@runCatching null
+            if (release.draft || release.prerelease) return@runCatching null
 
             val asset = release.firstApkAsset() ?: return@runCatching null
+            if (!isTrustedGitHubHttpsUrl(asset.browserDownloadUrl)) {
+                return@runCatching null
+            }
+
             val remoteVersion = normalizeVersion(release.tagName)
             val localVersion = normalizeVersion(BuildConfig.VERSION_NAME)
+            val safeReleaseUrl = release.htmlUrl
+                .takeIf { isTrustedGitHubHttpsUrl(it) }
+                ?: GitHubReleaseApiService.REPO_RELEASES_URL
 
             if (isNewerVersion(remoteVersion, localVersion)) {
                 AppUpdateInfo(
                     versionName = remoteVersion,
                     tagName = release.tagName,
                     releaseNotes = release.body.trim(),
-                    releasePageUrl = release.htmlUrl.ifBlank { GitHubReleaseApiService.REPO_RELEASES_URL },
+                    releasePageUrl = safeReleaseUrl,
                     apkAsset = asset
                 )
             } else {
@@ -222,6 +232,11 @@ class ApkUpdateManager(
     }
 
     fun downloadApk(updateInfo: AppUpdateInfo): Flow<UpdateDownloadState> = flow {
+        if (!isTrustedGitHubHttpsUrl(updateInfo.apkAsset.browserDownloadUrl)) {
+            emit(UpdateDownloadState.Failed("Untrusted update download URL"))
+            return@flow
+        }
+
         val updatesDir = File(context.cacheDir, UPDATES_DIR_NAME).apply {
             if (!exists()) mkdirs()
         }
@@ -291,6 +306,24 @@ class ApkUpdateManager(
                     return@flow
                 }
 
+                if (updateInfo.apkAsset.size > 0L && tempFile.length() != updateInfo.apkAsset.size) {
+                    tempFile.delete()
+                    emit(UpdateDownloadState.Failed("Downloaded APK size mismatch"))
+                    return@flow
+                }
+
+                if (!verifyOptionalDigest(tempFile, updateInfo.apkAsset.digest)) {
+                    tempFile.delete()
+                    emit(UpdateDownloadState.Failed("APK SHA-256 checksum verification failed"))
+                    return@flow
+                }
+
+                if (!verifyApkSignatureMatchesCurrentApp(tempFile)) {
+                    tempFile.delete()
+                    emit(UpdateDownloadState.Failed("APK signing certificate mismatch"))
+                    return@flow
+                }
+
                 if (targetFile.exists()) {
                     targetFile.delete()
                 }
@@ -309,6 +342,84 @@ class ApkUpdateManager(
             emit(UpdateDownloadState.Failed(t.message ?: "Download failed"))
         }
     }.flowOn(Dispatchers.IO)
+
+    fun verifyApkSignatureMatchesCurrentApp(apkFile: File): Boolean {
+        if (!apkFile.exists() || apkFile.length() <= 0L) return false
+        return runCatching {
+            val pm = context.packageManager
+            val installedSigners = getPackageSignatureDigests(pm, context.packageName, isArchive = false)
+            if (installedSigners.isEmpty()) return@runCatching false
+
+            val archiveSigners = getPackageSignatureDigests(pm, apkFile.absolutePath, isArchive = true)
+            archiveSigners.isNotEmpty() && archiveSigners.any { it in installedSigners }
+        }.getOrDefault(false)
+    }
+
+    private fun verifyOptionalDigest(file: File, expectedDigest: String?): Boolean {
+        val normalizedExpected = expectedDigest
+            ?.trim()
+            ?.removePrefix("sha256:")
+            ?.lowercase()
+            ?.takeIf { it.length == 64 }
+            ?: return true
+        val actual = computeFileSha256(file) ?: return false
+        return actual.equals(normalizedExpected, ignoreCase = true)
+    }
+
+    private fun computeFileSha256(file: File): String? = runCatching {
+        val digest = MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { input ->
+            val buf = ByteArray(16 * 1024)
+            while (true) {
+                val read = input.read(buf)
+                if (read == -1) break
+                digest.update(buf, 0, read)
+            }
+        }
+        digest.digest().joinToString("") { "%02x".format(it) }
+    }.getOrNull()
+
+    private fun getPackageSignatureDigests(
+        pm: PackageManager,
+        target: String,
+        isArchive: Boolean
+    ): Set<String> {
+        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            PackageManager.GET_SIGNING_CERTIFICATES
+        } else {
+            @Suppress("DEPRECATION")
+            PackageManager.GET_SIGNATURES
+        }
+        val info: PackageInfo? = if (isArchive) {
+            pm.getPackageArchiveInfo(target, flags)
+        } else {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                pm.getPackageInfo(target, PackageManager.PackageInfoFlags.of(flags.toLong()))
+            } else {
+                @Suppress("DEPRECATION")
+                pm.getPackageInfo(target, flags)
+            }
+        }
+        if (info == null) return emptySet()
+
+        val rawSignatures = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            val signingInfo = info.signingInfo ?: return emptySet()
+            if (signingInfo.hasMultipleSigners()) {
+                signingInfo.apkContentsSigners
+            } else {
+                signingInfo.signingCertificateHistory
+            }
+        } else {
+            @Suppress("DEPRECATION")
+            info.signatures
+        } ?: return emptySet()
+
+        val sha256 = MessageDigest.getInstance("SHA-256")
+        return rawSignatures.map { sig ->
+            sha256.reset()
+            sha256.digest(sig.toByteArray()).joinToString("") { "%02x".format(it) }
+        }.toSet()
+    }
 
     fun canRequestPackageInstalls(): Boolean {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -350,6 +461,20 @@ class ApkUpdateManager(
 
     companion object {
         private const val UPDATES_DIR_NAME = "updates"
+        private val TRUSTED_GITHUB_HOSTS = setOf(
+            "github.com",
+            "api.github.com",
+            "objects.githubusercontent.com",
+            "release-assets.githubusercontent.com"
+        )
+
+        fun isTrustedGitHubHttpsUrl(url: String?): Boolean {
+            if (url.isNullOrBlank()) return false
+            val parsed = runCatching { Uri.parse(url.trim()) }.getOrNull() ?: return false
+            if (!parsed.scheme.equals("https", ignoreCase = true)) return false
+            val host = parsed.host?.lowercase() ?: return false
+            return host in TRUSTED_GITHUB_HOSTS || host.endsWith(".githubusercontent.com")
+        }
 
         fun normalizeVersion(raw: String): String {
             return raw.trim().removePrefix("v").removePrefix("V")

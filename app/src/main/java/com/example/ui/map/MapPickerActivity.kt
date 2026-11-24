@@ -74,8 +74,9 @@ class MapPickerActivity : AppCompatActivity() {
     private var isProgrammaticTitleUpdate = false
     private var isSyncing3dSwitch = false
     private var isPinLifted = false
-    private var suppressNextIdleGeocode = false
+    private var lockedGeocodeCoord: Pair<Double, Double>? = null
     private var pendingCameraTarget: Triple<Double, Double, Double>? = null
+    private var pendingSaveArgs: Pair<String, String>? = null
     private var currentLat: Double = DEFAULT_LAT
     private var currentLon: Double = DEFAULT_LON
     private val safeLocationEngine by lazy { SafeMapLocationEngine(this) }
@@ -84,6 +85,22 @@ class MapPickerActivity : AppCompatActivity() {
         ActivityResultContracts.RequestMultiplePermissions()
     ) { results ->
         val granted = results.values.any { it }
+        val pendingSave = pendingSaveArgs
+        pendingSaveArgs = null
+        if (pendingSave != null) {
+            if (granted) {
+                viewModel.saveAndActivateAlarm(pendingSave.first, pendingSave.second, activateNow = true) {
+                    PinWakeService.startOrSync(this)
+                    finish()
+                }
+            } else {
+                viewModel.saveAndActivateAlarm(pendingSave.first, pendingSave.second, activateNow = false) {
+                    Toast.makeText(this, R.string.perm_location_needed_to_arm, Toast.LENGTH_LONG).show()
+                    finish()
+                }
+            }
+            return@registerForActivityResult
+        }
         if (granted) {
             mapLibreMap?.style?.let { style ->
                 if (style.isFullyLoaded) enableLocationComponent(style)
@@ -127,7 +144,7 @@ class MapPickerActivity : AppCompatActivity() {
             when {
                 existing != null -> {
                     userEditedTitle = true
-                    suppressNextIdleGeocode = true
+                    lockedGeocodeCoord = existing.latitude to existing.longitude
                     setTitleProgrammatically(existing.title)
                     binding.sliderRadius.value = existing.radiusMeters.toFloat().coerceIn(200f, 5000f)
                     binding.tvRadiusValue.text = DistanceFormatter.formatRadiusSliderValue(this, existing.radiusMeters)
@@ -236,7 +253,7 @@ class MapPickerActivity : AppCompatActivity() {
 
             map.addOnCameraMoveStartedListener { reason ->
                 if (reason == MapLibreMap.OnCameraMoveStartedListener.REASON_API_GESTURE) {
-                    suppressNextIdleGeocode = false
+                    lockedGeocodeCoord = null
                     liftPinUp()
                 }
             }
@@ -256,9 +273,12 @@ class MapPickerActivity : AppCompatActivity() {
                 currentLon = target.longitude
                 updateCircleOverlay(target.latitude, target.longitude, viewModel.uiState.value.radiusMeters)
                 viewModel.updateCoordinatesImmediate(target.latitude, target.longitude)
-                if (suppressNextIdleGeocode) {
-                    suppressNextIdleGeocode = false
-                } else {
+                val locked = lockedGeocodeCoord
+                val stillOnLockedSpot = locked != null &&
+                    kotlin.math.abs(locked.first - target.latitude) < 0.0002 &&
+                    kotlin.math.abs(locked.second - target.longitude) < 0.0002
+                if (!stillOnLockedSpot) {
+                    lockedGeocodeCoord = null
                     viewModel.onMapCenterSettled(
                         target.latitude,
                         target.longitude,
@@ -398,7 +418,7 @@ class MapPickerActivity : AppCompatActivity() {
             if (!userEditedTitle || binding.etAlarmTitle.text.isNullOrBlank()) {
                 setTitleProgrammatically(place.shortTitle())
             }
-            suppressNextIdleGeocode = true
+            lockedGeocodeCoord = place.latitudeDouble() to place.longitudeDouble()
             moveCameraTo(
                 lat = place.latitudeDouble(),
                 lon = place.longitudeDouble(),
@@ -562,11 +582,19 @@ class MapPickerActivity : AppCompatActivity() {
                 state.longitude
             )
 
-            viewModel.saveAndActivateAlarm(finalTitle, fallbackAddress) {
-                if (PermissionHelper.checkStatus(this).hasFineLocation) {
+            if (PermissionHelper.hasTrackingLocation(this)) {
+                viewModel.saveAndActivateAlarm(finalTitle, fallbackAddress, activateNow = true) {
                     PinWakeService.startOrSync(this)
+                    finish()
                 }
-                finish()
+            } else {
+                pendingSaveArgs = finalTitle to fallbackAddress
+                locationPermissionLauncher.launch(
+                    arrayOf(
+                        Manifest.permission.ACCESS_FINE_LOCATION,
+                        Manifest.permission.ACCESS_COARSE_LOCATION
+                    )
+                )
             }
         }
     }
@@ -602,6 +630,15 @@ class MapPickerActivity : AppCompatActivity() {
                         searchAdapter.submitList(state.searchResults)
                         binding.cardSearchResults.visibility =
                             if (state.searchResults.isNotEmpty()) View.VISIBLE else View.GONE
+
+                        if (state.searchError) {
+                            Toast.makeText(
+                                this@MapPickerActivity,
+                                R.string.map_search_failed,
+                                Toast.LENGTH_SHORT
+                            ).show()
+                            viewModel.consumeSearchError()
+                        }
                     }
                 }
                 launch {

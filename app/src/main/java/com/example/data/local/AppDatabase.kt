@@ -50,7 +50,6 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "pin_wake_database.db"
                 )
-                    .fallbackToDestructiveMigration(dropAllTables = true)
                     .build()
                     .also { INSTANCE = it }
             }

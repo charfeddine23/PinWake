@@ -57,8 +57,8 @@ class PinWakeService : Service() {
     private var currentTier: PollingTier = PollingTier.STANDBY
     private var lastKnownLocation: Location? = null
     private var isForegroundStarted = false
-    private val triggeredLock = mutableSetOf<Long>()
-    private val preAlertSentLock = mutableSetOf<Long>()
+    private val triggeredUpdatedAt = mutableMapOf<Long, Long>()
+    private val preAlertUpdatedAt = mutableMapOf<Long, Long>()
 
     private val locationListener = object : LocationListener {
         override fun onLocationChanged(location: Location) {
@@ -82,42 +82,56 @@ class PinWakeService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         // Always enter foreground synchronously before any async branching or stopSelf()
         // to satisfy Android 12+ startForegroundService() contract and avoid ANR/crash.
-        ensureForegroundStarted()
+        if (!ensureForegroundStartedSafe()) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
 
         when (intent?.action) {
+            ACTION_STOP_TRACKING -> {
+                serviceScope.launch {
+                    if (repository.getActiveAlarmsOnce().isEmpty()) {
+                        stopTrackingAndSelf()
+                    } else {
+                        observeActiveAlarms()
+                    }
+                }
+                return START_NOT_STICKY
+            }
             ACTION_CANCEL_ALL -> {
                 serviceScope.launch {
                     val active = repository.getActiveAlarmsOnce()
                     active.forEach { alarm ->
                         repository.recordTripOutcome(alarm, TripOutcome.CANCELLED)
+                        cancelAlarmNotifications(alarm.id)
                     }
+                    triggeredUpdatedAt.clear()
+                    preAlertUpdatedAt.clear()
                     repository.deactivateAllAlarms()
                     stopTrackingAndSelf()
                 }
                 return START_NOT_STICKY
             }
             ACTION_DISMISS_ALARM -> {
-                notificationManager.cancel(NOTIFICATION_ALARM_ID)
                 val alarmId = intent.getLongExtra(EXTRA_ALARM_ID, -1L)
+                cancelAlarmNotifications(alarmId)
                 if (alarmId > 0L) {
-                    triggeredLock.remove(alarmId)
-                    preAlertSentLock.remove(alarmId)
-                    notificationManager.cancel(preAlertNotificationId(alarmId))
+                    triggeredUpdatedAt.remove(alarmId)
+                    preAlertUpdatedAt.remove(alarmId)
                 }
                 sendBroadcast(Intent(ACTION_FINISH_RINGING_UI).setPackage(packageName))
                 observeActiveAlarms()
                 return START_STICKY
             }
             ACTION_SNOOZE_500M -> {
-                notificationManager.cancel(NOTIFICATION_ALARM_ID)
                 val alarmId = intent.getLongExtra(EXTRA_ALARM_ID, -1L)
+                cancelAlarmNotifications(alarmId)
                 val dist = intent.getFloatExtra(EXTRA_DISTANCE_METERS, -1f).let { if (it >= 0f) it else null }
                 sendBroadcast(Intent(ACTION_FINISH_RINGING_UI).setPackage(packageName))
                 serviceScope.launch {
                     if (alarmId > 0L) {
-                        triggeredLock.remove(alarmId)
-                        preAlertSentLock.remove(alarmId)
-                        notificationManager.cancel(preAlertNotificationId(alarmId))
+                        triggeredUpdatedAt.remove(alarmId)
+                        preAlertUpdatedAt.remove(alarmId)
                         repository.getAlarmById(alarmId)?.let { alarm ->
                             repository.applySnooze500m(alarm, dist)
                         }
@@ -133,42 +147,70 @@ class PinWakeService : Service() {
         }
     }
 
-    private fun ensureForegroundStarted() {
-        if (isForegroundStarted) return
+    private fun cancelAlarmNotifications(alarmId: Long) {
+        notificationManager.cancel(NOTIFICATION_ALARM_ID)
+        if (alarmId > 0L) {
+            notificationManager.cancel(alarmNotificationId(alarmId))
+            notificationManager.cancel(preAlertNotificationId(alarmId))
+        }
+    }
+
+    private fun ensureForegroundStartedSafe(): Boolean {
+        if (isForegroundStarted) return true
         val notification = buildTrackingNotification(
             title = getString(R.string.app_name),
             body = getString(R.string.notif_tracking_body_waiting, tierDisplayLabel(PollingTier.BALANCED_10S))
         )
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            ServiceCompat.startForeground(
-                this,
-                NOTIFICATION_TRACKING_ID,
-                notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
-            )
-        } else {
-            startForeground(NOTIFICATION_TRACKING_ID, notification)
-        }
-        isForegroundStarted = true
+        return runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                ServiceCompat.startForeground(
+                    this,
+                    NOTIFICATION_TRACKING_ID,
+                    notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+                )
+            } else {
+                startForeground(NOTIFICATION_TRACKING_ID, notification)
+            }
+            isForegroundStarted = true
+            true
+        }.getOrDefault(false)
     }
 
     private fun observeActiveAlarms() {
         if (alarmsObserverJob?.isActive == true) return
         alarmsObserverJob = serviceScope.launch {
-            repository.activeAlarms.collectLatest { active ->
+            // Use collect (NOT collectLatest) so Room writes inside evaluation never cancel an active alarm trigger
+            repository.activeAlarms.collect { active ->
+                val activeIds = active.map { it.id }.toSet()
+                triggeredUpdatedAt.keys.retainAll(activeIds)
+                preAlertUpdatedAt.keys.retainAll(activeIds)
+
+                // If an alarm was edited, toggled off/on, snoozed, or re-armed from History, clear stale trigger locks
+                active.forEach { alarm ->
+                    if (triggeredUpdatedAt[alarm.id] != alarm.updatedAt) {
+                        triggeredUpdatedAt.remove(alarm.id)
+                    }
+                    if (preAlertUpdatedAt[alarm.id] != alarm.updatedAt) {
+                        preAlertUpdatedAt.remove(alarm.id)
+                    }
+                }
+
                 currentActiveAlarms = active
                 if (active.isEmpty()) {
                     stopTrackingAndSelf()
-                    return@collectLatest
+                    return@collect
                 }
 
-                if (lastKnownLocation == null) {
+                if (lastKnownLocation == null || !isLocationFresh(lastKnownLocation)) {
                     lastKnownLocation = getBestLastKnownLocation()
                 }
 
                 val loc = lastKnownLocation
-                if (loc != null) {
-                    evaluateAlarmsAgainstLocation(loc, active)
+                if (loc != null && isLocationFresh(loc)) {
+                    serviceScope.launch {
+                        evaluateAlarmsAgainstLocation(loc, currentActiveAlarms)
+                    }
                 } else {
                     if (currentTier == PollingTier.STANDBY) {
                         applyPollingTier(PollingTier.BALANCED_10S)
@@ -202,15 +244,19 @@ class PinWakeService : Service() {
             return
         }
         serviceScope.launch {
-            evaluateAlarmsAgainstLocation(location, active)
+            evaluateAlarmsAgainstLocation(location, currentActiveAlarms)
         }
     }
 
     private suspend fun evaluateAlarmsAgainstLocation(
         location: Location,
-        activeAlarms: List<GeoAlarmEntity>
+        activeAlarmsSnapshot: List<GeoAlarmEntity>
     ) = evaluationMutex.withLock {
-        if (activeAlarms.isEmpty()) return@withLock
+        val activeAlarms = repository.getActiveAlarmsOnce().ifEmpty { activeAlarmsSnapshot }
+        if (activeAlarms.isEmpty()) {
+            stopTrackingAndSelf()
+            return@withLock
+        }
 
         var closestAlarm: GeoAlarmEntity? = null
         var minDistance = Float.MAX_VALUE
@@ -238,12 +284,14 @@ class PinWakeService : Service() {
                 location.accuracy <= (alarm.radiusMeters * 1.5f).coerceAtLeast(500f)
 
             val preAlertOffset = PreAlertPreferences.getPreAlertDistanceMeters(this@PinWakeService)
+            val alreadyTriggeredForVersion = triggeredUpdatedAt[alarm.id] == alarm.updatedAt
             if (dist <= alarm.radiusMeters &&
                 now >= alarm.snoozedUntilMs &&
                 accuracyAcceptable &&
-                triggeredLock.add(alarm.id)
+                !alreadyTriggeredForVersion
             ) {
-                preAlertSentLock.remove(alarm.id)
+                triggeredUpdatedAt[alarm.id] = alarm.updatedAt
+                preAlertUpdatedAt.remove(alarm.id)
                 notificationManager.cancel(preAlertNotificationId(alarm.id))
                 repository.setAlarmActive(alarm.id, active = false, lastDistanceMeters = dist)
                 repository.recordTripOutcome(alarm, TripOutcome.ARRIVED)
@@ -253,12 +301,13 @@ class PinWakeService : Service() {
                 dist <= alarm.radiusMeters + preAlertOffset &&
                 now >= alarm.snoozedUntilMs &&
                 accuracyAcceptable &&
-                !triggeredLock.contains(alarm.id) &&
-                preAlertSentLock.add(alarm.id)
+                !alreadyTriggeredForVersion &&
+                preAlertUpdatedAt[alarm.id] != alarm.updatedAt
             ) {
+                preAlertUpdatedAt[alarm.id] = alarm.updatedAt
                 triggerPreAlertNotification(alarm, dist)
             } else if (preAlertOffset == 0 || dist > alarm.radiusMeters + preAlertOffset + 150f) {
-                preAlertSentLock.remove(alarm.id)
+                preAlertUpdatedAt.remove(alarm.id)
             }
         }
 
@@ -294,6 +343,12 @@ class PinWakeService : Service() {
             distanceMeters = minDistance,
             tier = currentTier
         )
+    }
+
+    private fun isLocationFresh(location: Location?): Boolean {
+        if (location == null) return false
+        val ageMs = System.currentTimeMillis() - location.time
+        return ageMs in 0L..MAX_CACHED_LOCATION_AGE_MS
     }
 
     @SuppressLint("MissingPermission")
@@ -383,9 +438,10 @@ class PinWakeService : Service() {
             putExtra(EXTRA_DISTANCE_METERS, distanceMeters)
         }
 
+        val baseReqCode = requestCodeBase(alarm.id)
         val fullScreenPendingIntent = PendingIntent.getActivity(
             this,
-            alarm.id.toInt(),
+            baseReqCode,
             alarmIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
@@ -397,7 +453,7 @@ class PinWakeService : Service() {
         }
         val snoozePending = PendingIntent.getBroadcast(
             this,
-            (alarm.id.toInt() shl 4) + 1,
+            baseReqCode + 1,
             snoozeIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
@@ -408,7 +464,7 @@ class PinWakeService : Service() {
         }
         val dismissPending = PendingIntent.getBroadcast(
             this,
-            (alarm.id.toInt() shl 4) + 2,
+            baseReqCode + 2,
             dismissIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
@@ -436,7 +492,7 @@ class PinWakeService : Service() {
             )
             .build()
 
-        notificationManager.notify(NOTIFICATION_ALARM_ID, alarmNotification)
+        notificationManager.notify(alarmNotificationId(alarm.id), alarmNotification)
 
         runCatching {
             startActivity(alarmIntent)
@@ -488,8 +544,15 @@ class PinWakeService : Service() {
         }
     }
 
+    private fun requestCodeBase(alarmId: Long): Int =
+        ((alarmId * 31L) and 0x0FFF_FFF0L).toInt()
+
+    fun alarmNotificationId(alarmId: Long): Int =
+        if (alarmId > 0L) NOTIFICATION_ALARM_BASE_ID + ((alarmId and 0x03FFL).toInt())
+        else NOTIFICATION_ALARM_ID
+
     private fun preAlertNotificationId(alarmId: Long): Int =
-        NOTIFICATION_PRE_ALERT_BASE_ID + (alarmId.toInt() and 0x0FFF)
+        NOTIFICATION_PRE_ALERT_BASE_ID + ((alarmId and 0x03FFL).toInt())
 
     private fun updateTrackingNotification(
         targetTitle: String,
@@ -579,9 +642,12 @@ class PinWakeService : Service() {
     companion object {
         const val NOTIFICATION_TRACKING_ID = 4001
         const val NOTIFICATION_ALARM_ID = 4002
-        const val NOTIFICATION_PRE_ALERT_BASE_ID = 4500
+        const val NOTIFICATION_ALARM_BASE_ID = 5000
+        const val NOTIFICATION_PRE_ALERT_BASE_ID = 6500
+        private const val MAX_CACHED_LOCATION_AGE_MS = 120_000L
 
         const val ACTION_SYNC_TRACKING = "com.example.service.ACTION_SYNC_TRACKING"
+        const val ACTION_STOP_TRACKING = "com.example.service.ACTION_STOP_TRACKING"
         const val ACTION_CANCEL_ALL = "com.example.service.ACTION_CANCEL_ALL"
         const val ACTION_SNOOZE_500M = "com.example.service.ACTION_SNOOZE_500M"
         const val ACTION_DISMISS_ALARM = "com.example.service.ACTION_DISMISS_ALARM"
@@ -594,25 +660,48 @@ class PinWakeService : Service() {
         const val EXTRA_ALARM_VIBRATE = "extra_alarm_vibrate"
         const val EXTRA_DISTANCE_METERS = "extra_distance_meters"
 
+        fun alarmNotificationIdFor(alarmId: Long): Int =
+            if (alarmId > 0L) NOTIFICATION_ALARM_BASE_ID + ((alarmId and 0x03FFL).toInt())
+            else NOTIFICATION_ALARM_ID
+
+        fun preAlertNotificationIdFor(alarmId: Long): Int =
+            NOTIFICATION_PRE_ALERT_BASE_ID + ((alarmId and 0x03FFL).toInt())
+
         fun startOrSync(context: Context) {
+            val hasPerm = com.example.util.PermissionHelper.hasTrackingLocation(context)
+            if (!hasPerm) return
             val intent = Intent(context, PinWakeService::class.java).apply {
                 action = ACTION_SYNC_TRACKING
             }
-            ContextCompat.startForegroundService(context, intent)
+            runCatching { ContextCompat.startForegroundService(context, intent) }
+        }
+
+        fun stopTracking(context: Context) {
+            runCatching {
+                context.stopService(Intent(context, PinWakeService::class.java))
+            }
         }
 
         fun snooze500m(context: Context, alarmId: Long, currentDistanceMeters: Float) {
+            val nm = context.getSystemService(NotificationManager::class.java)
+            nm?.cancel(NOTIFICATION_ALARM_ID)
+            nm?.cancel(alarmNotificationIdFor(alarmId))
+            nm?.cancel(preAlertNotificationIdFor(alarmId))
             val intent = Intent(context, PinWakeService::class.java).apply {
                 action = ACTION_SNOOZE_500M
                 putExtra(EXTRA_ALARM_ID, alarmId)
                 putExtra(EXTRA_DISTANCE_METERS, currentDistanceMeters)
             }
-            ContextCompat.startForegroundService(context, intent)
+            runCatching { ContextCompat.startForegroundService(context, intent) }
         }
 
         fun dismissAlarm(context: Context, alarmId: Long) {
             val nm = context.getSystemService(NotificationManager::class.java)
             nm?.cancel(NOTIFICATION_ALARM_ID)
+            if (alarmId > 0L) {
+                nm?.cancel(alarmNotificationIdFor(alarmId))
+                nm?.cancel(preAlertNotificationIdFor(alarmId))
+            }
             val intent = Intent(context, PinWakeService::class.java).apply {
                 action = ACTION_DISMISS_ALARM
                 putExtra(EXTRA_ALARM_ID, alarmId)

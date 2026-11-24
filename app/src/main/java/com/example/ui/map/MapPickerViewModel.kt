@@ -30,6 +30,7 @@ data class MapPickerUiState(
     val isResolvingAddress: Boolean = false,
     val isSearching: Boolean = false,
     val searchResults: List<NominatimPlaceDto> = emptyList(),
+    val searchError: Boolean = false,
     val selectedCategory: FavoriteCategory = FavoriteCategory.NONE
 )
 
@@ -66,18 +67,24 @@ class MapPickerViewModel(
                     if (query.trim().length < 2) {
                         _uiState.value = _uiState.value.copy(
                             isSearching = false,
-                            searchResults = emptyList()
+                            searchResults = emptyList(),
+                            searchError = false
                         )
                         return@collectLatest
                     }
-                    _uiState.value = _uiState.value.copy(isSearching = true)
+                    _uiState.value = _uiState.value.copy(isSearching = true, searchError = false)
                     val result = repository.searchPlaces(query, currentLanguage)
                     _uiState.value = _uiState.value.copy(
                         isSearching = false,
-                        searchResults = result.getOrDefault(emptyList())
+                        searchResults = result.getOrDefault(emptyList()),
+                        searchError = result.isFailure
                     )
                 }
         }
+    }
+
+    fun consumeSearchError() {
+        _uiState.value = _uiState.value.copy(searchError = false)
     }
 
     fun initialize(
@@ -174,6 +181,7 @@ class MapPickerViewModel(
     fun saveAndActivateAlarm(
         title: String,
         fallbackAddress: String,
+        activateNow: Boolean = true,
         onSaved: (Long) -> Unit
     ) {
         val state = _uiState.value
@@ -194,7 +202,7 @@ class MapPickerViewModel(
                     latitude = state.latitude,
                     longitude = state.longitude,
                     radiusMeters = state.radiusMeters,
-                    isActive = true
+                    isActive = activateNow
                 )
             } else {
                 val entity = GeoAlarmEntity(
@@ -204,7 +212,7 @@ class MapPickerViewModel(
                     latitude = state.latitude,
                     longitude = state.longitude,
                     radiusMeters = state.radiusMeters,
-                    isActive = true,
+                    isActive = activateNow,
                     isFavorite = category != FavoriteCategory.NONE,
                     favoriteCategory = category,
                     vibrateEnabled = existing?.vibrateEnabled ?: true,

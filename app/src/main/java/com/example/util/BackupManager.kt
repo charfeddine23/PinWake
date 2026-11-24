@@ -16,6 +16,10 @@ data class BackupPayload(
 object BackupManager {
 
     private const val SCHEMA_VERSION = 1
+    const val MAX_BACKUP_JSON_CHARS = 2 * 1024 * 1024
+    private const val MAX_IMPORT_ALARMS = 500
+    private const val MAX_TITLE_LENGTH = 120
+    private const val MAX_ADDRESS_LENGTH = 240
 
     fun serializeToJson(
         alarms: List<GeoAlarmEntity>,
@@ -52,6 +56,7 @@ object BackupManager {
     }
 
     fun parseFromJson(rawJson: String): Result<BackupPayload> = runCatching {
+        require(rawJson.length <= MAX_BACKUP_JSON_CHARS) { "Backup JSON exceeds size limit" }
         val root = JSONObject(rawJson)
         val version = root.optInt("schemaVersion", 1)
         val exportedAt = root.optLong("exportedAt", System.currentTimeMillis())
@@ -62,10 +67,11 @@ object BackupManager {
         }
 
         val alarmsArray = root.optJSONArray("alarms") ?: JSONArray()
-        val parsed = ArrayList<GeoAlarmEntity>(alarmsArray.length())
+        val itemLimit = minOf(alarmsArray.length(), MAX_IMPORT_ALARMS)
+        val parsed = ArrayList<GeoAlarmEntity>(itemLimit)
         val now = System.currentTimeMillis()
 
-        for (i in 0 until alarmsArray.length()) {
+        for (i in 0 until itemLimit) {
             val obj = alarmsArray.optJSONObject(i) ?: continue
             val lat = obj.optDouble("latitude", Double.NaN)
             val lon = obj.optDouble("longitude", Double.NaN)
@@ -74,8 +80,12 @@ object BackupManager {
             }
 
             val rawTitle = NominatimPlaceDto.stripUnsupportedGlyphs(obj.optString("title", ""))
+                .take(MAX_TITLE_LENGTH)
+                .trim()
             if (rawTitle.isBlank()) continue
             val rawAddress = NominatimPlaceDto.stripUnsupportedGlyphs(obj.optString("address", ""))
+                .take(MAX_ADDRESS_LENGTH)
+                .trim()
 
             val categoryName = obj.optString("favoriteCategory", FavoriteCategory.NONE.name)
             val category = runCatching {

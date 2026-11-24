@@ -28,6 +28,18 @@ data class PermissionStatus(
 
 object PermissionHelper {
 
+    fun hasTrackingLocation(context: Context): Boolean {
+        val fine = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+        val coarse = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.ACCESS_COARSE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+        return fine || coarse
+    }
+
     fun checkStatus(context: Context): PermissionStatus {
         val fine = ContextCompat.checkSelfPermission(
             context,

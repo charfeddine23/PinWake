@@ -6,6 +6,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.media.MediaPlayer
 import android.media.RingtoneManager
 import android.os.Build
@@ -37,6 +39,8 @@ class AlarmRingingActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityAlarmRingingBinding
     private var mediaPlayer: MediaPlayer? = null
+    private var audioManager: AudioManager? = null
+    private var audioFocusRequest: AudioFocusRequest? = null
     private var vibrator: Vibrator? = null
     private var crescendoJob: Job? = null
 
@@ -149,27 +153,56 @@ class AlarmRingingActivity : AppCompatActivity() {
     }
 
     private fun startAlarmAudioWithCrescendo() {
-        val alarmUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-            ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
-            ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-            ?: return
+        val candidateUris = listOfNotNull(
+            RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM),
+            RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE),
+            RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+        ).distinct()
+        if (candidateUris.isEmpty()) return
 
-        runCatching {
+        val alarmAttrs = AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_ALARM)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+            .build()
+
+        val manager = getSystemService(AudioManager::class.java)
+        audioManager = manager
+        val focusReq = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE)
+            .setAudioAttributes(alarmAttrs)
+            .setAcceptsDelayedFocusGain(false)
+            .build()
+        audioFocusRequest = focusReq
+        runCatching { manager?.requestAudioFocus(focusReq) }
+
+        startPlayerWithFallback(candidateUris, index = 0, alarmAttrs = alarmAttrs)
+    }
+
+    private fun startPlayerWithFallback(
+        uris: List<android.net.Uri>,
+        index: Int,
+        alarmAttrs: AudioAttributes
+    ) {
+        if (index >= uris.size || isDestroyed || isFinishing) return
+        val started = runCatching {
             val player = MediaPlayer().apply {
-                setAudioAttributes(
-                    AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_ALARM)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                        .build()
-                )
-                setDataSource(applicationContext, alarmUri)
+                setAudioAttributes(alarmAttrs)
+                setDataSource(applicationContext, uris[index])
                 isLooping = true
                 setVolume(0.15f, 0.15f)
+                setOnErrorListener { failedPlayer, _, _ ->
+                    runCatching { failedPlayer.release() }
+                    if (mediaPlayer === failedPlayer) {
+                        mediaPlayer = null
+                    }
+                    startPlayerWithFallback(uris, index + 1, alarmAttrs)
+                    true
+                }
                 prepare()
                 start()
             }
             mediaPlayer = player
 
+            crescendoJob?.cancel()
             crescendoJob = lifecycleScope.launch {
                 var step = 1
                 val totalSteps = 15
@@ -180,6 +213,11 @@ class AlarmRingingActivity : AppCompatActivity() {
                     step++
                 }
             }
+            true
+        }.getOrDefault(false)
+
+        if (!started) {
+            startPlayerWithFallback(uris, index + 1, alarmAttrs)
         }
     }
 
@@ -247,6 +285,10 @@ class AlarmRingingActivity : AppCompatActivity() {
             }
         }
         mediaPlayer = null
+        audioFocusRequest?.let { req ->
+            runCatching { audioManager?.abandonAudioFocusRequest(req) }
+        }
+        audioFocusRequest = null
         runCatching { vibrator?.cancel() }
     }
 

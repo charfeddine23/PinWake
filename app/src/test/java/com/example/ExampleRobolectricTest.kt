@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.repository.PollingTier
 import com.example.util.ApkUpdateManager
+import kotlinx.coroutines.flow.first
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -388,6 +389,125 @@ class ExampleRobolectricTest {
             assertEquals(apkFile, manager.findExistingDownloadedApk(updateInfo))
         } finally {
             apkFile.delete()
+        }
+    }
+
+    @Test
+    fun `apkUpdateManager rejects untrusted or non-https release urls`() {
+        assertTrue(ApkUpdateManager.isTrustedGitHubHttpsUrl("https://github.com/user/repo/releases/download/v1.0/app.apk"))
+        assertTrue(ApkUpdateManager.isTrustedGitHubHttpsUrl("https://objects.githubusercontent.com/github-production-release/123"))
+        assertTrue(ApkUpdateManager.isTrustedGitHubHttpsUrl("https://release-assets.githubusercontent.com/asset"))
+        assertFalse(ApkUpdateManager.isTrustedGitHubHttpsUrl("http://github.com/user/repo/releases/download/v1.0/app.apk"))
+        assertFalse(ApkUpdateManager.isTrustedGitHubHttpsUrl("https://evil-github.com/app.apk"))
+        assertFalse(ApkUpdateManager.isTrustedGitHubHttpsUrl("https://github.com.evil.org/app.apk"))
+        assertFalse(ApkUpdateManager.isTrustedGitHubHttpsUrl("file:///sdcard/app.apk"))
+        assertFalse(ApkUpdateManager.isTrustedGitHubHttpsUrl(null))
+    }
+
+    @Test
+    fun `backupManager enforces size limit and truncates oversized fields`() {
+        val oversized = "{\"alarms\":[]}".padEnd(com.example.util.BackupManager.MAX_BACKUP_JSON_CHARS + 10, ' ')
+        assertTrue(com.example.util.BackupManager.parseFromJson(oversized).isFailure)
+
+        val longTitle = "A".repeat(200)
+        val longAddress = "B".repeat(400)
+        val json = """
+            {
+              "schemaVersion": 1,
+              "alarms": [
+                {
+                  "title": "$longTitle",
+                  "address": "$longAddress",
+                  "latitude": 36.75,
+                  "longitude": 3.05,
+                  "radiusMeters": 99999
+                }
+              ]
+            }
+        """.trimIndent()
+        val parsed = com.example.util.BackupManager.parseFromJson(json).getOrThrow()
+        assertEquals(1, parsed.alarms.size)
+        assertEquals(120, parsed.alarms[0].title.length)
+        assertEquals(240, parsed.alarms[0].address.length)
+        assertEquals(5000, parsed.alarms[0].radiusMeters)
+    }
+
+    @Test
+    fun `mapLinkParser handles 2-decimal coords and avoids mid-token numbers`() {
+        val shortCoords = com.example.util.MapLinkParser.parse("Pin at 36.75, 3.05")
+        assertEquals(36.75, shortCoords?.latitude ?: 0.0, 0.0001)
+        assertEquals(3.05, shortCoords?.longitude ?: 0.0, 0.0001)
+
+        val invalidMidToken = com.example.util.MapLinkParser.parse("id12.34,56.78test")
+        assertEquals(null, invalidMidToken)
+    }
+
+    @Test
+    fun `applySnooze500m shrinks default 500m radius and logs snoozed trip`() = kotlinx.coroutines.runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val db = androidx.room.Room.inMemoryDatabaseBuilder(
+            context,
+            com.example.data.local.AppDatabase::class.java
+        ).allowMainThreadQueries().build()
+
+        try {
+            val repo = com.example.data.repository.PinWakeRepository(
+                geoAlarmDao = db.geoAlarmDao(),
+                tripHistoryDao = db.tripHistoryDao(),
+                nominatimApi = com.example.data.remote.NominatimApiService.create(),
+                trackingStateManager = com.example.data.repository.TrackingStateManager()
+            )
+            val id = repo.saveQuickAssignedLocation(
+                category = com.example.data.local.entity.FavoriteCategory.NONE,
+                title = "Stop",
+                address = "Main St",
+                latitude = 36.75,
+                longitude = 3.05,
+                radiusMeters = 500,
+                isActive = true
+            )
+            val alarm = repo.getAlarmById(id)!!
+            repo.applySnooze500m(alarm, currentDistanceMeters = 450f)
+
+            val updated = repo.getAlarmById(id)!!
+            assertEquals(200, updated.radiusMeters)
+            assertEquals(0L, updated.snoozedUntilMs)
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
+    fun `tripHistoryDao insertTripAndPrune caps stored rows`() = kotlinx.coroutines.runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val db = androidx.room.Room.inMemoryDatabaseBuilder(
+            context,
+            com.example.data.local.AppDatabase::class.java
+        ).allowMainThreadQueries().build()
+
+        try {
+            val dao = db.tripHistoryDao()
+            for (i in 1..10) {
+                dao.insertTripAndPrune(
+                    com.example.data.local.entity.TripHistoryEntity(
+                        alarmId = 1L,
+                        alarmTitle = "Stop $i",
+                        address = "Addr $i",
+                        latitude = 36.75,
+                        longitude = 3.05,
+                        radiusMeters = 500,
+                        outcome = com.example.data.local.entity.TripOutcome.ARRIVED,
+                        triggeredAt = i * 1000L
+                    ),
+                    keepCount = 5
+                )
+            }
+            val remaining = dao.observeRecentTrips().first()
+            assertEquals(5, remaining.size)
+            assertEquals("Stop 10", remaining.first().alarmTitle)
+            assertEquals("Stop 6", remaining.last().alarmTitle)
+        } finally {
+            db.close()
         }
     }
 }

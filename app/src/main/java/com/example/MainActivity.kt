@@ -107,6 +107,7 @@ class MainActivity : AppCompatActivity() {
     private var lastSheetState: Int = BottomSheetBehavior.STATE_HALF_EXPANDED
     private var activeSingleFixListener: LocationListener? = null
     private var pendingCenterOnLocation: Boolean = false
+    private var pendingArmAlarm: GeoAlarmEntity? = null
     private val mapHoldHandler = Handler(Looper.getMainLooper())
     private var pendingMapHoldRunnable: Runnable? = null
     private var quickAssignDialog: BottomSheetDialog? = null
@@ -140,8 +141,18 @@ class MainActivity : AppCompatActivity() {
         ActivityResultContracts.RequestMultiplePermissions()
     ) {
         refreshSettingsAttentionDot()
-        syncTrackingServiceIfPossible()
+        val pendingToArm = pendingArmAlarm
+        pendingArmAlarm = null
         if (hasFineOrCoarseLocation()) {
+            if (pendingToArm != null) {
+                viewModel.setAlarmActive(pendingToArm, true) { hasActive ->
+                    if (hasActive) {
+                        PinWakeService.startOrSync(this)
+                    }
+                }
+            } else {
+                syncTrackingServiceIfPossible()
+            }
             heroMap?.style?.let { style ->
                 if (style.isFullyLoaded) enableHeroLocationPuck(style, forceReapplyStyle = false)
             }
@@ -154,6 +165,10 @@ class MainActivity : AppCompatActivity() {
             }
         } else {
             pendingCenterOnLocation = false
+            if (pendingToArm != null) {
+                Toast.makeText(this, R.string.perm_location_needed_to_arm, Toast.LENGTH_LONG).show()
+                alarmAdapter.notifyDataSetChanged()
+            }
         }
     }
 
@@ -798,14 +813,17 @@ class MainActivity : AppCompatActivity() {
     private fun setupRecyclerViews() {
         alarmAdapter = AlarmAdapter(
             onToggleActive = { alarm, active ->
-                if (active && !PermissionHelper.checkStatus(this).hasFineLocation) {
+                if (active && !PermissionHelper.hasTrackingLocation(this)) {
+                    pendingArmAlarm = alarm
+                    alarmAdapter.notifyDataSetChanged()
                     requestFineLocation()
+                    return@AlarmAdapter
                 }
                 viewModel.setAlarmActive(alarm, active) { hasActive ->
-                    if (hasActive && PermissionHelper.checkStatus(this).hasFineLocation) {
+                    if (hasActive && PermissionHelper.hasTrackingLocation(this)) {
                         PinWakeService.startOrSync(this)
                     } else if (!hasActive) {
-                        stopService(Intent(this, PinWakeService::class.java))
+                        PinWakeService.stopTracking(this)
                     }
                 }
             },
@@ -822,7 +840,7 @@ class MainActivity : AppCompatActivity() {
             onDeleteClick = { alarm ->
                 viewModel.deleteAlarm(alarm.id) { hasActive ->
                     if (!hasActive) {
-                        stopService(Intent(this, PinWakeService::class.java))
+                        PinWakeService.stopTracking(this)
                     }
                 }
             }
@@ -840,14 +858,19 @@ class MainActivity : AppCompatActivity() {
         }
 
         historyAdapter = TripHistoryAdapter { trip ->
-            if (!PermissionHelper.checkStatus(this).hasFineLocation) {
-                requestFineLocation()
-            }
+            val hasPerm = PermissionHelper.hasTrackingLocation(this)
             viewModel.replayTrip(trip) { rearmedAlarm, hasActive ->
                 if (isDestroyed || isFinishing) return@replayTrip
                 focusedPlaceLockId = rearmedAlarm.id
                 lastHeroCameraKey = null
-                if (hasActive && PermissionHelper.checkStatus(this).hasFineLocation) {
+                if (!hasPerm) {
+                    viewModel.setAlarmActive(rearmedAlarm, false) {
+                        pendingArmAlarm = rearmedAlarm
+                        requestFineLocation()
+                    }
+                    return@replayTrip
+                }
+                if (hasActive) {
                     PinWakeService.startOrSync(this)
                 }
                 Toast.makeText(
@@ -875,7 +898,8 @@ class MainActivity : AppCompatActivity() {
             binding.btnMyLocationFullMap,
             binding.btnQuickWorkFullMap,
             binding.btnQuickHomeFullMap,
-            binding.btnSettings
+            binding.btnSettings,
+            binding.pillBrandHeader
         ).forEach { attachLuxuryPressFeedback(it) }
 
         binding.layoutSheetHandle.setOnClickListener {
@@ -1291,14 +1315,16 @@ class MainActivity : AppCompatActivity() {
             }
             card.setOnClickListener {
                 val nextActive = !favorite.isActive
-                if (nextActive && !PermissionHelper.checkStatus(this).hasFineLocation) {
+                if (nextActive && !PermissionHelper.hasTrackingLocation(this)) {
+                    pendingArmAlarm = favorite
                     requestFineLocation()
+                    return@setOnClickListener
                 }
                 viewModel.setAlarmActive(favorite, nextActive) { hasActive ->
-                    if (hasActive && PermissionHelper.checkStatus(this).hasFineLocation) {
+                    if (hasActive && PermissionHelper.hasTrackingLocation(this)) {
                         PinWakeService.startOrSync(this)
                     } else if (!hasActive) {
-                        stopService(Intent(this, PinWakeService::class.java))
+                        PinWakeService.stopTracking(this)
                     }
                 }
             }
@@ -1501,9 +1527,11 @@ class MainActivity : AppCompatActivity() {
                 getString(R.string.map_unknown_address, latitude, longitude)
             }
             val radiusMeters = dialogBinding.sliderQuickAssignRadius.value.toInt()
-            val activateAlarm = dialogBinding.switchQuickAssignActive.isChecked
+            val canTrack = PermissionHelper.hasTrackingLocation(this)
+            val activateAlarm = dialogBinding.switchQuickAssignActive.isChecked && canTrack
 
-            if (activateAlarm && !PermissionHelper.checkStatus(this).hasFineLocation) {
+            if (dialogBinding.switchQuickAssignActive.isChecked && !canTrack) {
+                Toast.makeText(this, R.string.perm_location_needed_to_arm, Toast.LENGTH_LONG).show()
                 requestFineLocation()
             }
 
@@ -1519,10 +1547,10 @@ class MainActivity : AppCompatActivity() {
                 if (isDestroyed || isFinishing) return@saveQuickAssignedLocation
                 focusedPlaceLockId = savedId
                 lastHeroCameraKey = null
-                if (hasAnyActive && PermissionHelper.checkStatus(this).hasFineLocation) {
+                if (hasAnyActive && PermissionHelper.hasTrackingLocation(this)) {
                     PinWakeService.startOrSync(this)
                 } else if (!hasAnyActive) {
-                    stopService(Intent(this, PinWakeService::class.java))
+                    PinWakeService.stopTracking(this)
                 }
                 Toast.makeText(
                     this,
@@ -1570,7 +1598,6 @@ class MainActivity : AppCompatActivity() {
                 binding.pillBrandHeader.setBackgroundResource(R.drawable.bg_luxury_glass_pill_active)
                 binding.pillBrandHeader.isClickable = true
                 binding.pillBrandHeader.isFocusable = true
-                attachLuxuryPressFeedback(binding.pillBrandHeader)
                 binding.pillBrandHeader.setOnClickListener {
                     showInstallUpdateDialog(readyFile, update.availableUpdate)
                 }
@@ -1583,7 +1610,6 @@ class MainActivity : AppCompatActivity() {
                 binding.pillBrandHeader.setBackgroundResource(R.drawable.bg_luxury_glass_pill)
                 binding.pillBrandHeader.isClickable = false
                 binding.pillBrandHeader.isFocusable = false
-                binding.pillBrandHeader.setOnTouchListener(null)
                 binding.pillBrandHeader.setOnClickListener(null)
             }
         }
@@ -1657,6 +1683,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun installDownloadedApk(apkFile: File) {
+        if (!apkUpdateManager.verifyApkSignatureMatchesCurrentApp(apkFile)) {
+            Toast.makeText(this, R.string.update_signature_invalid, Toast.LENGTH_LONG).show()
+            return
+        }
         if (!apkUpdateManager.canRequestPackageInstalls()) {
             pendingInstallApk = apkFile
             MaterialAlertDialogBuilder(this)
@@ -1673,6 +1703,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun launchApkInstaller(apkFile: File) {
+        if (!apkUpdateManager.verifyApkSignatureMatchesCurrentApp(apkFile)) {
+            Toast.makeText(this, R.string.update_signature_invalid, Toast.LENGTH_LONG).show()
+            return
+        }
         runCatching {
             startActivity(apkUpdateManager.buildInstallApkIntent(apkFile))
         }.onFailure {
@@ -1703,8 +1737,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun syncTrackingServiceIfPossible() {
-        val status = PermissionHelper.checkStatus(this)
-        if (status.hasFineLocation && viewModel.uiState.value.activeCount > 0) {
+        if (PermissionHelper.hasTrackingLocation(this) && viewModel.uiState.value.activeCount > 0) {
             PinWakeService.startOrSync(this)
         }
     }

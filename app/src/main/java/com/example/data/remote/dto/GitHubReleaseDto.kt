@@ -9,7 +9,8 @@ data class GitHubAssetDto(
     val name: String = "",
     val size: Long = 0L,
     @Json(name = "content_type") val contentType: String = "",
-    @Json(name = "browser_download_url") val browserDownloadUrl: String = ""
+    @Json(name = "browser_download_url") val browserDownloadUrl: String = "",
+    val digest: String? = null
 )
 
 @JsonClass(generateAdapter = true)

@@ -258,6 +258,7 @@ class SettingsActivity : AppCompatActivity() {
         }
         binding.btnOpenGithubRelease.setOnClickListener {
             val url = viewModel.updateState.value.availableUpdate?.releasePageUrl
+                ?.takeIf { ApkUpdateManager.isTrustedGitHubHttpsUrl(it) }
                 ?: GitHubReleaseApiService.REPO_RELEASES_URL
             runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
         }
@@ -404,10 +405,33 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun readAndRestoreBackupFromUri(uri: Uri) {
         lifecycleScope.launch {
-            val rawJson = withContext(Dispatchers.IO) {
+            val readOutcome = withContext(Dispatchers.IO) {
                 runCatching {
-                    contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
-                }.getOrNull()
+                    contentResolver.openInputStream(uri)?.bufferedReader()?.use { reader ->
+                        val limit = com.example.util.BackupManager.MAX_BACKUP_JSON_CHARS
+                        val buf = CharArray(limit + 1)
+                        var total = 0
+                        while (total <= limit) {
+                            val read = reader.read(buf, total, buf.size - total)
+                            if (read == -1) break
+                            total += read
+                        }
+                        if (total > limit) {
+                            null to true
+                        } else {
+                            String(buf, 0, total) to false
+                        }
+                    } ?: (null to false)
+                }.getOrElse { null to false }
+            }
+            val (rawJson, tooLarge) = readOutcome
+            if (tooLarge) {
+                Toast.makeText(
+                    this@SettingsActivity,
+                    R.string.backup_file_too_large,
+                    Toast.LENGTH_SHORT
+                ).show()
+                return@launch
             }
             if (rawJson.isNullOrBlank()) {
                 Toast.makeText(
@@ -585,13 +609,16 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun syncTrackingServiceIfPossible() {
-        val status = PermissionHelper.checkStatus(this)
-        if (status.hasFineLocation && viewModel.uiState.value.activeCount > 0) {
+        if (PermissionHelper.hasTrackingLocation(this) && viewModel.uiState.value.activeCount > 0) {
             PinWakeService.startOrSync(this)
         }
     }
 
     private fun installDownloadedApk(apkFile: File) {
+        if (!apkUpdateManager.verifyApkSignatureMatchesCurrentApp(apkFile)) {
+            Toast.makeText(this, R.string.update_signature_invalid, Toast.LENGTH_LONG).show()
+            return
+        }
         if (!apkUpdateManager.canRequestPackageInstalls()) {
             pendingInstallApk = apkFile
             MaterialAlertDialogBuilder(this)
@@ -608,6 +635,10 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun launchApkInstaller(apkFile: File) {
+        if (!apkUpdateManager.verifyApkSignatureMatchesCurrentApp(apkFile)) {
+            Toast.makeText(this, R.string.update_signature_invalid, Toast.LENGTH_LONG).show()
+            return
+        }
         runCatching {
             startActivity(apkUpdateManager.buildInstallApkIntent(apkFile))
         }.onFailure {
