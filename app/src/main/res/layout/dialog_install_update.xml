@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/bg_liquid_glass_sheet"
+    android:layoutDirection="ltr"
+    android:orientation="vertical"
+    android:paddingHorizontal="20dp"
+    android:paddingTop="12dp"
+    android:paddingBottom="26dp">
+
+    <View
+        android:layout_width="44dp"
+        android:layout_height="5dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginBottom="16dp"
+        android:background="@drawable/bg_sheet_handle" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <ImageView
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="@drawable/bg_icon_circle_dark"
+            android:contentDescription="@string/update_install_prompt_title"
+            android:padding="12dp"
+            android:src="@drawable/ic_download_arrow"
+            app:tint="@color/accent_cyan_glow" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="14dp"
+            android:layout_marginEnd="8dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/update_install_prompt_title"
+                android:textAppearance="@style/TextAppearance.PinWake.Title"
+                android:textColor="@color/text_primary"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tvInstallPromptVersion"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:background="@drawable/bg_badge_cyan"
+                android:paddingHorizontal="9dp"
+                android:paddingVertical="3dp"
+                android:textAppearance="@style/TextAppearance.PinWake.Mono"
+                android:textColor="@color/accent_cyan_glow"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                tools:text="v1.0.12" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/tvInstallPromptMessage"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="14dp"
+        android:lineSpacingExtra="2dp"
+        android:textColor="@color/text_secondary"
+        android:textSize="14sp"
+        tools:text="Pin Wake v1.0.12 is downloaded and ready. Would you like to install it now?" />
+
+    <TextView
+        android:id="@+id/tvInstallPromptNotes"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:background="@drawable/bg_liquid_glass_card"
+        android:ellipsize="end"
+        android:maxLines="4"
+        android:padding="12dp"
+        android:textColor="@color/text_secondary"
+        android:textSize="12sp"
+        android:visibility="gone"
+        tools:text="Bug fixes and performance improvements."
+        tools:visibility="visible" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="20dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/btnInstallLater"
+            android:layout_width="0dp"
+            android:layout_height="52dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_luxury_glass_pill"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:paddingHorizontal="16dp"
+            android:text="@string/update_btn_maybe_later"
+            android:textColor="@color/text_primary"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/btnInstallNow"
+            android:layout_width="0dp"
+            android:layout_height="52dp"
+            android:layout_marginStart="12dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_cyan_gradient_button"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:paddingHorizontal="16dp"
+            android:text="@string/update_btn_install_now"
+            android:textColor="@color/text_on_accent"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+</LinearLayout>

@@ -1,6 +1,8 @@
 package com.example
 
 import android.Manifest
+import android.animation.ObjectAnimator
+import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -38,18 +40,23 @@ import androidx.recyclerview.widget.DefaultItemAnimator
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.example.data.local.entity.FavoriteCategory
 import com.example.data.local.entity.GeoAlarmEntity
 import com.example.data.repository.PollingTier
 import com.example.databinding.ActivityMainBinding
+import com.example.databinding.DialogInstallUpdateBinding
 import com.example.databinding.DialogQuickAssignPinBinding
 import com.example.service.PinWakeService
 import com.example.ui.dashboard.AlarmAdapter
 import com.example.ui.dashboard.DashboardUiState
 import com.example.ui.dashboard.DashboardViewModel
 import com.example.ui.dashboard.TripHistoryAdapter
+import com.example.ui.dashboard.UpdateUiState
 import com.example.ui.map.MapPickerActivity
 import com.example.ui.settings.SettingsActivity
+import com.example.util.ApkUpdateManager
+import com.example.util.AppUpdateInfo
 import com.example.util.DistanceFormatter
 import com.example.util.LanguageManager
 import com.example.util.MapLinkParser
@@ -71,6 +78,7 @@ import org.maplibre.android.location.modes.RenderMode
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.Style
 import org.maplibre.geojson.FeatureCollection
+import java.io.File
 import java.util.Locale
 import kotlin.math.hypot
 
@@ -102,6 +110,23 @@ class MainActivity : AppCompatActivity() {
     private val mapHoldHandler = Handler(Looper.getMainLooper())
     private var pendingMapHoldRunnable: Runnable? = null
     private var quickAssignDialog: BottomSheetDialog? = null
+    private var installUpdateDialog: BottomSheetDialog? = null
+    private var brandArrowPulseAnimator: ObjectAnimator? = null
+    private var pendingInstallApk: File? = null
+
+    private val apkUpdateManager: ApkUpdateManager by lazy {
+        (application as PinWakeApplication).container.apkUpdateManager
+    }
+
+    private val installPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        val pending = pendingInstallApk
+        if (pending != null && apkUpdateManager.canRequestPackageInstalls()) {
+            pendingInstallApk = null
+            launchApkInstaller(pending)
+        }
+    }
 
     private val restoreSheetBackCallback = object : OnBackPressedCallback(false) {
         override fun handleOnBackPressed() {
@@ -264,8 +289,11 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         cancelPendingMapHold()
+        stopBrandArrowPulse()
         quickAssignDialog?.dismiss()
         quickAssignDialog = null
+        installUpdateDialog?.dismiss()
+        installUpdateDialog = null
         activeSingleFixListener?.let { listener ->
             runCatching { getSystemService(LocationManager::class.java)?.removeUpdates(listener) }
         }
@@ -353,6 +381,13 @@ class MainActivity : AppCompatActivity() {
         }
         if (kotlin.math.abs(sheetBehavior.halfExpandedRatio - targetHalfRatio) > 0.005f) {
             sheetBehavior.halfExpandedRatio = targetHalfRatio
+        }
+
+        val targetSheetHeight = (parentHeight - expandedOffsetPx).coerceAtLeast(targetPeekHeight)
+        val scrollParams = binding.scrollDashboard.layoutParams
+        if (scrollParams.height != targetSheetHeight) {
+            scrollParams.height = targetSheetHeight
+            binding.scrollDashboard.layoutParams = scrollParams
         }
 
         val collapsedOffset = parentHeight - targetPeekHeight
@@ -1098,7 +1133,8 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
                 launch {
-                    viewModel.updateState.collect {
+                    viewModel.updateState.collect { update ->
+                        renderBrandUpdateIndicator(update)
                         refreshSettingsAttentionDot()
                     }
                 }
@@ -1500,11 +1536,154 @@ class MainActivity : AppCompatActivity() {
         dialog.show()
     }
 
+    private fun renderBrandUpdateIndicator(update: UpdateUiState) {
+        val readyFile = update.downloadedApkFile?.takeIf { it.exists() }
+        when {
+            update.isDownloading -> {
+                binding.ivBrandLogo.visibility = View.GONE
+                binding.layoutBrandUpdateSlot.visibility = View.VISIBLE
+                binding.progressBrandUpdate.visibility = View.VISIBLE
+                binding.ivBrandUpdateArrow.visibility = View.VISIBLE
+                binding.ivBrandUpdateArrow.setColorFilter(
+                    ContextCompat.getColor(this, R.color.accent_cyan_glow)
+                )
+                binding.ivBrandUpdateArrow.contentDescription =
+                    getString(R.string.cd_update_downloading_indicator)
+                binding.pillBrandHeader.setBackgroundResource(R.drawable.bg_luxury_glass_pill)
+                binding.pillBrandHeader.isClickable = false
+                binding.pillBrandHeader.isFocusable = false
+                binding.pillBrandHeader.setOnClickListener(null)
+                startBrandArrowPulse()
+            }
+            readyFile != null -> {
+                stopBrandArrowPulse()
+                binding.ivBrandLogo.visibility = View.GONE
+                binding.layoutBrandUpdateSlot.visibility = View.VISIBLE
+                binding.progressBrandUpdate.visibility = View.GONE
+                binding.ivBrandUpdateArrow.visibility = View.VISIBLE
+                binding.ivBrandUpdateArrow.alpha = 1f
+                binding.ivBrandUpdateArrow.setColorFilter(
+                    ContextCompat.getColor(this, R.color.accent_emerald)
+                )
+                binding.ivBrandUpdateArrow.contentDescription =
+                    getString(R.string.cd_update_ready_arrow)
+                binding.pillBrandHeader.setBackgroundResource(R.drawable.bg_luxury_glass_pill_active)
+                binding.pillBrandHeader.isClickable = true
+                binding.pillBrandHeader.isFocusable = true
+                attachLuxuryPressFeedback(binding.pillBrandHeader)
+                binding.pillBrandHeader.setOnClickListener {
+                    showInstallUpdateDialog(readyFile, update.availableUpdate)
+                }
+            }
+            else -> {
+                stopBrandArrowPulse()
+                binding.ivBrandLogo.visibility = View.VISIBLE
+                binding.layoutBrandUpdateSlot.visibility = View.GONE
+                binding.progressBrandUpdate.visibility = View.GONE
+                binding.pillBrandHeader.setBackgroundResource(R.drawable.bg_luxury_glass_pill)
+                binding.pillBrandHeader.isClickable = false
+                binding.pillBrandHeader.isFocusable = false
+                binding.pillBrandHeader.setOnTouchListener(null)
+                binding.pillBrandHeader.setOnClickListener(null)
+            }
+        }
+    }
+
+    private fun startBrandArrowPulse() {
+        if (brandArrowPulseAnimator?.isRunning == true) return
+        stopBrandArrowPulse()
+        brandArrowPulseAnimator = ObjectAnimator.ofFloat(
+            binding.ivBrandUpdateArrow,
+            View.ALPHA,
+            1f,
+            0.35f
+        ).apply {
+            repeatCount = ValueAnimator.INFINITE
+            repeatMode = ValueAnimator.REVERSE
+            duration = 700L
+            start()
+        }
+    }
+
+    private fun stopBrandArrowPulse() {
+        brandArrowPulseAnimator?.cancel()
+        brandArrowPulseAnimator = null
+        binding.ivBrandUpdateArrow.alpha = 1f
+    }
+
+    private fun showInstallUpdateDialog(apkFile: File, updateInfo: AppUpdateInfo?) {
+        installUpdateDialog?.dismiss()
+
+        val dialogBinding = DialogInstallUpdateBinding.inflate(layoutInflater)
+        val dialog = BottomSheetDialog(this)
+        dialog.setContentView(dialogBinding.root)
+        dialog.setOnShowListener {
+            dialog.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)
+                ?.setBackgroundColor(Color.TRANSPARENT)
+        }
+        dialog.setOnDismissListener {
+            if (installUpdateDialog === dialog) {
+                installUpdateDialog = null
+            }
+        }
+        installUpdateDialog = dialog
+
+        val versionName = updateInfo?.versionName ?: BuildConfig.VERSION_NAME
+        dialogBinding.tvInstallPromptVersion.text =
+            getString(R.string.update_pill_version, versionName)
+        dialogBinding.tvInstallPromptMessage.text =
+            getString(R.string.update_install_prompt_message, versionName)
+
+        val notes = updateInfo?.releaseNotes?.trim().orEmpty()
+        if (notes.isNotBlank()) {
+            dialogBinding.tvInstallPromptNotes.visibility = View.VISIBLE
+            dialogBinding.tvInstallPromptNotes.text = notes
+        } else {
+            dialogBinding.tvInstallPromptNotes.visibility = View.GONE
+        }
+
+        attachLuxuryPressFeedback(dialogBinding.btnInstallLater)
+        attachLuxuryPressFeedback(dialogBinding.btnInstallNow)
+
+        dialogBinding.btnInstallLater.setOnClickListener {
+            dialog.dismiss()
+        }
+        dialogBinding.btnInstallNow.setOnClickListener {
+            dialog.dismiss()
+            installDownloadedApk(apkFile)
+        }
+
+        dialog.show()
+    }
+
+    private fun installDownloadedApk(apkFile: File) {
+        if (!apkUpdateManager.canRequestPackageInstalls()) {
+            pendingInstallApk = apkFile
+            MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.update_btn_install)
+                .setMessage(R.string.update_install_perm_msg)
+                .setPositiveButton(R.string.perm_open_settings) { _, _ ->
+                    installPermissionLauncher.launch(apkUpdateManager.buildInstallPermissionIntent())
+                }
+                .setNegativeButton(android.R.string.cancel, null)
+                .show()
+            return
+        }
+        launchApkInstaller(apkFile)
+    }
+
+    private fun launchApkInstaller(apkFile: File) {
+        runCatching {
+            startActivity(apkUpdateManager.buildInstallApkIntent(apkFile))
+        }.onFailure {
+            Toast.makeText(this, R.string.update_check_failed, Toast.LENGTH_SHORT).show()
+        }
+    }
+
     private fun refreshSettingsAttentionDot() {
         val missingPerms = !PermissionHelper.checkStatus(this).allGranted
-        val hasUpdate = viewModel.updateState.value.availableUpdate != null
         binding.dotSettingsAttention.visibility =
-            if (missingPerms || hasUpdate) View.VISIBLE else View.GONE
+            if (missingPerms) View.VISIBLE else View.GONE
     }
 
     private fun openSettings(scrollToUpdates: Boolean = false) {

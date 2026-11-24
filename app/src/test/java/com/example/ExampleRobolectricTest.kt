@@ -359,4 +359,35 @@ class ExampleRobolectricTest {
             db.close()
         }
     }
+
+    @Test
+    fun `apkUpdateManager findExistingDownloadedApk validates versioned filename and size`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val manager = ApkUpdateManager(
+            context = context,
+            gitHubApi = com.example.data.remote.GitHubReleaseApiService.create()
+        )
+        val updateInfo = com.example.util.AppUpdateInfo(
+            versionName = "9.9.9",
+            tagName = "v9.9.9",
+            releaseNotes = "Release notes",
+            releasePageUrl = "https://example.com",
+            apkAsset = com.example.data.remote.dto.GitHubAssetDto(
+                name = "PinWake-v9.9.9.apk",
+                browserDownloadUrl = "https://example.com/PinWake-v9.9.9.apk",
+                size = 5L
+            )
+        )
+        val updatesDir = java.io.File(context.cacheDir, "updates").apply { mkdirs() }
+        val apkFile = java.io.File(updatesDir, "PinWake-v9.9.9.apk")
+        try {
+            apkFile.writeText("123")
+            assertEquals(null, manager.findExistingDownloadedApk(updateInfo))
+
+            apkFile.writeText("12345")
+            assertEquals(apkFile, manager.findExistingDownloadedApk(updateInfo))
+        } finally {
+            apkFile.delete()
+        }
+    }
 }

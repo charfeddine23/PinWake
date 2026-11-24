@@ -120,6 +120,12 @@
     <string name="update_check_failed">Could not check updates. Tap GitHub to view releases.</string>
     <string name="update_install_perm_msg">Allow Pin Wake to install app updates in Android settings to finish updating.</string>
     <string name="cd_check_updates">Check for app updates on GitHub</string>
+    <string name="cd_update_downloading_indicator">Downloading Pin Wake update</string>
+    <string name="cd_update_ready_arrow">Update ready — tap to install</string>
+    <string name="update_install_prompt_title">Install App Update?</string>
+    <string name="update_install_prompt_message">Pin Wake v%1$s has finished downloading. Would you like to install it now?</string>
+    <string name="update_btn_maybe_later">Maybe Later</string>
+    <string name="update_btn_install_now">Install</string>
 
     <!-- Google-Style Free Vector Map Layers (OpenFreeMap) -->
     <string name="cd_map_layers">Map style and 3D layers</string>

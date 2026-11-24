@@ -94,26 +94,66 @@
         <LinearLayout
             android:id="@+id/pillBrandHeader"
             android:layout_width="wrap_content"
-            android:layout_height="46dp"
+            android:layout_height="48dp"
             android:background="@drawable/bg_luxury_glass_pill"
+            android:clickable="false"
             android:elevation="6dp"
+            android:focusable="false"
             android:gravity="center_vertical"
             android:orientation="horizontal"
             android:paddingStart="6dp"
             android:paddingEnd="15dp">
 
-            <ImageView
-                android:layout_width="32dp"
-                android:layout_height="32dp"
-                android:background="@drawable/bg_icon_circle_dark"
-                android:contentDescription="@string/app_name"
-                android:padding="6dp"
-                android:src="@drawable/ic_pin_wake" />
+            <FrameLayout
+                android:id="@+id/brandLeadingSlot"
+                android:layout_width="36dp"
+                android:layout_height="36dp">
+
+                <ImageView
+                    android:id="@+id/ivBrandLogo"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:layout_gravity="center"
+                    android:background="@drawable/bg_icon_circle_dark"
+                    android:contentDescription="@string/app_name"
+                    android:padding="6dp"
+                    android:src="@drawable/ic_pin_wake" />
+
+                <FrameLayout
+                    android:id="@+id/layoutBrandUpdateSlot"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:layout_gravity="center"
+                    android:visibility="gone">
+
+                    <ImageView
+                        android:id="@+id/ivBrandUpdateArrow"
+                        android:layout_width="32dp"
+                        android:layout_height="32dp"
+                        android:layout_gravity="center"
+                        android:background="@drawable/bg_icon_circle_dark"
+                        android:contentDescription="@string/cd_update_ready_arrow"
+                        android:padding="7dp"
+                        android:src="@drawable/ic_download_arrow"
+                        app:tint="@color/accent_cyan_glow" />
+
+                    <ProgressBar
+                        android:id="@+id/progressBrandUpdate"
+                        style="?android:attr/progressBarStyleSmall"
+                        android:layout_width="36dp"
+                        android:layout_height="36dp"
+                        android:layout_gravity="center"
+                        android:indeterminate="true"
+                        android:indeterminateTint="@color/accent_cyan"
+                        android:visibility="gone" />
+                </FrameLayout>
+            </FrameLayout>
 
             <TextView
+                android:id="@+id/tvBrandName"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="9dp"
+                android:layout_marginStart="8dp"
                 android:letterSpacing="0.01"
                 android:text="@string/app_name"
                 android:textAppearance="@style/TextAppearance.PinWake.Title"
@@ -177,6 +217,7 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:background="@drawable/bg_liquid_glass_sheet"
+        android:clipChildren="false"
         android:clipToPadding="false"
         android:elevation="8dp"
         android:fillViewport="true"
@@ -192,6 +233,8 @@
             android:id="@+id/contentContainer"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:clipChildren="false"
+            android:clipToPadding="false"
             android:orientation="vertical"
             android:paddingHorizontal="20dp"
             android:paddingTop="2dp">
@@ -560,6 +603,7 @@
                 android:clipChildren="false"
                 android:clipToPadding="false"
                 android:nestedScrollingEnabled="false"
+                android:paddingBottom="8dp"
                 tools:itemCount="2"
                 tools:listitem="@layout/item_alarm_card" />
 
@@ -668,12 +712,13 @@
         android:layout_marginBottom="20dp"
         android:background="@drawable/bg_luxury_cta_pill"
         android:clickable="true"
-        android:elevation="12dp"
+        android:elevation="14dp"
         android:focusable="true"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingStart="10dp"
-        android:paddingEnd="18dp">
+        android:paddingEnd="18dp"
+        android:translationZ="2dp">
 
         <ImageView
             android:layout_width="36dp"
