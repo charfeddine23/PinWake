@@ -205,4 +205,39 @@
     <string name="map_search_failed">البحث غير متاح حالياً. تأكد من الاتصال وحاول مجدداً.</string>
     <string name="perm_location_needed_to_arm">يرجى منح صلاحية الموقع أولاً لتفعيل مراقبة الوصول.</string>
     <string name="update_signature_invalid">تم حظر التحديث: توقيع الحزمة لا يطابق التطبيق الحالي.</string>
+
+    <!-- تخصيص نغمة لكل منبه -->
+    <string name="map_ringtone_label">نغمة المنبه</string>
+    <string name="ringtone_default_alarm">نغمة المنبه الافتراضية</string>
+    <string name="ringtone_badge_format">♪ %1$s</string>
+    <string name="cd_pick_ringtone">اختيار نغمة المنبه</string>
+
+    <!-- طلب الـ GPS والتشغيل الإجباري -->
+    <string name="gps_enable_dialog_title">نظام الـ GPS مغلق</string>
+    <string name="gps_enable_dialog_message">يحتاج Pin Wake إلى تشغيل الـ GPS لتحديد موقعك وإيقاظك بدقة عند الوصول (يعمل حتى بدون إنترنت).</string>
+    <string name="gps_mandatory_dialog_title">الحماية الإجبارية للـ GPS</string>
+    <string name="gps_mandatory_dialog_message">لديك منبه وصول نشط. أبقِ الـ GPS مشتغلاً لضمان إيقاظك عند الوصول حتى بدون إنترنت.</string>
+    <string name="gps_turn_on_now">تشغيل الـ GPS الآن</string>
+    <string name="gps_disabled_banner_title">تم إغلاق الـ GPS — التتبع متوقف</string>
+    <string name="gps_disabled_banner_body">اضغط لإعادة تشغيل الـ GPS فوراً ومواصلة المراقبة.</string>
+    <string name="notif_channel_gps_watchdog_name">مراقب تشغيل الـ GPS الإجباري</string>
+    <string name="notif_channel_gps_watchdog_desc">تنبيه عاجل وفوري عند إغلاق الـ GPS أثناء تفعيل منبه الوصول.</string>
+    <string name="notif_gps_disabled_title">تم إيقاف الـ GPS!</string>
+    <string name="notif_gps_disabled_body">المنبهات النشطة لن ترن حتى تعيد تشغيل الـ GPS الآن.</string>
+    <string name="notif_action_enable_gps">تشغيل GPS</string>
+
+    <!-- التشغيل الإجباري والتنبيه في وضع الصمت -->
+    <string name="settings_section_enforcement">التشغيل الإجباري ووضع الصمت</string>
+    <string name="settings_enforcement_subtitle">إبقاء تتبع الـ GPS مشتغلاً إجبارياً وإطلاق التنبيه بصوت عالٍ حتى في وضع الصمت</string>
+    <string name="settings_force_gps_title">إبقاء الـ GPS والتتبع مشتغلاً إجبارياً</string>
+    <string name="settings_force_gps_subtitle">إعادة تشغيل المراقبة تلقائياً عند الإغلاق وتنبيه عاجل إذا أُطفئ الـ GPS</string>
+    <string name="settings_force_silent_title">التنبيه الإجباري حتى في وضع الصمت</string>
+    <string name="settings_force_silent_subtitle">رفع مستوى صوت المنبه تلقائياً وتجاوز وضع الصمت والاهتزاز وعدم الإزعاج</string>
+    <string name="perm_dnd_access">تجاوز وضع الصمت وعدم الإزعاج</string>
+
+    <!-- تحديد الموقع بالـ GPS بدون إنترنت -->
+    <string name="offline_gps_badge">GPS بدون إنترنت</string>
+    <string name="offline_gps_pin_title">نقطة GPS بدون إنترنت</string>
+    <string name="offline_gps_pin_address">إحداثيات GPS بدون إنترنت (%1$.4f, %2$.4f)</string>
+    <string name="offline_gps_waiting_satellite">جاري التقاط موقع GPS عبر الأقمار الصناعية…</string>
 </resources>

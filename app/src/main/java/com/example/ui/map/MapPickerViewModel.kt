@@ -31,7 +31,9 @@ data class MapPickerUiState(
     val isSearching: Boolean = false,
     val searchResults: List<NominatimPlaceDto> = emptyList(),
     val searchError: Boolean = false,
-    val selectedCategory: FavoriteCategory = FavoriteCategory.NONE
+    val selectedCategory: FavoriteCategory = FavoriteCategory.NONE,
+    val ringtoneUri: String? = null,
+    val ringtoneTitle: String? = null
 )
 
 @OptIn(FlowPreview::class)
@@ -104,7 +106,9 @@ class MapPickerViewModel(
                     radiusMeters = existing.radiusMeters,
                     resolvedAddress = existing.address,
                     suggestedTitle = existing.title,
-                    selectedCategory = existing.favoriteCategory
+                    selectedCategory = existing.favoriteCategory,
+                    ringtoneUri = existing.ringtoneUri,
+                    ringtoneTitle = existing.ringtoneTitle
                 )
             } else {
                 _uiState.value = _uiState.value.copy(
@@ -178,6 +182,13 @@ class MapPickerViewModel(
         _uiState.value = _uiState.value.copy(selectedCategory = category)
     }
 
+    fun updateRingtone(uri: String?, title: String?) {
+        _uiState.value = _uiState.value.copy(
+            ringtoneUri = uri,
+            ringtoneTitle = title
+        )
+    }
+
     fun saveAndActivateAlarm(
         title: String,
         fallbackAddress: String,
@@ -202,7 +213,9 @@ class MapPickerViewModel(
                     latitude = state.latitude,
                     longitude = state.longitude,
                     radiusMeters = state.radiusMeters,
-                    isActive = activateNow
+                    isActive = activateNow,
+                    ringtoneUri = state.ringtoneUri,
+                    ringtoneTitle = state.ringtoneTitle
                 )
             } else {
                 val entity = GeoAlarmEntity(
@@ -216,6 +229,8 @@ class MapPickerViewModel(
                     isFavorite = category != FavoriteCategory.NONE,
                     favoriteCategory = category,
                     vibrateEnabled = existing?.vibrateEnabled ?: true,
+                    ringtoneUri = state.ringtoneUri,
+                    ringtoneTitle = state.ringtoneTitle,
                     lastDistanceMeters = null,
                     snoozedUntilMs = 0L,
                     createdAt = existing?.createdAt ?: System.currentTimeMillis(),

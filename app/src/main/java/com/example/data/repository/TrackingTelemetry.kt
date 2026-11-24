@@ -31,7 +31,11 @@ data class TrackingTelemetry(
     val lastFixAccuracyMeters: Float? = null,
     val lastLatitude: Double? = null,
     val lastLongitude: Double? = null,
-    val lastUpdatedAtMs: Long = 0L
+    val lastUpdatedAtMs: Long = 0L,
+    val isGpsEnabled: Boolean = true,
+    val isGpsDisabledWarning: Boolean = false,
+    val isOfflineMode: Boolean = false,
+    val locationProvider: String? = null
 )
 
 class TrackingStateManager {

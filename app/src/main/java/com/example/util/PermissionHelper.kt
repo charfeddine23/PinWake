@@ -16,14 +16,16 @@ data class PermissionStatus(
     val hasBackgroundLocation: Boolean,
     val hasNotifications: Boolean,
     val hasFullScreenIntent: Boolean,
-    val isBatteryUnrestricted: Boolean
+    val isBatteryUnrestricted: Boolean,
+    val hasDndBypassAccess: Boolean
 ) {
     val allGranted: Boolean
         get() = hasFineLocation &&
             hasBackgroundLocation &&
             hasNotifications &&
             hasFullScreenIntent &&
-            isBatteryUnrestricted
+            isBatteryUnrestricted &&
+            hasDndBypassAccess
 }
 
 object PermissionHelper {
@@ -64,22 +66,24 @@ object PermissionHelper {
             true
         }
 
+        val notificationManager = context.getSystemService(NotificationManager::class.java)
         val fullScreen = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            val nm = context.getSystemService(NotificationManager::class.java)
-            nm?.canUseFullScreenIntent() ?: true
+            notificationManager?.canUseFullScreenIntent() ?: true
         } else {
             true
         }
 
         val powerManager = context.getSystemService(PowerManager::class.java)
         val batteryUnrestricted = powerManager?.isIgnoringBatteryOptimizations(context.packageName) ?: true
+        val dndBypass = notificationManager?.isNotificationPolicyAccessGranted ?: false
 
         return PermissionStatus(
             hasFineLocation = fine,
             hasBackgroundLocation = background,
             hasNotifications = notifications,
             hasFullScreenIntent = fullScreen,
-            isBatteryUnrestricted = batteryUnrestricted
+            isBatteryUnrestricted = batteryUnrestricted,
+            hasDndBypassAccess = dndBypass
         )
     }
 
@@ -103,5 +107,9 @@ object PermissionHelper {
         return Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
             data = Uri.fromParts("package", context.packageName, null)
         }
+    }
+
+    fun buildNotificationPolicySettingsIntent(): Intent {
+        return Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)
     }
 }

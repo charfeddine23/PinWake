@@ -10,6 +10,7 @@ import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.media.MediaPlayer
 import android.media.RingtoneManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.VibrationAttributes
@@ -30,10 +31,12 @@ import com.example.R
 import com.example.databinding.ActivityAlarmRingingBinding
 import com.example.service.PinWakeService
 import com.example.util.DistanceFormatter
+import com.example.util.PreAlertPreferences
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 class AlarmRingingActivity : AppCompatActivity() {
 
@@ -41,6 +44,7 @@ class AlarmRingingActivity : AppCompatActivity() {
     private var mediaPlayer: MediaPlayer? = null
     private var audioManager: AudioManager? = null
     private var audioFocusRequest: AudioFocusRequest? = null
+    private var savedAlarmStreamVolume: Int? = null
     private var vibrator: Vibrator? = null
     private var crescendoJob: Job? = null
 
@@ -104,6 +108,7 @@ class AlarmRingingActivity : AppCompatActivity() {
         val address = alarmIntent.getStringExtra(PinWakeService.EXTRA_ALARM_ADDRESS) ?: ""
         val radius = alarmIntent.getIntExtra(PinWakeService.EXTRA_ALARM_RADIUS, 500)
         val vibrateEnabled = alarmIntent.getBooleanExtra(PinWakeService.EXTRA_ALARM_VIBRATE, true)
+        val customRingtoneUri = alarmIntent.getStringExtra(PinWakeService.EXTRA_ALARM_RINGTONE_URI)
         currentDistanceMeters = alarmIntent.getFloatExtra(PinWakeService.EXTRA_DISTANCE_METERS, 0f)
 
         binding.tvAlarmTitle.text = title
@@ -111,8 +116,8 @@ class AlarmRingingActivity : AppCompatActivity() {
         binding.tvAlarmSubtitle.text = getString(R.string.alarm_ringing_subtitle, radius)
         binding.tvDistanceRemaining.text = DistanceFormatter.formatCompactDistance(currentDistanceMeters)
 
-        startAlarmAudioWithCrescendo()
-        if (vibrateEnabled) {
+        startAlarmAudioWithCrescendo(customRingtoneUri)
+        if (vibrateEnabled || PreAlertPreferences.isForceSilentOverrideEnabled(this)) {
             startAlarmVibration()
         }
     }
@@ -152,8 +157,15 @@ class AlarmRingingActivity : AppCompatActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     }
 
-    private fun startAlarmAudioWithCrescendo() {
+    private fun startAlarmAudioWithCrescendo(customRingtoneUriRaw: String?) {
+        val parsedCustomUri = customRingtoneUriRaw
+            ?.takeIf {
+                it.startsWith("content://") || it.startsWith("android.resource://")
+            }
+            ?.let { runCatching { Uri.parse(it) }.getOrNull() }
+
         val candidateUris = listOfNotNull(
+            parsedCustomUri,
             RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM),
             RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE),
             RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
@@ -167,6 +179,22 @@ class AlarmRingingActivity : AppCompatActivity() {
 
         val manager = getSystemService(AudioManager::class.java)
         audioManager = manager
+
+        // Forced alert: boost alarm stream even when device ringer is in Silent / Vibrate / DND
+        if (manager != null && PreAlertPreferences.isForceSilentOverrideEnabled(this)) {
+            runCatching {
+                val maxVol = manager.getStreamMaxVolume(AudioManager.STREAM_ALARM)
+                val currentVol = manager.getStreamVolume(AudioManager.STREAM_ALARM)
+                val targetVol = (maxVol * 0.90f).roundToInt().coerceAtLeast(1)
+                if (currentVol < targetVol) {
+                    if (savedAlarmStreamVolume == null) {
+                        savedAlarmStreamVolume = currentVol
+                    }
+                    manager.setStreamVolume(AudioManager.STREAM_ALARM, targetVol, 0)
+                }
+            }
+        }
+
         val focusReq = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE)
             .setAudioAttributes(alarmAttrs)
             .setAcceptsDelayedFocusGain(false)
@@ -285,6 +313,10 @@ class AlarmRingingActivity : AppCompatActivity() {
             }
         }
         mediaPlayer = null
+        savedAlarmStreamVolume?.let { prevVol ->
+            savedAlarmStreamVolume = null
+            runCatching { audioManager?.setStreamVolume(AudioManager.STREAM_ALARM, prevVol, 0) }
+        }
         audioFocusRequest?.let { req ->
             runCatching { audioManager?.abandonAudioFocusRequest(req) }
         }

@@ -510,4 +510,130 @@ class ExampleRobolectricTest {
             db.close()
         }
     }
+
+    @Test
+    fun `custom ringtone persists and backupManager validates ringtone uri schemes`() = kotlinx.coroutines.runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val validUri = "content://media/internal/audio/media/42"
+        val alarm = com.example.data.local.entity.GeoAlarmEntity(
+            title = "Morning Commute",
+            address = "Downtown",
+            latitude = 36.7538,
+            longitude = 3.0588,
+            radiusMeters = 500,
+            isActive = true,
+            ringtoneUri = validUri,
+            ringtoneTitle = "Helios"
+        )
+
+        val json = com.example.util.BackupManager.serializeToJson(listOf(alarm), preAlertMeters = 300)
+        val parsed = com.example.util.BackupManager.parseFromJson(json).getOrThrow()
+        assertEquals(validUri, parsed.alarms[0].ringtoneUri)
+        assertEquals("Helios", parsed.alarms[0].ringtoneTitle)
+
+        // Unsafe file:// URI or oversized URI must be stripped during import parsing
+        val unsafeJson = """
+            {
+              "schemaVersion": 1,
+              "alarms": [
+                {
+                  "title": "Unsafe",
+                  "address": "Test",
+                  "latitude": 36.75,
+                  "longitude": 3.05,
+                  "ringtoneUri": "file:///sdcard/evil.mp3",
+                  "ringtoneTitle": "Evil"
+                }
+              ]
+            }
+        """.trimIndent()
+        val unsafeParsed = com.example.util.BackupManager.parseFromJson(unsafeJson).getOrThrow()
+        assertEquals(null, unsafeParsed.alarms[0].ringtoneUri)
+        assertEquals("Evil", unsafeParsed.alarms[0].ringtoneTitle)
+
+        val db = androidx.room.Room.inMemoryDatabaseBuilder(
+            context,
+            com.example.data.local.AppDatabase::class.java
+        ).allowMainThreadQueries().build()
+        try {
+            val id = db.geoAlarmDao().insertAlarm(alarm)
+            val saved = db.geoAlarmDao().getAlarmById(id)
+            assertEquals(validUri, saved?.ringtoneUri)
+            assertEquals("Helios", saved?.ringtoneTitle)
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
+    fun `forced gps keep-on and silent override preferences default true and persist`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        assertTrue(com.example.util.PreAlertPreferences.isForcedGpsKeepOnEnabled(context))
+        assertTrue(com.example.util.PreAlertPreferences.isForceSilentOverrideEnabled(context))
+
+        com.example.util.PreAlertPreferences.setForcedGpsKeepOnEnabled(context, false)
+        com.example.util.PreAlertPreferences.setForceSilentOverrideEnabled(context, false)
+
+        assertFalse(com.example.util.PreAlertPreferences.isForcedGpsKeepOnEnabled(context))
+        assertFalse(com.example.util.PreAlertPreferences.isForceSilentOverrideEnabled(context))
+
+        com.example.util.PreAlertPreferences.setForcedGpsKeepOnEnabled(context, true)
+        com.example.util.PreAlertPreferences.setForceSilentOverrideEnabled(context, true)
+
+        assertTrue(com.example.util.PreAlertPreferences.isForcedGpsKeepOnEnabled(context))
+        assertTrue(com.example.util.PreAlertPreferences.isForceSilentOverrideEnabled(context))
+    }
+
+    @Test
+    fun `migration 1 to 2 adds ringtone columns to geo_alarms cleanly`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val dbName = "migration-test-${System.nanoTime()}.db"
+        val sqliteHelper = androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory().create(
+            androidx.sqlite.db.SupportSQLiteOpenHelper.Configuration.builder(context)
+                .name(dbName)
+                .callback(object : androidx.sqlite.db.SupportSQLiteOpenHelper.Callback(1) {
+                    override fun onCreate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                        db.execSQL(
+                            """
+                            CREATE TABLE IF NOT EXISTS geo_alarms (
+                                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                                title TEXT NOT NULL,
+                                address TEXT NOT NULL,
+                                latitude REAL NOT NULL,
+                                longitude REAL NOT NULL,
+                                radiusMeters INTEGER NOT NULL,
+                                isActive INTEGER NOT NULL,
+                                isFavorite INTEGER NOT NULL,
+                                favoriteCategory TEXT NOT NULL,
+                                vibrateEnabled INTEGER NOT NULL,
+                                lastDistanceMeters REAL,
+                                snoozedUntilMs INTEGER NOT NULL,
+                                createdAt INTEGER NOT NULL,
+                                updatedAt INTEGER NOT NULL
+                            )
+                            """.trimIndent()
+                        )
+                    }
+
+                    override fun onUpgrade(db: androidx.sqlite.db.SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) {}
+                })
+                .build()
+        )
+        try {
+            val db = sqliteHelper.writableDatabase
+            com.example.data.local.AppDatabase.MIGRATION_1_2.migrate(db)
+            db.execSQL(
+                "INSERT INTO geo_alarms (title, address, latitude, longitude, radiusMeters, isActive, isFavorite, favoriteCategory, vibrateEnabled, snoozedUntilMs, createdAt, updatedAt, ringtoneUri, ringtoneTitle) " +
+                    "VALUES ('Work', 'Center', 36.75, 3.05, 500, 1, 1, 'WORK', 1, 0, 1000, 1000, 'content://ring/1', 'Chime')"
+            )
+            db.query("SELECT ringtoneUri, ringtoneTitle FROM geo_alarms WHERE title='Work'").use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals("content://ring/1", cursor.getString(0))
+                assertEquals("Chime", cursor.getString(1))
+            }
+        } finally {
+            sqliteHelper.close()
+            context.deleteDatabase(dbName)
+        }
+    }
 }

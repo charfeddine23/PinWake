@@ -32,6 +32,7 @@ import com.example.ui.dashboard.DashboardViewModel
 import com.example.ui.dashboard.UpdateCheckEvent
 import com.example.ui.dashboard.UpdateUiState
 import com.example.util.ApkUpdateManager
+import com.example.util.GpsEnforcementHelper
 import com.example.util.LanguageManager
 import com.example.util.OpenFreeMapStyle
 import com.example.util.OpenFreeMapStyles
@@ -61,6 +62,7 @@ class SettingsActivity : AppCompatActivity() {
     private var pendingInstallApk: File? = null
     private var pendingExportJson: String? = null
     private var isSyncing3dSwitch = false
+    private var isSyncingEnforcementSwitches = false
 
     private val fineLocationLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -123,6 +125,7 @@ class SettingsActivity : AppCompatActivity() {
         syncLanguageUi()
         syncMapStyleUi()
         syncPreAlertUi()
+        syncEnforcementSwitchesUi()
         refreshPermissionsUi()
         binding.tvSettingsCurrentVersion.text =
             getString(R.string.settings_current_version, BuildConfig.VERSION_NAME)
@@ -140,6 +143,7 @@ class SettingsActivity : AppCompatActivity() {
         refreshPermissionsUi()
         syncLanguageUi()
         syncMapStyleUi()
+        syncEnforcementSwitchesUi()
         syncTrackingServiceIfPossible()
     }
 
@@ -232,6 +236,44 @@ class SettingsActivity : AppCompatActivity() {
         binding.optPreAlert500.setOnClickListener { updatePreAlertMeters(PreAlertPreferences.PRE_ALERT_500M) }
         binding.optPreAlert1000.setOnClickListener { updatePreAlertMeters(PreAlertPreferences.PRE_ALERT_1000M) }
 
+        // Forced GPS Keep-On & Silent/DND Override
+        binding.rowForceGpsKeepOn.setOnClickListener {
+            binding.switchForceGpsKeepOn.toggle()
+        }
+        binding.switchForceGpsKeepOn.setOnCheckedChangeListener { _, isChecked ->
+            if (isSyncingEnforcementSwitches) return@setOnCheckedChangeListener
+            PreAlertPreferences.setForcedGpsKeepOnEnabled(this, isChecked)
+            if (isChecked) {
+                syncTrackingServiceIfPossible()
+                if (!GpsEnforcementHelper.isGpsProviderEnabled(this)) {
+                    GpsEnforcementHelper.showEnableGpsDialog(
+                        context = this,
+                        mandatoryForActiveTracking = viewModel.uiState.value.activeCount > 0
+                    )
+                }
+            }
+        }
+
+        binding.rowForceSilentOverride.setOnClickListener {
+            binding.switchForceSilentOverride.toggle()
+        }
+        binding.switchForceSilentOverride.setOnCheckedChangeListener { _, isChecked ->
+            if (isSyncingEnforcementSwitches) return@setOnCheckedChangeListener
+            PreAlertPreferences.setForceSilentOverrideEnabled(this, isChecked)
+            if (isChecked && !PermissionHelper.checkStatus(this).hasDndBypassAccess) {
+                MaterialAlertDialogBuilder(this)
+                    .setTitle(R.string.perm_dnd_access)
+                    .setMessage(R.string.settings_force_silent_subtitle)
+                    .setPositiveButton(R.string.perm_open_settings) { _, _ ->
+                        runCatching {
+                            startActivity(PermissionHelper.buildNotificationPolicySettingsIntent())
+                        }
+                    }
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show()
+            }
+        }
+
         // Background Permissions
         binding.btnPermFineLocation.setOnClickListener { requestFineLocation() }
         binding.btnPermBackgroundLocation.setOnClickListener { requestBackgroundLocation() }
@@ -241,6 +283,9 @@ class SettingsActivity : AppCompatActivity() {
         }
         binding.btnPermBattery.setOnClickListener {
             runCatching { startActivity(PermissionHelper.buildBatteryOptimizationIntent(this)) }
+        }
+        binding.btnPermDndAccess.setOnClickListener {
+            runCatching { startActivity(PermissionHelper.buildNotificationPolicySettingsIntent()) }
         }
         binding.btnOpenAndroidAppSettings.setOnClickListener {
             runCatching { startActivity(PermissionHelper.buildAppSettingsIntent(this)) }
@@ -377,6 +422,13 @@ class SettingsActivity : AppCompatActivity() {
         applySelectionPillStyle(binding.optPreAlert1000, selected == PreAlertPreferences.PRE_ALERT_1000M)
     }
 
+    private fun syncEnforcementSwitchesUi() {
+        isSyncingEnforcementSwitches = true
+        binding.switchForceGpsKeepOn.isChecked = PreAlertPreferences.isForcedGpsKeepOnEnabled(this)
+        binding.switchForceSilentOverride.isChecked = PreAlertPreferences.isForceSilentOverrideEnabled(this)
+        isSyncingEnforcementSwitches = false
+    }
+
     private fun writeBackupToUri(uri: Uri, json: String) {
         lifecycleScope.launch {
             val success = withContext(Dispatchers.IO) {
@@ -484,7 +536,8 @@ class SettingsActivity : AppCompatActivity() {
             status.hasBackgroundLocation,
             status.hasNotifications,
             status.hasFullScreenIntent,
-            status.isBatteryUnrestricted
+            status.isBatteryUnrestricted,
+            status.hasDndBypassAccess
         ).count { !it }
 
         if (missingCount == 0) {
@@ -507,6 +560,7 @@ class SettingsActivity : AppCompatActivity() {
         updatePermissionPill(binding.btnPermNotifications, status.hasNotifications)
         updatePermissionPill(binding.btnPermFullScreen, status.hasFullScreenIntent)
         updatePermissionPill(binding.btnPermBattery, status.isBatteryUnrestricted)
+        updatePermissionPill(binding.btnPermDndAccess, status.hasDndBypassAccess)
     }
 
     private fun updatePermissionPill(button: TextView, granted: Boolean) {

@@ -23,6 +23,8 @@ data class GeoAlarmEntity(
     val isFavorite: Boolean = false,
     val favoriteCategory: FavoriteCategory = FavoriteCategory.NONE,
     val vibrateEnabled: Boolean = true,
+    val ringtoneUri: String? = null,
+    val ringtoneTitle: String? = null,
     val lastDistanceMeters: Float? = null,
     val snoozedUntilMs: Long = 0L,
     val createdAt: Long = System.currentTimeMillis(),

@@ -45,6 +45,8 @@ object BackupManager {
                         put("isFavorite", alarm.isFavorite)
                         put("favoriteCategory", alarm.favoriteCategory.name)
                         put("vibrateEnabled", alarm.vibrateEnabled)
+                        alarm.ringtoneUri?.takeIf { isValidRingtoneUri(it) }?.let { put("ringtoneUri", it) }
+                        alarm.ringtoneTitle?.takeIf { it.isNotBlank() }?.let { put("ringtoneTitle", it) }
                         put("createdAt", alarm.createdAt)
                         put("updatedAt", alarm.updatedAt)
                     }
@@ -53,6 +55,11 @@ object BackupManager {
             put("alarms", array)
         }
         return root.toString(2)
+    }
+
+    private fun isValidRingtoneUri(raw: String): Boolean {
+        if (raw.length > 512) return false
+        return raw.startsWith("content://") || raw.startsWith("android.resource://")
     }
 
     fun parseFromJson(rawJson: String): Result<BackupPayload> = runCatching {
@@ -95,6 +102,12 @@ object BackupManager {
             val isFavorite = obj.optBoolean("isFavorite", category != FavoriteCategory.NONE) ||
                 category != FavoriteCategory.NONE
 
+            val rawRingtoneUri = obj.optString("ringtoneUri", "").trim()
+                .takeIf { it.isNotBlank() && isValidRingtoneUri(it) }
+            val rawRingtoneTitle = NominatimPlaceDto.stripUnsupportedGlyphs(
+                obj.optString("ringtoneTitle", "")
+            ).take(80).trim().takeIf { it.isNotBlank() }
+
             parsed.add(
                 GeoAlarmEntity(
                     id = 0L,
@@ -107,6 +120,8 @@ object BackupManager {
                     isFavorite = isFavorite,
                     favoriteCategory = category,
                     vibrateEnabled = obj.optBoolean("vibrateEnabled", true),
+                    ringtoneUri = rawRingtoneUri,
+                    ringtoneTitle = rawRingtoneTitle,
                     lastDistanceMeters = null,
                     snoozedUntilMs = 0L,
                     createdAt = obj.optLong("createdAt", now),

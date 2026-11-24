@@ -122,6 +122,14 @@ class AlarmAdapter(
 
             binding.tvRadiusBadge.text = DistanceFormatter.formatRadiusBadge(ctx, item.radiusMeters)
 
+            val toneTitle = item.ringtoneTitle?.trim()
+            if (!toneTitle.isNullOrBlank()) {
+                binding.tvRingtoneBadge.visibility = View.VISIBLE
+                binding.tvRingtoneBadge.text = ctx.getString(R.string.ringtone_badge_format, toneTitle)
+            } else {
+                binding.tvRingtoneBadge.visibility = View.GONE
+            }
+
             if (item.isActive) {
                 val dist = item.lastDistanceMeters
                 val insideZone = dist != null && dist <= item.radiusMeters

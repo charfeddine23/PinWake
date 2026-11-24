@@ -162,6 +162,24 @@
             android:textColor="@color/text_secondary"
             android:textSize="11sp"
             tools:text="500 m radius" />
+
+        <TextView
+            android:id="@+id/tvRingtoneBadge"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:background="@drawable/bg_badge_cyan"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:maxWidth="136dp"
+            android:paddingHorizontal="10dp"
+            android:paddingVertical="5dp"
+            android:textAppearance="@style/TextAppearance.PinWake.Mono"
+            android:textColor="@color/accent_cyan_glow"
+            android:textSize="10sp"
+            android:visibility="gone"
+            tools:text="♪ Radar"
+            tools:visibility="visible" />
     </LinearLayout>
 
     <!-- Row 3: Symmetrical Non-Overlapping Action Dock (All >= 48dp Touch Targets) -->

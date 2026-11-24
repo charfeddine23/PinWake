@@ -4,7 +4,10 @@ import android.Manifest
 import android.animation.ObjectAnimator
 import android.animation.ValueAnimator
 import android.annotation.SuppressLint
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.PointF
@@ -58,12 +61,14 @@ import com.example.ui.settings.SettingsActivity
 import com.example.util.ApkUpdateManager
 import com.example.util.AppUpdateInfo
 import com.example.util.DistanceFormatter
+import com.example.util.GpsEnforcementHelper
 import com.example.util.LanguageManager
 import com.example.util.MapLinkParser
 import com.example.util.MapStyleHelper
 import com.example.util.OpenFreeMapStyle
 import com.example.util.OpenFreeMapStyles
 import com.example.util.PermissionHelper
+import com.example.util.PreAlertPreferences
 import com.example.util.SafeMapLocationEngine
 import com.example.util.ShareTripHelper
 import kotlinx.coroutines.launch
@@ -114,6 +119,17 @@ class MainActivity : AppCompatActivity() {
     private var installUpdateDialog: BottomSheetDialog? = null
     private var brandArrowPulseAnimator: ObjectAnimator? = null
     private var pendingInstallApk: File? = null
+    private var promptedGpsThisSession = false
+    private var isGpsDialogShowing = false
+    private var providersReceiverRegistered = false
+
+    private val providersChangedReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == LocationManager.PROVIDERS_CHANGED_ACTION) {
+                renderTelemetryBanner(viewModel.uiState.value)
+            }
+        }
+    }
 
     private val apkUpdateManager: ApkUpdateManager by lazy {
         (application as PinWakeApplication).container.apkUpdateManager
@@ -193,8 +209,19 @@ class MainActivity : AppCompatActivity() {
         setupClicks()
         observeDashboard()
 
+        if (!providersReceiverRegistered) {
+            ContextCompat.registerReceiver(
+                this,
+                providersChangedReceiver,
+                IntentFilter(LocationManager.PROVIDERS_CHANGED_ACTION),
+                ContextCompat.RECEIVER_EXPORTED
+            )
+            providersReceiverRegistered = true
+        }
+
         if (savedInstanceState == null) {
             handleIncomingShareIntent(intent)
+            maybeHandlePromptEnableGpsIntent(intent)
         }
     }
 
@@ -202,6 +229,7 @@ class MainActivity : AppCompatActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         handleIncomingShareIntent(intent)
+        maybeHandlePromptEnableGpsIntent(intent)
     }
 
     private fun setupBottomSheet(initialHalfExpanded: Boolean) {
@@ -260,6 +288,8 @@ class MainActivity : AppCompatActivity() {
         binding.dashboardMapView.onResume()
         refreshSettingsAttentionDot()
         syncTrackingServiceIfPossible()
+        renderTelemetryBanner(viewModel.uiState.value)
+        checkGpsOnResume()
 
         val savedStyle = OpenFreeMapStyles.getSavedStyle(this)
         val saved3d = OpenFreeMapStyles.is3dBuildingsEnabled(this)
@@ -315,6 +345,10 @@ class MainActivity : AppCompatActivity() {
         activeSingleFixListener = null
         runCatching {
             heroMap?.locationComponent?.takeIf { it.isLocationComponentActivated }?.isLocationComponentEnabled = false
+        }
+        if (providersReceiverRegistered) {
+            runCatching { unregisterReceiver(providersChangedReceiver) }
+            providersReceiverRegistered = false
         }
         binding.dashboardMapView.onDestroy()
         super.onDestroy()
@@ -739,14 +773,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         if (hasFineOrCoarseLocation()) {
-            val lm = getSystemService(LocationManager::class.java)
-            val gps = runCatching { lm?.getLastKnownLocation(LocationManager.GPS_PROVIDER) }.getOrNull()
-            val net = runCatching { lm?.getLastKnownLocation(LocationManager.NETWORK_PROVIDER) }.getOrNull()
-            val best = when {
-                gps != null && net != null -> if (gps.time >= net.time) gps else net
-                gps != null -> gps
-                else -> net
-            }
+            val best = GpsEnforcementHelper.getBestLocation(this)
             if (best != null) {
                 val modeTag = if (isFullMap) "full" else "hero"
                 val camKey = "loc:$modeTag:${best.latitude}:${best.longitude}"
@@ -822,6 +849,9 @@ class MainActivity : AppCompatActivity() {
                 viewModel.setAlarmActive(alarm, active) { hasActive ->
                     if (hasActive && PermissionHelper.hasTrackingLocation(this)) {
                         PinWakeService.startOrSync(this)
+                        if (active && !GpsEnforcementHelper.isGpsProviderEnabled(this)) {
+                            showGpsEnablePromptIfNeeded(mandatory = true)
+                        }
                     } else if (!hasActive) {
                         PinWakeService.stopTracking(this)
                     }
@@ -872,6 +902,9 @@ class MainActivity : AppCompatActivity() {
                 }
                 if (hasActive) {
                     PinWakeService.startOrSync(this)
+                    if (!GpsEnforcementHelper.isGpsProviderEnabled(this)) {
+                        showGpsEnablePromptIfNeeded(mandatory = true)
+                    }
                 }
                 Toast.makeText(
                     this,
@@ -918,11 +951,23 @@ class MainActivity : AppCompatActivity() {
             viewModel.clearHistory()
         }
 
+        binding.cardGpsDisabledBanner.setOnClickListener {
+            runCatching { startActivity(GpsEnforcementHelper.buildLocationSettingsIntent()) }
+        }
+        binding.btnEnableGpsBanner.setOnClickListener {
+            runCatching { startActivity(GpsEnforcementHelper.buildLocationSettingsIntent()) }
+        }
+
         binding.btnMyLocationFullMap.setOnClickListener {
             focusedPlaceLockId = null
             renderFullMapQuickDockStates(viewModel.uiState.value)
             if (hasFineOrCoarseLocation()) {
-                centerHeroOnCurrentLocation()
+                if (!GpsEnforcementHelper.isGpsProviderEnabled(this)) {
+                    showGpsEnablePromptIfNeeded(mandatory = false)
+                    centerHeroOnCurrentLocation(silentIfUnavailable = true)
+                } else {
+                    centerHeroOnCurrentLocation(silentIfUnavailable = false)
+                }
             } else {
                 pendingCenterOnLocation = true
                 requestFineLocation()
@@ -1023,7 +1068,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     @SuppressLint("MissingPermission")
-    private fun centerHeroOnCurrentLocation() {
+    private fun centerHeroOnCurrentLocation(silentIfUnavailable: Boolean = false) {
         if (!hasFineOrCoarseLocation()) return
         val map = heroMap ?: return
         val lm = getSystemService(LocationManager::class.java) ?: return
@@ -1032,13 +1077,7 @@ class MainActivity : AppCompatActivity() {
             if (style.isFullyLoaded) enableHeroLocationPuck(style)
         }
 
-        val gps = runCatching { lm.getLastKnownLocation(LocationManager.GPS_PROVIDER) }.getOrNull()
-        val net = runCatching { lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER) }.getOrNull()
-        val best = when {
-            gps != null && net != null -> if (gps.time >= net.time) gps else net
-            gps != null -> gps
-            else -> net
-        }
+        val best = GpsEnforcementHelper.getBestLocation(this)
 
         if (best != null) {
             runCatching {
@@ -1055,15 +1094,27 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        val provider = when {
-            lm.isProviderEnabled(LocationManager.GPS_PROVIDER) -> LocationManager.GPS_PROVIDER
-            lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER) -> LocationManager.NETWORK_PROVIDER
-            else -> null
+        val enabledProviders = buildList {
+            if (runCatching { lm.isProviderEnabled(LocationManager.GPS_PROVIDER) }.getOrDefault(false)) {
+                add(LocationManager.GPS_PROVIDER)
+            }
+            if (runCatching { lm.isProviderEnabled(LocationManager.PASSIVE_PROVIDER) }.getOrDefault(false)) {
+                add(LocationManager.PASSIVE_PROVIDER)
+            }
+            if (runCatching { lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER) }.getOrDefault(false)) {
+                add(LocationManager.NETWORK_PROVIDER)
+            }
         }
 
-        if (provider == null) {
-            Toast.makeText(this, R.string.map_location_unavailable, Toast.LENGTH_SHORT).show()
+        if (enabledProviders.isEmpty()) {
+            if (!silentIfUnavailable) {
+                showGpsEnablePromptIfNeeded(mandatory = false)
+            }
             return
+        }
+
+        if (!silentIfUnavailable && GpsEnforcementHelper.isOffline(this)) {
+            Toast.makeText(this, R.string.offline_gps_waiting_satellite, Toast.LENGTH_SHORT).show()
         }
 
         activeSingleFixListener?.let { old ->
@@ -1097,8 +1148,10 @@ class MainActivity : AppCompatActivity() {
         }
         activeSingleFixListener = listener
 
-        runCatching {
-            lm.requestLocationUpdates(provider, 0L, 0f, listener, Looper.getMainLooper())
+        enabledProviders.forEach { providerName ->
+            runCatching {
+                lm.requestLocationUpdates(providerName, 0L, 0f, listener, Looper.getMainLooper())
+            }
         }
     }
 
@@ -1227,8 +1280,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun renderTelemetryBanner(state: DashboardUiState) {
+        val gpsEnabled = GpsEnforcementHelper.isGpsProviderEnabled(this)
+        val offline = GpsEnforcementHelper.isOffline(this)
+        binding.cardGpsDisabledBanner.visibility = if (gpsEnabled) View.GONE else View.VISIBLE
+
         val telemetry = state.telemetry
         if (telemetry.isTracking && state.activeCount > 0) {
+            binding.tvOfflineGpsChip.visibility =
+                if (offline || telemetry.isOfflineMode) View.VISIBLE else View.GONE
             binding.cardLiveTelemetry.setBackgroundResource(R.drawable.bg_liquid_glass_card_active)
             binding.viewTrackingDot.setBackgroundResource(R.drawable.bg_badge_emerald)
             binding.viewHeroRadarDot.setBackgroundResource(R.drawable.bg_badge_emerald)
@@ -1273,6 +1332,8 @@ class MainActivity : AppCompatActivity() {
                 binding.btnShareTripStatus.visibility = View.GONE
             }
         } else {
+            binding.tvOfflineGpsChip.visibility =
+                if (offline && state.activeCount > 0) View.VISIBLE else View.GONE
             binding.cardLiveTelemetry.setBackgroundResource(R.drawable.bg_liquid_glass_card)
             binding.viewTrackingDot.setBackgroundResource(R.drawable.bg_badge_cyan)
             binding.viewHeroRadarDot.setBackgroundResource(R.drawable.bg_badge_cyan)
@@ -1323,6 +1384,9 @@ class MainActivity : AppCompatActivity() {
                 viewModel.setAlarmActive(favorite, nextActive) { hasActive ->
                     if (hasActive && PermissionHelper.hasTrackingLocation(this)) {
                         PinWakeService.startOrSync(this)
+                        if (nextActive && !GpsEnforcementHelper.isGpsProviderEnabled(this)) {
+                            showGpsEnablePromptIfNeeded(mandatory = true)
+                        }
                     } else if (!hasActive) {
                         PinWakeService.stopTracking(this)
                     }
@@ -1795,7 +1859,44 @@ class MainActivity : AppCompatActivity() {
         startActivity(intent)
     }
 
+    private fun checkGpsOnResume() {
+        if (GpsEnforcementHelper.isGpsProviderEnabled(this)) {
+            promptedGpsThisSession = false
+            return
+        }
+        val hasActive = viewModel.uiState.value.activeCount > 0
+        val mandatory = hasActive && PreAlertPreferences.isForcedGpsKeepOnEnabled(this)
+        if (mandatory) {
+            showGpsEnablePromptIfNeeded(mandatory = true)
+        } else if (!promptedGpsThisSession) {
+            promptedGpsThisSession = true
+            showGpsEnablePromptIfNeeded(mandatory = false)
+        }
+    }
+
+    private fun maybeHandlePromptEnableGpsIntent(incoming: Intent?) {
+        if (incoming?.getBooleanExtra(EXTRA_PROMPT_ENABLE_GPS, false) == true &&
+            !GpsEnforcementHelper.isGpsProviderEnabled(this)
+        ) {
+            showGpsEnablePromptIfNeeded(mandatory = true)
+        }
+    }
+
+    private fun showGpsEnablePromptIfNeeded(mandatory: Boolean) {
+        if (isDestroyed || isFinishing || isGpsDialogShowing) return
+        if (GpsEnforcementHelper.isGpsProviderEnabled(this)) return
+        isGpsDialogShowing = true
+        GpsEnforcementHelper.showEnableGpsDialog(
+            context = this,
+            mandatoryForActiveTracking = mandatory,
+            onOpenSettings = { isGpsDialogShowing = false },
+            onDismissed = { isGpsDialogShowing = false }
+        )
+    }
+
     companion object {
+        const val EXTRA_PROMPT_ENABLE_GPS = "extra_prompt_enable_gps"
+
         private const val MAP_HOLD_DURATION_MS = 1000L
         private const val HERO_GEOFENCE_SOURCE_ID = "pinwake-hero-geofence-source"
         private const val HERO_GEOFENCE_FILL_ID = "pinwake-hero-geofence-fill"

@@ -54,7 +54,9 @@ class PinWakeRepository(
         latitude: Double,
         longitude: Double,
         radiusMeters: Int,
-        isActive: Boolean
+        isActive: Boolean,
+        ringtoneUri: String? = null,
+        ringtoneTitle: String? = null
     ): Long {
         val now = System.currentTimeMillis()
         val isCanonicalSlot = category == FavoriteCategory.HOME ||
@@ -77,6 +79,8 @@ class PinWakeRepository(
                 isActive = isActive,
                 isFavorite = true,
                 favoriteCategory = category,
+                ringtoneUri = ringtoneUri ?: existing.ringtoneUri,
+                ringtoneTitle = ringtoneTitle ?: existing.ringtoneTitle,
                 lastDistanceMeters = null,
                 snoozedUntilMs = 0L,
                 updatedAt = now
@@ -94,6 +98,8 @@ class PinWakeRepository(
                     isActive = isActive,
                     isFavorite = category != FavoriteCategory.NONE,
                     favoriteCategory = category,
+                    ringtoneUri = ringtoneUri,
+                    ringtoneTitle = ringtoneTitle,
                     createdAt = now,
                     updatedAt = now
                 )
@@ -245,6 +251,8 @@ class PinWakeRepository(
                         matchByLocation.favoriteCategory
                     },
                     vibrateEnabled = item.vibrateEnabled,
+                    ringtoneUri = item.ringtoneUri ?: matchByLocation.ringtoneUri,
+                    ringtoneTitle = item.ringtoneTitle ?: matchByLocation.ringtoneTitle,
                     lastDistanceMeters = null,
                     snoozedUntilMs = 0L,
                     updatedAt = now

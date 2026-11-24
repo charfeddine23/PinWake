@@ -2,10 +2,14 @@ package com.example.ui.map
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.Activity
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
+import android.media.RingtoneManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Looper
@@ -20,6 +24,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.content.IntentCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updatePadding
@@ -34,6 +39,7 @@ import com.example.data.local.entity.FavoriteCategory
 import com.example.databinding.ActivityMapPickerBinding
 import com.example.service.PinWakeService
 import com.example.util.DistanceFormatter
+import com.example.util.GpsEnforcementHelper
 import com.example.util.LanguageManager
 import com.example.util.MapStyleHelper
 import com.example.util.OpenFreeMapStyle
@@ -79,7 +85,33 @@ class MapPickerActivity : AppCompatActivity() {
     private var pendingSaveArgs: Pair<String, String>? = null
     private var currentLat: Double = DEFAULT_LAT
     private var currentLon: Double = DEFAULT_LON
+    private var promptedGpsThisSession = false
     private val safeLocationEngine by lazy { SafeMapLocationEngine(this) }
+
+    private val ringtonePickerLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode != Activity.RESULT_OK) return@registerForActivityResult
+        val pickedUri = result.data?.let {
+            IntentCompat.getParcelableExtra(it, RingtoneManager.EXTRA_RINGTONE_PICKED_URI, Uri::class.java)
+        }
+        val defaultUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+        if (pickedUri == null || pickedUri == defaultUri) {
+            viewModel.updateRingtone(uri = null, title = null)
+        } else {
+            val resolvedTitle = runCatching {
+                RingtoneManager.getRingtone(this, pickedUri)?.getTitle(this)
+            }.getOrNull()
+                ?.trim()
+                ?.takeIf { it.isNotBlank() }
+                ?: pickedUri.lastPathSegment
+                ?: getString(R.string.ringtone_default_alarm)
+            viewModel.updateRingtone(
+                uri = pickedUri.toString(),
+                title = resolvedTitle.take(80)
+            )
+        }
+    }
 
     private val locationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -504,7 +536,15 @@ class MapPickerActivity : AppCompatActivity() {
 
         binding.fabMyLocation.setOnClickListener {
             if (hasLocationPermission()) {
-                centerOnCurrentLocation(silentIfUnavailable = false)
+                if (!GpsEnforcementHelper.isGpsProviderEnabled(this)) {
+                    GpsEnforcementHelper.showEnableGpsDialog(
+                        context = this,
+                        mandatoryForActiveTracking = false
+                    )
+                    centerOnCurrentLocation(silentIfUnavailable = true)
+                } else {
+                    centerOnCurrentLocation(silentIfUnavailable = false)
+                }
             } else {
                 locationPermissionLauncher.launch(
                     arrayOf(
@@ -564,10 +604,18 @@ class MapPickerActivity : AppCompatActivity() {
             )
         }
 
+        binding.rowAlarmRingtone.setOnClickListener {
+            launchRingtonePicker()
+        }
+
         binding.btnSaveAlarm.setOnClickListener {
+            val state = viewModel.uiState.value
+            val isOffline = GpsEnforcementHelper.isOffline(this)
             val enteredTitle = binding.etAlarmTitle.text?.toString()?.trim().orEmpty()
             val finalTitle = enteredTitle.ifBlank {
-                viewModel.uiState.value.suggestedTitle.ifBlank { "" }
+                state.suggestedTitle.ifBlank {
+                    if (isOffline) getString(R.string.offline_gps_pin_title) else ""
+                }
             }
             if (finalTitle.isBlank()) {
                 binding.tilAlarmTitle.error = getString(R.string.map_error_empty_title)
@@ -575,17 +623,25 @@ class MapPickerActivity : AppCompatActivity() {
             }
             binding.tilAlarmTitle.error = null
 
-            val state = viewModel.uiState.value
-            val fallbackAddress = getString(
-                R.string.map_unknown_address,
-                state.latitude,
-                state.longitude
-            )
+            val fallbackAddress = if (isOffline) {
+                getString(R.string.offline_gps_pin_address, state.latitude, state.longitude)
+            } else {
+                getString(R.string.map_unknown_address, state.latitude, state.longitude)
+            }
 
             if (PermissionHelper.hasTrackingLocation(this)) {
                 viewModel.saveAndActivateAlarm(finalTitle, fallbackAddress, activateNow = true) {
                     PinWakeService.startOrSync(this)
-                    finish()
+                    if (!GpsEnforcementHelper.isGpsProviderEnabled(this)) {
+                        GpsEnforcementHelper.showEnableGpsDialog(
+                            context = this,
+                            mandatoryForActiveTracking = true,
+                            onOpenSettings = { finish() },
+                            onDismissed = { finish() }
+                        )
+                    } else {
+                        finish()
+                    }
                 }
             } else {
                 pendingSaveArgs = finalTitle to fallbackAddress
@@ -597,6 +653,21 @@ class MapPickerActivity : AppCompatActivity() {
                 )
             }
         }
+    }
+
+    private fun launchRingtonePicker() {
+        val currentUriString = viewModel.uiState.value.ringtoneUri
+        val defaultUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+        val existingUri = currentUriString?.let { runCatching { Uri.parse(it) }.getOrNull() } ?: defaultUri
+        val pickerIntent = Intent(RingtoneManager.ACTION_RINGTONE_PICKER).apply {
+            putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_ALARM)
+            putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, getString(R.string.map_ringtone_label))
+            putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
+            putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, false)
+            putExtra(RingtoneManager.EXTRA_RINGTONE_DEFAULT_URI, defaultUri)
+            putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, existingUri)
+        }
+        runCatching { ringtonePickerLauncher.launch(pickerIntent) }
     }
 
     private fun observeUiState() {
@@ -614,8 +685,14 @@ class MapPickerActivity : AppCompatActivity() {
                         binding.tvResolvedAddress.text = when {
                             state.isResolvingAddress -> getString(R.string.map_resolving_address)
                             state.resolvedAddress.isNotBlank() -> state.resolvedAddress
+                            GpsEnforcementHelper.isOffline(this@MapPickerActivity) ->
+                                getString(R.string.offline_gps_pin_address, state.latitude, state.longitude)
                             else -> getString(R.string.map_unknown_address, state.latitude, state.longitude)
                         }
+
+                        binding.tvSelectedRingtone.text =
+                            state.ringtoneTitle?.takeIf { it.isNotBlank() }
+                                ?: getString(R.string.ringtone_default_alarm)
 
                         if (!userEditedTitle &&
                             state.suggestedTitle.isNotBlank() &&
@@ -768,35 +845,37 @@ class MapPickerActivity : AppCompatActivity() {
     @SuppressLint("MissingPermission")
     private fun centerOnCurrentLocation(silentIfUnavailable: Boolean = false) {
         if (!hasLocationPermission()) return
-        val gps = runCatching {
-            locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
-        }.getOrNull()
-        val net = runCatching {
-            locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
-        }.getOrNull()
-
-        val best = when {
-            gps != null && net != null -> if (gps.time >= net.time) gps else net
-            gps != null -> gps
-            else -> net
-        }
+        val best = GpsEnforcementHelper.getBestLocation(this)
 
         if (best != null) {
             moveCameraTo(best.latitude, best.longitude, 16.0, animate = true)
             return
         }
 
-        val provider = when {
-            locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) -> LocationManager.GPS_PROVIDER
-            locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER) -> LocationManager.NETWORK_PROVIDER
-            else -> null
+        val enabledProviders = buildList {
+            if (runCatching { locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) }.getOrDefault(false)) {
+                add(LocationManager.GPS_PROVIDER)
+            }
+            if (runCatching { locationManager.isProviderEnabled(LocationManager.PASSIVE_PROVIDER) }.getOrDefault(false)) {
+                add(LocationManager.PASSIVE_PROVIDER)
+            }
+            if (runCatching { locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER) }.getOrDefault(false)) {
+                add(LocationManager.NETWORK_PROVIDER)
+            }
         }
 
-        if (provider == null) {
+        if (enabledProviders.isEmpty()) {
             if (!silentIfUnavailable) {
-                Toast.makeText(this, R.string.map_location_unavailable, Toast.LENGTH_SHORT).show()
+                GpsEnforcementHelper.showEnableGpsDialog(
+                    context = this,
+                    mandatoryForActiveTracking = false
+                )
             }
             return
+        }
+
+        if (!silentIfUnavailable && GpsEnforcementHelper.isOffline(this)) {
+            Toast.makeText(this, R.string.offline_gps_waiting_satellite, Toast.LENGTH_SHORT).show()
         }
 
         activeSingleFixListener?.let { old ->
@@ -819,14 +898,16 @@ class MapPickerActivity : AppCompatActivity() {
         }
         activeSingleFixListener = singleFixListener
 
-        runCatching {
-            locationManager.requestLocationUpdates(
-                provider,
-                0L,
-                0f,
-                singleFixListener,
-                Looper.getMainLooper()
-            )
+        enabledProviders.forEach { providerName ->
+            runCatching {
+                locationManager.requestLocationUpdates(
+                    providerName,
+                    0L,
+                    0f,
+                    singleFixListener,
+                    Looper.getMainLooper()
+                )
+            }
         }
     }
 
@@ -898,6 +979,16 @@ class MapPickerActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         binding.mapView.onResume()
+        if (!promptedGpsThisSession &&
+            hasLocationPermission() &&
+            !GpsEnforcementHelper.isGpsProviderEnabled(this)
+        ) {
+            promptedGpsThisSession = true
+            GpsEnforcementHelper.showEnableGpsDialog(
+                context = this,
+                mandatoryForActiveTracking = false
+            )
+        }
     }
 
     override fun onPause() {

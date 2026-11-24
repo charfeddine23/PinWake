@@ -2,12 +2,15 @@ package com.example.service
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.AlarmManager
 import android.app.Notification
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.location.Location
@@ -18,6 +21,8 @@ import android.os.Bundle
 import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
+import android.os.SystemClock
+import android.os.VibrationAttributes
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
@@ -33,13 +38,13 @@ import com.example.data.repository.PinWakeRepository
 import com.example.data.repository.PollingTier
 import com.example.ui.alarm.AlarmRingingActivity
 import com.example.util.DistanceFormatter
+import com.example.util.GpsEnforcementHelper
 import com.example.util.PreAlertPreferences
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -57,16 +62,39 @@ class PinWakeService : Service() {
     private var currentTier: PollingTier = PollingTier.STANDBY
     private var lastKnownLocation: Location? = null
     private var isForegroundStarted = false
+    private var trackingWakeLock: PowerManager.WakeLock? = null
+    private var providersReceiverRegistered = false
     private val triggeredUpdatedAt = mutableMapOf<Long, Long>()
     private val preAlertUpdatedAt = mutableMapOf<Long, Long>()
+
+    private val providersChangedReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == LocationManager.PROVIDERS_CHANGED_ACTION) {
+                handleGpsAvailabilityChange()
+            }
+        }
+    }
 
     private val locationListener = object : LocationListener {
         override fun onLocationChanged(location: Location) {
             handleLocationUpdate(location)
         }
 
-        override fun onProviderEnabled(provider: String) {}
-        override fun onProviderDisabled(provider: String) {}
+        override fun onProviderEnabled(provider: String) {
+            if (provider == LocationManager.GPS_PROVIDER) {
+                handleGpsAvailabilityChange()
+                if (currentActiveAlarms.isNotEmpty() && currentTier != PollingTier.STANDBY) {
+                    applyPollingTier(currentTier)
+                }
+            }
+        }
+
+        override fun onProviderDisabled(provider: String) {
+            if (provider == LocationManager.GPS_PROVIDER) {
+                handleGpsAvailabilityChange()
+            }
+        }
+
         @Deprecated("Deprecated in Java")
         override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
     }
@@ -77,6 +105,15 @@ class PinWakeService : Service() {
         repository = app.container.repository
         locationManager = getSystemService(LocationManager::class.java)
         notificationManager = getSystemService(NotificationManager::class.java)
+        if (!providersReceiverRegistered) {
+            ContextCompat.registerReceiver(
+                this,
+                providersChangedReceiver,
+                IntentFilter(LocationManager.PROVIDERS_CHANGED_ACTION),
+                ContextCompat.RECEIVER_EXPORTED
+            )
+            providersReceiverRegistered = true
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -202,11 +239,16 @@ class PinWakeService : Service() {
                     return@collect
                 }
 
+                syncWakeLockForActiveTracking()
+                handleGpsAvailabilityChange()
+
                 if (lastKnownLocation == null || !isLocationFresh(lastKnownLocation)) {
                     lastKnownLocation = getBestLastKnownLocation()
                 }
 
                 val loc = lastKnownLocation
+                val gpsReady = GpsEnforcementHelper.isGpsProviderEnabled(this@PinWakeService)
+                val offline = GpsEnforcementHelper.isOffline(this@PinWakeService)
                 if (loc != null && isLocationFresh(loc)) {
                     serviceScope.launch {
                         evaluateAlarmsAgainstLocation(loc, currentActiveAlarms)
@@ -223,7 +265,11 @@ class PinWakeService : Service() {
                             activeAlarmCount = active.size,
                             closestAlarmId = first.id,
                             closestAlarmTitle = first.title,
-                            closestDistanceMeters = first.lastDistanceMeters
+                            closestDistanceMeters = first.lastDistanceMeters,
+                            isGpsEnabled = gpsReady,
+                            isGpsDisabledWarning = !gpsReady &&
+                                PreAlertPreferences.isForcedGpsKeepOnEnabled(this@PinWakeService),
+                            isOfflineMode = offline
                         )
                     }
                     updateTrackingNotification(
@@ -323,6 +369,13 @@ class PinWakeService : Service() {
         }
 
         val target = closestAlarm ?: remaining.first()
+        val gpsReady = GpsEnforcementHelper.isGpsProviderEnabled(this@PinWakeService)
+        val offline = GpsEnforcementHelper.isOffline(this@PinWakeService)
+        if (gpsReady) {
+            notificationManager.cancel(NOTIFICATION_GPS_WATCHDOG_ID)
+        }
+        syncWakeLockForActiveTracking()
+
         repository.trackingStateManager.update {
             it.copy(
                 isTracking = true,
@@ -334,7 +387,12 @@ class PinWakeService : Service() {
                 lastFixAccuracyMeters = if (location.hasAccuracy()) location.accuracy else null,
                 lastLatitude = location.latitude,
                 lastLongitude = location.longitude,
-                lastUpdatedAtMs = now
+                lastUpdatedAtMs = now,
+                isGpsEnabled = gpsReady,
+                isGpsDisabledWarning = !gpsReady &&
+                    PreAlertPreferences.isForcedGpsKeepOnEnabled(this@PinWakeService),
+                isOfflineMode = offline,
+                locationProvider = location.provider
             )
         }
 
@@ -361,10 +419,25 @@ class PinWakeService : Service() {
         val intervalMs = tier.intervalMs
         val minDist = tier.minDistanceMeters
 
+        // Hardware GPS provider works 100% offline with zero internet connectivity
         try {
             if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
                 locationManager.requestLocationUpdates(
                     LocationManager.GPS_PROVIDER,
+                    intervalMs,
+                    minDist,
+                    locationListener,
+                    Looper.getMainLooper()
+                )
+            }
+        } catch (_: SecurityException) {
+        } catch (_: IllegalArgumentException) {
+        }
+
+        try {
+            if (locationManager.isProviderEnabled(LocationManager.PASSIVE_PROVIDER)) {
+                locationManager.requestLocationUpdates(
+                    LocationManager.PASSIVE_PROVIDER,
                     intervalMs,
                     minDist,
                     locationListener,
@@ -391,19 +464,124 @@ class PinWakeService : Service() {
     }
 
     @SuppressLint("MissingPermission")
-    private fun getBestLastKnownLocation(): Location? {
-        if (!hasLocationPermission()) return null
-        val gps = runCatching {
-            locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
-        }.getOrNull()
-        val net = runCatching {
-            locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
-        }.getOrNull()
-        return when {
-            gps != null && net != null -> if (gps.time >= net.time) gps else net
-            gps != null -> gps
-            else -> net
+    private fun getBestLastKnownLocation(): Location? =
+        GpsEnforcementHelper.getBestLocation(this)
+
+    private fun handleGpsAvailabilityChange() {
+        val gpsReady = GpsEnforcementHelper.isGpsProviderEnabled(this)
+        val offline = GpsEnforcementHelper.isOffline(this)
+        val hasActive = currentActiveAlarms.isNotEmpty()
+        val enforceForced = PreAlertPreferences.isForcedGpsKeepOnEnabled(this)
+
+        repository.trackingStateManager.update {
+            it.copy(
+                isGpsEnabled = gpsReady,
+                isGpsDisabledWarning = hasActive && !gpsReady && enforceForced,
+                isOfflineMode = offline
+            )
         }
+
+        if (hasActive && !gpsReady && enforceForced) {
+            showGpsDisabledWatchdogAlert()
+        } else {
+            notificationManager.cancel(NOTIFICATION_GPS_WATCHDOG_ID)
+        }
+    }
+
+    private fun showGpsDisabledWatchdogAlert() {
+        val openLocationSettingsIntent = GpsEnforcementHelper.buildLocationSettingsIntent().apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val settingsPending = PendingIntent.getActivity(
+            this,
+            NOTIFICATION_GPS_WATCHDOG_ID,
+            openLocationSettingsIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val openAppIntent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra(MainActivity.EXTRA_PROMPT_ENABLE_GPS, true)
+        }
+        val appPending = PendingIntent.getActivity(
+            this,
+            NOTIFICATION_GPS_WATCHDOG_ID + 1,
+            openAppIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val alertNotification = NotificationCompat.Builder(this, PinWakeApplication.CHANNEL_GPS_WATCHDOG)
+            .setSmallIcon(R.drawable.ic_gps_warning)
+            .setContentTitle(getString(R.string.notif_gps_disabled_title))
+            .setContentText(getString(R.string.notif_gps_disabled_body))
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setOngoing(true)
+            .setAutoCancel(false)
+            .setContentIntent(settingsPending)
+            .setFullScreenIntent(appPending, true)
+            .addAction(
+                R.drawable.ic_gps_warning,
+                getString(R.string.notif_action_enable_gps),
+                settingsPending
+            )
+            .build()
+
+        notificationManager.notify(NOTIFICATION_GPS_WATCHDOG_ID, alertNotification)
+        vibrateAttentionPattern(longArrayOf(0L, 350L, 150L, 350L, 150L, 450L))
+    }
+
+    private fun vibrateAttentionPattern(timings: LongArray) {
+        runCatching {
+            val vib = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                getSystemService(VibratorManager::class.java)?.defaultVibrator
+            } else {
+                @Suppress("DEPRECATION")
+                getSystemService(Vibrator::class.java)
+            }
+            if (vib?.hasVibrator() == true) {
+                val effect = VibrationEffect.createWaveform(timings, -1)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    vib.vibrate(
+                        effect,
+                        VibrationAttributes.Builder()
+                            .setUsage(VibrationAttributes.USAGE_ALARM)
+                            .build()
+                    )
+                } else {
+                    @Suppress("DEPRECATION")
+                    vib.vibrate(effect)
+                }
+            }
+        }
+    }
+
+    @SuppressLint("WakelockTimeout")
+    private fun syncWakeLockForActiveTracking() {
+        val shouldHold = currentActiveAlarms.isNotEmpty() &&
+            PreAlertPreferences.isForcedGpsKeepOnEnabled(this)
+        if (shouldHold) {
+            val pm = getSystemService(PowerManager::class.java) ?: return
+            val wl = trackingWakeLock ?: pm.newWakeLock(
+                PowerManager.PARTIAL_WAKE_LOCK,
+                "PinWake::ForcedGpsKeepAlive"
+            ).also {
+                it.setReferenceCounted(false)
+                trackingWakeLock = it
+            }
+            runCatching { wl.acquire(60 * 60 * 1000L) }
+        } else {
+            releaseTrackingWakeLock()
+        }
+    }
+
+    private fun releaseTrackingWakeLock() {
+        runCatching {
+            if (trackingWakeLock?.isHeld == true) {
+                trackingWakeLock?.release()
+            }
+        }
+        trackingWakeLock = null
     }
 
     private fun hasLocationPermission(): Boolean {
@@ -435,6 +613,7 @@ class PinWakeService : Service() {
             putExtra(EXTRA_ALARM_ADDRESS, alarm.address)
             putExtra(EXTRA_ALARM_RADIUS, alarm.radiusMeters)
             putExtra(EXTRA_ALARM_VIBRATE, alarm.vibrateEnabled)
+            alarm.ringtoneUri?.let { putExtra(EXTRA_ALARM_RINGTONE_URI, it) }
             putExtra(EXTRA_DISTANCE_METERS, distanceMeters)
         }
 
@@ -624,6 +803,8 @@ class PinWakeService : Service() {
 
     private fun stopTrackingAndSelf() {
         locationManager.removeUpdates(locationListener)
+        notificationManager.cancel(NOTIFICATION_GPS_WATCHDOG_ID)
+        releaseTrackingWakeLock()
         currentTier = PollingTier.STANDBY
         repository.trackingStateManager.resetToStandby()
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
@@ -631,8 +812,40 @@ class PinWakeService : Service() {
         stopSelf()
     }
 
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        if (currentActiveAlarms.isNotEmpty() &&
+            PreAlertPreferences.isForcedGpsKeepOnEnabled(this) &&
+            hasLocationPermission()
+        ) {
+            val restartIntent = Intent(this, BootAndWatchdogReceiver::class.java).apply {
+                action = BootAndWatchdogReceiver.ACTION_WATCHDOG_RESTART
+            }
+            val restartPending = PendingIntent.getBroadcast(
+                this,
+                NOTIFICATION_TRACKING_ID + 7,
+                restartIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            val am = getSystemService(AlarmManager::class.java)
+            runCatching {
+                am?.setAndAllowWhileIdle(
+                    AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                    SystemClock.elapsedRealtime() + 1_500L,
+                    restartPending
+                )
+            }
+        }
+    }
+
     override fun onDestroy() {
         locationManager.removeUpdates(locationListener)
+        notificationManager.cancel(NOTIFICATION_GPS_WATCHDOG_ID)
+        releaseTrackingWakeLock()
+        if (providersReceiverRegistered) {
+            runCatching { unregisterReceiver(providersChangedReceiver) }
+            providersReceiverRegistered = false
+        }
         serviceScope.cancel()
         super.onDestroy()
     }
@@ -642,6 +855,7 @@ class PinWakeService : Service() {
     companion object {
         const val NOTIFICATION_TRACKING_ID = 4001
         const val NOTIFICATION_ALARM_ID = 4002
+        const val NOTIFICATION_GPS_WATCHDOG_ID = 4003
         const val NOTIFICATION_ALARM_BASE_ID = 5000
         const val NOTIFICATION_PRE_ALERT_BASE_ID = 6500
         private const val MAX_CACHED_LOCATION_AGE_MS = 120_000L
@@ -658,6 +872,7 @@ class PinWakeService : Service() {
         const val EXTRA_ALARM_ADDRESS = "extra_alarm_address"
         const val EXTRA_ALARM_RADIUS = "extra_alarm_radius"
         const val EXTRA_ALARM_VIBRATE = "extra_alarm_vibrate"
+        const val EXTRA_ALARM_RINGTONE_URI = "extra_alarm_ringtone_uri"
         const val EXTRA_DISTANCE_METERS = "extra_distance_meters"
 
         fun alarmNotificationIdFor(alarmId: Long): Int =

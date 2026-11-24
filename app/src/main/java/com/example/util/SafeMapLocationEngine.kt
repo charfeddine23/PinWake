@@ -36,13 +36,11 @@ class SafeMapLocationEngine(context: Context) : LocationEngine {
             return
         }
 
-        val best = listOf(
-            LocationManager.GPS_PROVIDER,
-            LocationManager.NETWORK_PROVIDER,
-            LocationManager.PASSIVE_PROVIDER
-        ).mapNotNull { provider ->
-            runCatching { locationManager.getLastKnownLocation(provider) }.getOrNull()
-        }.maxByOrNull { it.time }
+        val best = listOfNotNull(
+            runCatching { locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER) }.getOrNull(),
+            runCatching { locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER) }.getOrNull(),
+            runCatching { locationManager.getLastKnownLocation(LocationManager.PASSIVE_PROVIDER) }.getOrNull()
+        ).maxByOrNull { it.time }
 
         if (best != null) {
             callback.onSuccess(LocationEngineResult.create(best))
@@ -78,7 +76,8 @@ class SafeMapLocationEngine(context: Context) : LocationEngine {
 
         listOf(
             LocationManager.GPS_PROVIDER,
-            LocationManager.NETWORK_PROVIDER
+            LocationManager.NETWORK_PROVIDER,
+            LocationManager.PASSIVE_PROVIDER
         ).forEach { provider ->
             val enabled = runCatching { locationManager.isProviderEnabled(provider) }.getOrDefault(false)
             if (enabled) {

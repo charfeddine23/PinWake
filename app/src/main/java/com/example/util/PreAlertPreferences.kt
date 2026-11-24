@@ -6,6 +6,8 @@ object PreAlertPreferences {
 
     private const val PREFS_NAME = "pin_wake_prefs"
     private const val KEY_PRE_ALERT_METERS = "pre_alert_distance_meters"
+    private const val KEY_FORCE_GPS_KEEP_ON = "force_gps_keep_on"
+    private const val KEY_FORCE_SILENT_OVERRIDE = "force_silent_override"
 
     const val PRE_ALERT_OFF = 0
     const val PRE_ALERT_300M = 300
@@ -31,6 +33,30 @@ object PreAlertPreferences {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
             .putInt(KEY_PRE_ALERT_METERS, normalized)
+            .apply()
+    }
+
+    fun isForcedGpsKeepOnEnabled(context: Context): Boolean {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(KEY_FORCE_GPS_KEEP_ON, true)
+    }
+
+    fun setForcedGpsKeepOnEnabled(context: Context, enabled: Boolean) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(KEY_FORCE_GPS_KEEP_ON, enabled)
+            .apply()
+    }
+
+    fun isForceSilentOverrideEnabled(context: Context): Boolean {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(KEY_FORCE_SILENT_OVERRIDE, true)
+    }
+
+    fun setForceSilentOverrideEnabled(context: Context, enabled: Boolean) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(KEY_FORCE_SILENT_OVERRIDE, enabled)
             .apply()
     }
 
