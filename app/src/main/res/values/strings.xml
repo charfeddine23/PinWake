@@ -95,7 +95,7 @@
     <!-- Alarm Ringing Screen -->
     <string name="alarm_ringing_badge">DESTINATION REACHED</string>
     <string name="alarm_ringing_subtitle">Inside %1$d m wake geofence</string>
-    <string name="alarm_snooze_500m">Snooze +500m</string>
+    <string name="alarm_snooze_500m">Snooze (+500m)</string>
     <string name="alarm_slide_to_dismiss">Slide to Dismiss</string>
     <string name="alarm_snooze_toast">Snoozed — will re-alert 500m closer</string>
     <string name="alarm_dismissed_toast">Alarm dismissed. Have a safe trip!</string>
@@ -135,6 +135,9 @@
     <string name="hero_live_radar">LIVE RADAR</string>
     <string name="map_sheet_title">Set Wake Destination</string>
     <string name="alarm_card_armed">ARMED</string>
+    <string name="alarm_category_default">Wake Pin</string>
+    <string name="alarm_eyebrow_format">%1$s · %2$s</string>
+    <string name="cd_switch_alarm">Toggle GPS alarm for %1$s</string>
     <string name="cd_drag_sheet">Expand or collapse map view</string>
 
     <!-- 1-Second Map Hold Quick Assign Sheet -->

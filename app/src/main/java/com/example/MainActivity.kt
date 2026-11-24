@@ -34,6 +34,7 @@ import androidx.core.widget.doAfterTextChanged
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.recyclerview.widget.DefaultItemAnimator
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
@@ -795,7 +796,12 @@ class MainActivity : AppCompatActivity() {
         binding.rvAlarms.apply {
             layoutManager = LinearLayoutManager(this@MainActivity)
             adapter = alarmAdapter
-            itemAnimator = null
+            itemAnimator = DefaultItemAnimator().apply {
+                supportsChangeAnimations = false
+                addDuration = 180L
+                removeDuration = 180L
+                moveDuration = 180L
+            }
         }
 
         historyAdapter = TripHistoryAdapter { trip ->
@@ -882,7 +888,7 @@ class MainActivity : AppCompatActivity() {
                     target.animate()
                         .scaleX(1f)
                         .scaleY(1f)
-                        .setDuration(200L)
+                        .setDuration(180L)
                         .setInterpolator(OvershootInterpolator(1.6f))
                         .start()
                 }
@@ -1104,6 +1110,17 @@ class MainActivity : AppCompatActivity() {
         alarmAdapter.submitList(state.alarms)
         binding.emptyAlarmsCard.visibility = if (state.alarms.isEmpty()) View.VISIBLE else View.GONE
         binding.tvActiveAlarmCount.text = getString(R.string.status_active_count, state.activeCount)
+        if (state.activeCount > 0) {
+            binding.tvActiveAlarmCount.setBackgroundResource(R.drawable.bg_badge_emerald)
+            binding.tvActiveAlarmCount.setTextColor(
+                ContextCompat.getColor(this, R.color.accent_emerald)
+            )
+        } else {
+            binding.tvActiveAlarmCount.setBackgroundResource(R.drawable.bg_liquid_glass_pill)
+            binding.tvActiveAlarmCount.setTextColor(
+                ContextCompat.getColor(this, R.color.text_secondary)
+            )
+        }
 
         historyAdapter.submitList(state.recentTrips)
         binding.sectionHistory.visibility =

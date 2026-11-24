@@ -95,7 +95,7 @@
     <!-- Alarm Ringing Screen -->
     <string name="alarm_ringing_badge">تم الوصول للوجهة</string>
     <string name="alarm_ringing_subtitle">داخل نطاق التنبيه %1$d م</string>
-    <string name="alarm_snooze_500m">غفوة +500م</string>
+    <string name="alarm_snooze_500m">غفوة (+500م)</string>
     <string name="alarm_slide_to_dismiss">اسحب لإيقاف المنبه</string>
     <string name="alarm_snooze_toast">تم التأجيل — سيعاد التنبيه على بُعد 500م أقرب</string>
     <string name="alarm_dismissed_toast">تم إيقاف المنبه. رحلة سعيدة!</string>
@@ -135,6 +135,9 @@
     <string name="hero_live_radar">رادار مباشر</string>
     <string name="map_sheet_title">تحديد وجهة التنبيه</string>
     <string name="alarm_card_armed">مفعّل</string>
+    <string name="alarm_category_default">منبه نقطة</string>
+    <string name="alarm_eyebrow_format">%1$s · %2$s</string>
+    <string name="cd_switch_alarm">تبديل منبه %1$s</string>
     <string name="cd_drag_sheet">توسيع أو طي عرض الخريطة</string>
 
     <!-- قائمة التثبيت السريع بالضغط لمدة ثانية على الخريطة -->

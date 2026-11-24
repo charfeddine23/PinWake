@@ -19,7 +19,10 @@ import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.updatePadding
 import androidx.lifecycle.lifecycleScope
 import com.example.R
 import com.example.databinding.ActivityAlarmRingingBinding
@@ -56,6 +59,7 @@ class AlarmRingingActivity : AppCompatActivity() {
 
         binding = ActivityAlarmRingingBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        applySystemBarInsets()
 
         // Prevent accidental back-button dismissal while half-asleep
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
@@ -106,6 +110,27 @@ class AlarmRingingActivity : AppCompatActivity() {
         startAlarmAudioWithCrescendo()
         if (vibrateEnabled) {
             startAlarmVibration()
+        }
+    }
+
+    private fun applySystemBarInsets() {
+        val baseBadgeTopMargin = (24f * resources.displayMetrics.density).toInt()
+        val baseDockBottomPadding = binding.alarmBottomDock.paddingBottom
+
+        ViewCompat.setOnApplyWindowInsetsListener(binding.alarmRoot) { _, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            val badgeLp = binding.tvRingingBadge.layoutParams as
+                androidx.constraintlayout.widget.ConstraintLayout.LayoutParams
+            val targetTopMargin = baseBadgeTopMargin + bars.top
+            if (badgeLp.topMargin != targetTopMargin) {
+                badgeLp.topMargin = targetTopMargin
+                binding.tvRingingBadge.layoutParams = badgeLp
+            }
+            val targetBottomPad = baseDockBottomPadding + bars.bottom
+            if (binding.alarmBottomDock.paddingBottom != targetBottomPad) {
+                binding.alarmBottomDock.updatePadding(bottom = targetBottomPad)
+            }
+            insets
         }
     }
 

@@ -1,35 +1,40 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Obsidian Mobility Canvas (Uber / Yassir Dark) -->
-    <color name="bg_midnight">#090D16</color>
-    <color name="bg_surface_deep">#111622</color>
-    <color name="bg_surface_elevated">#182032</color>
-    <color name="bg_surface_input">#1E273B</color>
+    <!-- Deep Liquid Glass Canvas -->
+    <color name="bg_midnight">#070B12</color>
+    <color name="bg_surface_deep">#0B0F19</color>
+    <color name="bg_surface_elevated">#111827</color>
+    <color name="bg_surface_input">#161F30</color>
 
-    <!-- Elevated Surfaces & Hairline Strokes -->
-    <color name="glass_fill_start">#F2141B29</color>
-    <color name="glass_fill_end">#F20F1522</color>
-    <color name="glass_active_start">#F5102535</color>
-    <color name="glass_active_end">#F50D1C2B</color>
+    <!-- Semi-Transparent Glass Surfaces & Hairline Strokes -->
+    <color name="glass_card_fill">#CC111827</color>
+    <color name="glass_card_active_fill">#D90D282E</color>
+    <color name="glass_fill_start">#CC111827</color>
+    <color name="glass_fill_end">#D90B0F19</color>
+    <color name="glass_active_start">#D90D282E</color>
+    <color name="glass_active_end">#E60A1E24</color>
     <color name="glass_alarm_start">#D92D1222</color>
     <color name="glass_alarm_end">#B3170D19</color>
-    <color name="glass_pill_fill">#EB161E2E</color>
-    <color name="glass_search_fill">#F5121826</color>
-    <color name="glass_stroke_subtle">#1FFFFFFF</color>
-    <color name="glass_stroke_bright">#38FFFFFF</color>
-    <color name="glass_stroke_cyan">#B300E5FF</color>
-    <color name="glass_stroke_emerald">#B310B981</color>
+    <color name="glass_pill_fill">#CC111827</color>
+    <color name="glass_search_fill">#E60B0F19</color>
+    <color name="glass_sheet_start">#F2111827</color>
+    <color name="glass_sheet_end">#FA070B12</color>
+    <color name="glass_stroke_subtle">#24FFFFFF</color>
+    <color name="glass_stroke_bright">#3DFFFFFF</color>
+    <color name="glass_stroke_cyan">#6622D3EE</color>
+    <color name="glass_stroke_emerald">#9910B981</color>
+    <color name="glass_stroke_amber">#66F59E0B</color>
 
     <!-- High-Contrast Mobility Accents -->
-    <color name="accent_cyan">#00D4FF</color>
-    <color name="accent_cyan_glow">#38BDF8</color>
-    <color name="accent_cyan_tint">#2400D4FF</color>
+    <color name="accent_cyan">#22D3EE</color>
+    <color name="accent_cyan_glow">#22D3EE</color>
+    <color name="accent_cyan_tint">#2422D3EE</color>
     <color name="accent_emerald">#10B981</color>
     <color name="accent_emerald_tint">#2410B981</color>
     <color name="accent_rose">#F43F5E</color>
     <color name="accent_rose_tint">#29F43F5E</color>
     <color name="accent_amber">#F59E0B</color>
-    <color name="accent_amber_tint">#29F59E0B</color>
+    <color name="accent_amber_tint">#26F59E0B</color>
 
     <!-- Text Hierarchy -->
     <color name="text_primary">#F8FAFC</color>
@@ -38,8 +43,8 @@
     <color name="text_on_accent">#031319</color>
 
     <!-- Map Geofence Overlay -->
-    <color name="geofence_fill">#2E06B6D4</color>
-    <color name="geofence_stroke">#CC38BDF8</color>
+    <color name="geofence_fill">#2422D3EE</color>
+    <color name="geofence_stroke">#CC22D3EE</color>
 
     <!-- Standard Colors -->
     <color name="transparent">#00000000</color>

@@ -11,8 +11,8 @@
 
     <!-- Ambient Radial Glow -->
     <View
-        android:layout_width="360dp"
-        android:layout_height="360dp"
+        android:layout_width="340dp"
+        android:layout_height="340dp"
         android:background="@drawable/bg_ambient_glow"
         app:layout_constraintBottom_toBottomOf="@+id/radarContainer"
         app:layout_constraintEnd_toEndOf="parent"
@@ -24,7 +24,7 @@
         android:id="@+id/tvRingingBadge"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="56dp"
+        android:layout_marginTop="24dp"
         android:background="@drawable/bg_badge_rose"
         android:paddingHorizontal="18dp"
         android:paddingVertical="8dp"
@@ -40,54 +40,47 @@
     <!-- Animated Radar Pulse & Center Emblem -->
     <FrameLayout
         android:id="@+id/radarContainer"
-        android:layout_width="256dp"
-        android:layout_height="256dp"
+        android:layout_width="228dp"
+        android:layout_height="228dp"
         app:layout_constraintBottom_toTopOf="@+id/tvAlarmTitle"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/tvRingingBadge">
+        app:layout_constraintTop_toBottomOf="@+id/tvRingingBadge"
+        app:layout_constraintVertical_chainStyle="packed">
 
         <com.example.ui.alarm.RadarPulseView
             android:id="@+id/radarPulseView"
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
 
-        <LinearLayout
-            android:layout_width="112dp"
-            android:layout_height="112dp"
+        <FrameLayout
+            android:layout_width="104dp"
+            android:layout_height="104dp"
             android:layout_gravity="center"
             android:background="@drawable/bg_liquid_glass_card_active"
-            android:elevation="8dp"
-            android:gravity="center"
-            android:orientation="vertical">
+            android:elevation="10dp">
 
             <ImageView
-                android:layout_width="42dp"
-                android:layout_height="42dp"
+                android:layout_width="46dp"
+                android:layout_height="46dp"
+                android:layout_gravity="center"
                 android:contentDescription="@string/cd_alarm_icon"
-                android:src="@drawable/ic_alarm_bell" />
-
-            <TextView
-                android:id="@+id/tvDistanceRemaining"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="5dp"
-                android:textAppearance="@style/TextAppearance.PinWake.Mono"
-                android:textColor="@color/accent_cyan_glow"
-                android:textSize="13sp"
-                android:textStyle="bold"
-                tools:text="320 m" />
-        </LinearLayout>
+                android:src="@drawable/ic_alarm_bell"
+                app:tint="@color/accent_cyan_glow" />
+        </FrameLayout>
     </FrameLayout>
 
+    <!-- Prominent Destination Readout -->
     <TextView
         android:id="@+id/tvAlarmTitle"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginHorizontal="24dp"
+        android:layout_marginTop="6dp"
         android:gravity="center"
         android:maxLines="2"
         android:textAppearance="@style/TextAppearance.PinWake.Display"
+        android:textColor="@color/text_primary"
         android:textSize="32sp"
         android:textStyle="bold"
         app:layout_constraintBottom_toTopOf="@+id/tvAlarmAddress"
@@ -101,36 +94,58 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginHorizontal="28dp"
-        android:layout_marginTop="8dp"
+        android:layout_marginTop="6dp"
         android:ellipsize="end"
         android:gravity="center"
         android:maxLines="2"
         android:textColor="@color/text_secondary"
         android:textSize="14sp"
-        app:layout_constraintBottom_toTopOf="@+id/tvAlarmSubtitle"
+        app:layout_constraintBottom_toTopOf="@+id/cardDistanceTelemetry"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/tvAlarmTitle"
         tools:text="Main Transit Concourse, Downtown" />
 
-    <TextView
-        android:id="@+id/tvAlarmSubtitle"
+    <!-- Unmissable Distance & Geofence Telemetry Glass Readout -->
+    <LinearLayout
+        android:id="@+id/cardDistanceTelemetry"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="12dp"
-        android:background="@drawable/bg_badge_cyan"
-        android:paddingHorizontal="14dp"
-        android:paddingVertical="6dp"
-        android:textAppearance="@style/TextAppearance.PinWake.Mono"
-        android:textColor="@color/accent_cyan_glow"
-        android:textSize="12sp"
+        android:layout_marginHorizontal="24dp"
+        android:layout_marginTop="16dp"
+        android:background="@drawable/bg_liquid_glass_card_active"
+        android:elevation="6dp"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:paddingHorizontal="24dp"
+        android:paddingVertical="12dp"
         app:layout_constraintBottom_toTopOf="@+id/alarmBottomDock"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/tvAlarmAddress"
-        tools:text="Inside 500 m wake geofence" />
+        app:layout_constraintTop_toBottomOf="@+id/tvAlarmAddress">
 
-    <!-- Bottom Mobility Action Dock -->
+        <TextView
+            android:id="@+id/tvDistanceRemaining"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textAppearance="@style/TextAppearance.PinWake.Mono"
+            android:textColor="@color/accent_cyan_glow"
+            android:textSize="24sp"
+            android:textStyle="bold"
+            tools:text="320 m" />
+
+        <TextView
+            android:id="@+id/tvAlarmSubtitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:textAppearance="@style/TextAppearance.PinWake.Mono"
+            android:textColor="@color/text_secondary"
+            android:textSize="12sp"
+            tools:text="Inside 500 m wake geofence" />
+    </LinearLayout>
+
+    <!-- Bottom Mobility Action Dock with Wide Separation between Snooze and Dismiss -->
     <LinearLayout
         android:id="@+id/alarmBottomDock"
         android:layout_width="0dp"
@@ -140,28 +155,29 @@
         android:orientation="vertical"
         android:paddingHorizontal="20dp"
         android:paddingTop="18dp"
-        android:paddingBottom="34dp"
+        android:paddingBottom="28dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent">
 
-        <!-- Snooze 500m Button -->
+        <!-- Distinct Amber-Tinted Glass Snooze (+500m) Button -->
         <LinearLayout
             android:id="@+id/btnSnooze500m"
             android:layout_width="match_parent"
-            android:layout_height="54dp"
-            android:layout_marginBottom="14dp"
-            android:background="@drawable/bg_where_to_box"
+            android:layout_height="56dp"
+            android:background="@drawable/bg_snooze_glass_button"
             android:clickable="true"
             android:focusable="true"
             android:gravity="center"
-            android:orientation="horizontal">
+            android:orientation="horizontal"
+            android:paddingHorizontal="20dp">
 
             <ImageView
                 android:layout_width="22dp"
                 android:layout_height="22dp"
                 android:contentDescription="@string/alarm_snooze_500m"
-                android:src="@drawable/ic_snooze" />
+                android:src="@drawable/ic_snooze"
+                app:tint="@color/accent_amber" />
 
             <TextView
                 android:layout_width="wrap_content"
@@ -169,15 +185,22 @@
                 android:layout_marginStart="10dp"
                 android:text="@string/alarm_snooze_500m"
                 android:textColor="@color/text_primary"
-                android:textSize="15sp"
+                android:textSize="16sp"
                 android:textStyle="bold" />
         </LinearLayout>
 
-        <!-- Slide to Dismiss Control -->
+        <!-- Clear Visual Divider Separating Snooze from Dismiss -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginVertical="16dp"
+            android:background="@drawable/bg_hairline_gradient" />
+
+        <!-- Bold High-Contrast Slide to Dismiss Control -->
         <com.example.ui.alarm.SlideToDismissView
             android:id="@+id/slideToDismiss"
             android:layout_width="match_parent"
-            android:layout_height="64dp" />
+            android:layout_height="68dp" />
     </LinearLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>

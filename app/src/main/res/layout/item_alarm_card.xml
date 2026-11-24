@@ -5,29 +5,50 @@
     android:id="@+id/cardAlarmRoot"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginBottom="12dp"
-    android:background="@drawable/bg_liquid_glass_card"
+    android:layout_marginBottom="14dp"
+    android:background="@drawable/bg_alarm_card_luxury"
     android:clickable="true"
+    android:clipChildren="false"
+    android:clipToPadding="false"
     android:focusable="true"
-    android:foreground="?attr/selectableItemBackground"
     android:layoutDirection="ltr"
     android:orientation="vertical"
     android:padding="16dp">
 
+    <!-- Row 1: Animated Radar Emblem, Category Eyebrow, Title & Arm Switch -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:clipChildren="false"
+        android:clipToPadding="false"
         android:gravity="center_vertical"
         android:orientation="horizontal">
 
-        <ImageView
-            android:id="@+id/ivCategoryIcon"
-            android:layout_width="44dp"
-            android:layout_height="44dp"
-            android:background="@drawable/bg_icon_circle_dark"
-            android:contentDescription="@string/cd_alarm_icon"
-            android:padding="10dp"
-            android:src="@drawable/ic_pin_wake" />
+        <FrameLayout
+            android:layout_width="52dp"
+            android:layout_height="52dp"
+            android:clipChildren="false"
+            android:clipToPadding="false">
+
+            <View
+                android:id="@+id/viewRadarHalo"
+                android:layout_width="50dp"
+                android:layout_height="50dp"
+                android:layout_gravity="center"
+                android:background="@drawable/bg_radar_halo_ring"
+                android:visibility="gone"
+                tools:visibility="visible" />
+
+            <ImageView
+                android:id="@+id/ivCategoryIcon"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:layout_gravity="center"
+                android:background="@drawable/bg_icon_circle_dark"
+                android:contentDescription="@string/cd_alarm_icon"
+                android:padding="10dp"
+                android:src="@drawable/ic_pin_wake" />
+        </FrameLayout>
 
         <LinearLayout
             android:layout_width="0dp"
@@ -37,13 +58,41 @@
             android:layout_weight="1"
             android:orientation="vertical">
 
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <View
+                    android:id="@+id/dotAlarmStatus"
+                    android:layout_width="7dp"
+                    android:layout_height="7dp"
+                    android:background="@drawable/bg_badge_emerald" />
+
+                <TextView
+                    android:id="@+id/tvAlarmCategoryEyebrow"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:ellipsize="end"
+                    android:letterSpacing="0.06"
+                    android:maxLines="1"
+                    android:textAppearance="@style/TextAppearance.PinWake.Mono"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="10sp"
+                    tools:text="HOME · ARMED" />
+            </LinearLayout>
+
             <TextView
                 android:id="@+id/tvAlarmName"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:layout_marginTop="3dp"
                 android:ellipsize="end"
                 android:maxLines="1"
                 android:textAppearance="@style/TextAppearance.PinWake.Title"
+                android:textColor="@color/text_primary"
                 android:textSize="16sp"
                 android:textStyle="bold"
                 tools:text="Central Station" />
@@ -69,17 +118,18 @@
             android:minHeight="48dp" />
     </LinearLayout>
 
+    <!-- Gradient Hairline Separator -->
     <View
         android:layout_width="match_parent"
         android:layout_height="1dp"
-        android:layout_marginTop="12dp"
-        android:background="#14FFFFFF" />
+        android:layout_marginTop="13dp"
+        android:background="@drawable/bg_hairline_gradient" />
 
-    <!-- Distance, Radius & Quick Actions -->
+    <!-- Row 2: Live Distance & Geofence Radius Telemetry Strip -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="10dp"
+        android:layout_marginTop="12dp"
         android:gravity="center_vertical"
         android:orientation="horizontal">
 
@@ -88,7 +138,10 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:background="@drawable/bg_badge_cyan"
-            android:paddingHorizontal="10dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:maxWidth="172dp"
+            android:paddingHorizontal="11dp"
             android:paddingVertical="5dp"
             android:textAppearance="@style/TextAppearance.PinWake.Mono"
             android:textColor="@color/accent_cyan_glow"
@@ -101,42 +154,64 @@
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
             android:background="@drawable/bg_liquid_glass_pill"
-            android:paddingHorizontal="10dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:paddingHorizontal="11dp"
             android:paddingVertical="5dp"
             android:textAppearance="@style/TextAppearance.PinWake.Mono"
             android:textColor="@color/text_secondary"
             android:textSize="11sp"
             tools:text="500 m radius" />
+    </LinearLayout>
 
-        <View
-            android:layout_width="0dp"
-            android:layout_height="0dp"
-            android:layout_weight="1" />
+    <!-- Row 3: Symmetrical Non-Overlapping Action Dock (All >= 48dp Touch Targets) -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="14dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
 
-        <TextView
+        <LinearLayout
             android:id="@+id/btnEditAlarm"
-            android:layout_width="wrap_content"
-            android:layout_height="40dp"
-            android:background="@drawable/bg_liquid_glass_pill"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_luxury_glass_pill"
             android:clickable="true"
             android:focusable="true"
-            android:foreground="?attr/selectableItemBackgroundBorderless"
             android:gravity="center"
-            android:minWidth="64dp"
-            android:paddingHorizontal="14dp"
-            android:text="@string/action_edit_on_map"
-            android:textColor="@color/text_primary"
-            android:textSize="12sp"
-            android:textStyle="bold" />
+            android:orientation="horizontal"
+            android:paddingHorizontal="16dp">
+
+            <ImageView
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_edit"
+                app:tint="@color/accent_cyan_glow" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="@string/action_edit_on_map"
+                android:textColor="@color/text_primary"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+        </LinearLayout>
 
         <ImageButton
             android:id="@+id/btnShareAlarm"
             android:layout_width="48dp"
             android:layout_height="48dp"
-            android:layout_marginStart="2dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
+            android:layout_marginStart="12dp"
+            android:background="@drawable/bg_luxury_glass_pill"
             android:contentDescription="@string/cd_share_destination"
             android:padding="13dp"
+            android:scaleType="centerInside"
             android:src="@drawable/ic_share"
             app:tint="@color/accent_cyan_glow" />
 
@@ -144,11 +219,13 @@
             android:id="@+id/btnDeleteAlarm"
             android:layout_width="48dp"
             android:layout_height="48dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
+            android:layout_marginStart="12dp"
+            android:background="@drawable/bg_luxury_glass_pill_rose"
             android:contentDescription="@string/cd_delete_alarm"
-            android:padding="12dp"
+            android:padding="13dp"
+            android:scaleType="centerInside"
             android:src="@drawable/ic_delete"
-            app:tint="@color/text_secondary" />
+            app:tint="@color/accent_rose" />
     </LinearLayout>
 
 </LinearLayout>

@@ -430,26 +430,36 @@ object MapStyleHelper {
             existingSource.setGeoJson(features)
         }
 
+        val firstMapLabelId = style.layers.firstOrNull {
+            it is SymbolLayer && !it.id.startsWith("pinwake-")
+        }?.id
+
         if (style.getLayer(fillLayerId) == null) {
-            style.addLayer(
-                FillLayer(fillLayerId, sourceId).apply {
-                    setProperties(
-                        PropertyFactory.fillColor("#06B6D4"),
-                        PropertyFactory.fillOpacity(0.14f) // Equivalent to #2206B6D4
-                    )
-                }
-            )
+            val fillLayer = FillLayer(fillLayerId, sourceId).apply {
+                setProperties(
+                    PropertyFactory.fillColor("#22D3EE"),
+                    PropertyFactory.fillOpacity(0.14f)
+                )
+            }
+            if (firstMapLabelId != null) {
+                style.addLayerBelow(fillLayer, firstMapLabelId)
+            } else {
+                style.addLayer(fillLayer)
+            }
         }
         if (style.getLayer(lineLayerId) == null) {
-            style.addLayer(
-                LineLayer(lineLayerId, sourceId).apply {
-                    setProperties(
-                        PropertyFactory.lineColor("#06B6D4"),
-                        PropertyFactory.lineWidth(2.4f),
-                        PropertyFactory.lineOpacity(0.95f)
-                    )
-                }
-            )
+            val lineLayer = LineLayer(lineLayerId, sourceId).apply {
+                setProperties(
+                    PropertyFactory.lineColor("#22D3EE"),
+                    PropertyFactory.lineWidth(2.4f),
+                    PropertyFactory.lineOpacity(0.95f)
+                )
+            }
+            if (firstMapLabelId != null) {
+                style.addLayerBelow(lineLayer, firstMapLabelId)
+            } else {
+                style.addLayer(lineLayer)
+            }
         }
     }
 

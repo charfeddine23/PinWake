@@ -36,8 +36,8 @@ class SlideToDismissView @JvmOverloads constructor(
 
     private val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
-        strokeWidth = 1.25f * density
-        color = ContextCompat.getColor(context, R.color.glass_stroke_bright)
+        strokeWidth = 1.5f * density
+        color = ContextCompat.getColor(context, R.color.glass_stroke_cyan)
     }
 
     private val activeTrackPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -81,7 +81,7 @@ class SlideToDismissView @JvmOverloads constructor(
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        val desiredHeight = (64f * density).toInt()
+        val desiredHeight = (68f * density).toInt()
         val height = resolveSize(desiredHeight, heightMeasureSpec)
         val width = MeasureSpec.getSize(widthMeasureSpec)
         setMeasuredDimension(width, height)
@@ -208,7 +208,7 @@ class SlideToDismissView @JvmOverloads constructor(
 
     private fun animateBackToStart() {
         ValueAnimator.ofFloat(thumbOffsetPx, 0f).apply {
-            duration = 260L
+            duration = 180L
             interpolator = OvershootInterpolator(1.1f)
             addUpdateListener {
                 thumbOffsetPx = it.animatedValue as Float
