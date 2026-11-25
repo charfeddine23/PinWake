@@ -1,5 +1,8 @@
 package com.example.ui.alarm
 
+import android.animation.ObjectAnimator
+import android.animation.ValueAnimator
+import android.annotation.SuppressLint
 import android.app.KeyguardManager
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -17,7 +20,10 @@ import android.os.VibrationAttributes
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import android.view.MotionEvent
+import android.view.View
 import android.view.WindowManager
+import android.view.animation.OvershootInterpolator
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
@@ -47,6 +53,7 @@ class AlarmRingingActivity : AppCompatActivity() {
     private var savedAlarmStreamVolume: Int? = null
     private var vibrator: Vibrator? = null
     private var crescendoJob: Job? = null
+    private var badgePulseAnimator: ObjectAnimator? = null
 
     private var alarmId: Long = -1L
     private var currentDistanceMeters: Float = 0f
@@ -92,6 +99,8 @@ class AlarmRingingActivity : AppCompatActivity() {
         binding.btnSnooze500m.setOnClickListener {
             handleSnooze500m()
         }
+        attachSnoozePressFeedback(binding.btnSnooze500m)
+        startRingingBadgePulse()
     }
 
     override fun onNewIntent(intent: android.content.Intent) {
@@ -324,7 +333,50 @@ class AlarmRingingActivity : AppCompatActivity() {
         runCatching { vibrator?.cancel() }
     }
 
+    @SuppressLint("ClickableViewAccessibility")
+    private fun attachSnoozePressFeedback(view: View) {
+        view.setOnTouchListener { target, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    target.animate().cancel()
+                    target.animate()
+                        .scaleX(0.96f)
+                        .scaleY(0.96f)
+                        .setDuration(80L)
+                        .start()
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    target.animate().cancel()
+                    target.animate()
+                        .scaleX(1f)
+                        .scaleY(1f)
+                        .setDuration(180L)
+                        .setInterpolator(OvershootInterpolator(1.6f))
+                        .start()
+                }
+            }
+            false
+        }
+    }
+
+    private fun startRingingBadgePulse() {
+        badgePulseAnimator?.cancel()
+        badgePulseAnimator = ObjectAnimator.ofFloat(
+            binding.tvRingingBadge,
+            View.ALPHA,
+            1f,
+            0.45f
+        ).apply {
+            repeatCount = ValueAnimator.INFINITE
+            repeatMode = ValueAnimator.REVERSE
+            duration = 650L
+            start()
+        }
+    }
+
     override fun onDestroy() {
+        badgePulseAnimator?.cancel()
+        badgePulseAnimator = null
         runCatching { unregisterReceiver(finishRingingReceiver) }
         stopAudioAndVibration()
         super.onDestroy()

@@ -9,7 +9,10 @@ import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
+import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import com.example.R
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 
 data class PermissionStatus(
     val hasFineLocation: Boolean,
@@ -29,6 +32,8 @@ data class PermissionStatus(
 }
 
 object PermissionHelper {
+
+    private var promptedBgReadinessThisSession = false
 
     fun hasTrackingLocation(context: Context): Boolean {
         val fine = ContextCompat.checkSelfPermission(
@@ -85,6 +90,56 @@ object PermissionHelper {
             isBatteryUnrestricted = batteryUnrestricted,
             hasDndBypassAccess = dndBypass
         )
+    }
+
+    fun needsMandatoryBackgroundReadiness(context: Context): Boolean {
+        val status = checkStatus(context)
+        return status.hasFineLocation && (!status.hasBackgroundLocation || !status.isBatteryUnrestricted)
+    }
+
+    fun promptMandatoryBackgroundReadinessIfNeeded(
+        activity: AppCompatActivity,
+        onComplete: (() -> Unit)? = null
+    ) {
+        if (activity.isDestroyed || activity.isFinishing) {
+            onComplete?.invoke()
+            return
+        }
+        val status = checkStatus(activity)
+        if (!status.hasFineLocation ||
+            (status.hasBackgroundLocation && status.isBatteryUnrestricted) ||
+            promptedBgReadinessThisSession
+        ) {
+            onComplete?.invoke()
+            return
+        }
+        promptedBgReadinessThisSession = true
+
+        val messageRes = if (!status.hasBackgroundLocation) {
+            R.string.bg_readiness_dialog_message_location
+        } else {
+            R.string.bg_readiness_dialog_message_battery
+        }
+
+        MaterialAlertDialogBuilder(activity)
+            .setTitle(R.string.bg_readiness_dialog_title)
+            .setMessage(messageRes)
+            .setPositiveButton(R.string.perm_open_settings) { _, _ ->
+                val targetIntent = if (!status.hasBackgroundLocation) {
+                    buildAppSettingsIntent(activity)
+                } else {
+                    buildBatteryOptimizationIntent(activity)
+                }
+                runCatching { activity.startActivity(targetIntent) }
+                onComplete?.invoke()
+            }
+            .setNegativeButton(R.string.update_btn_maybe_later) { _, _ ->
+                onComplete?.invoke()
+            }
+            .setOnCancelListener {
+                onComplete?.invoke()
+            }
+            .show()
     }
 
     fun buildAppSettingsIntent(context: Context): Intent {

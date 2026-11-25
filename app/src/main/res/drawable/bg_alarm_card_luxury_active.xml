@@ -1,17 +1,37 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ripple xmlns:android="http://schemas.android.com/apk/res/android"
-    android:color="#3322D3EE">
+    android:color="#3822D3EE">
     <item>
-        <shape android:shape="rectangle">
-            <gradient
-                android:angle="135"
-                android:endColor="@color/glass_active_end"
-                android:startColor="@color/glass_card_active_fill"
-                android:type="linear" />
-            <corners android:radius="22dp" />
-            <stroke
-                android:width="1dp"
-                android:color="@color/glass_stroke_cyan" />
-        </shape>
+        <layer-list>
+            <item>
+                <shape android:shape="rectangle">
+                    <gradient
+                        android:angle="135"
+                        android:centerColor="#E00B222B"
+                        android:endColor="#EB081920"
+                        android:startColor="#E611343D"
+                        android:type="linear" />
+                    <corners android:radius="22dp" />
+                    <stroke
+                        android:width="1.25dp"
+                        android:color="#8822D3EE" />
+                </shape>
+            </item>
+            <item
+                android:bottom="1dp"
+                android:left="1dp"
+                android:right="1dp"
+                android:top="1dp">
+                <shape android:shape="rectangle">
+                    <gradient
+                        android:angle="270"
+                        android:centerColor="#0522D3EE"
+                        android:endColor="#0022D3EE"
+                        android:startColor="#1E22D3EE"
+                        android:type="linear" />
+                    <corners android:radius="21dp" />
+                </shape>
+            </item>
+        </layer-list>
     </item>
 </ripple>

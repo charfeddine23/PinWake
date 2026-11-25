@@ -1,8 +1,13 @@
 package com.example.ui.dashboard
 
+import android.annotation.SuppressLint
 import android.text.format.DateFormat
 import android.view.LayoutInflater
+import android.view.MotionEvent
+import android.view.View
 import android.view.ViewGroup
+import android.view.animation.DecelerateInterpolator
+import android.view.animation.OvershootInterpolator
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
@@ -16,6 +21,8 @@ import java.util.Date
 class TripHistoryAdapter(
     private val onReplayClick: (TripHistoryEntity) -> Unit = {}
 ) : ListAdapter<TripHistoryEntity, TripHistoryAdapter.HistoryViewHolder>(DiffCallback) {
+
+    private val seenTripIds = mutableSetOf<Long>()
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): HistoryViewHolder {
         val binding = ItemTripHistoryBinding.inflate(
@@ -34,8 +41,14 @@ class TripHistoryAdapter(
         private val binding: ItemTripHistoryBinding
     ) : RecyclerView.ViewHolder(binding.root) {
 
+        init {
+            attachLuxuryPressFeedback(binding.cardHistoryRoot)
+            attachLuxuryPressFeedback(binding.btnReplayTrip)
+        }
+
         fun bind(item: TripHistoryEntity) {
             val ctx = binding.root.context
+            val density = ctx.resources.displayMetrics.density
             binding.tvHistoryTitle.text = item.alarmTitle
             val timeFormatted = DateFormat.getTimeFormat(ctx).format(Date(item.triggeredAt))
             val dateFormatted = DateFormat.getMediumDateFormat(ctx).format(Date(item.triggeredAt))
@@ -67,6 +80,46 @@ class TripHistoryAdapter(
 
             binding.btnReplayTrip.setOnClickListener { onReplayClick(item) }
             binding.cardHistoryRoot.setOnClickListener { onReplayClick(item) }
+
+            if (seenTripIds.add(item.id)) {
+                binding.cardHistoryRoot.alpha = 0f
+                binding.cardHistoryRoot.translationY = 10f * density
+                binding.cardHistoryRoot.animate()
+                    .alpha(1f)
+                    .translationY(0f)
+                    .setDuration(180L)
+                    .setInterpolator(DecelerateInterpolator())
+                    .start()
+            } else {
+                binding.cardHistoryRoot.alpha = 1f
+                binding.cardHistoryRoot.translationY = 0f
+            }
+        }
+
+        @SuppressLint("ClickableViewAccessibility")
+        private fun attachLuxuryPressFeedback(view: View) {
+            view.setOnTouchListener { target, event ->
+                when (event.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> {
+                        target.animate().cancel()
+                        target.animate()
+                            .scaleX(0.96f)
+                            .scaleY(0.96f)
+                            .setDuration(80L)
+                            .start()
+                    }
+                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                        target.animate().cancel()
+                        target.animate()
+                            .scaleX(1f)
+                            .scaleY(1f)
+                            .setDuration(180L)
+                            .setInterpolator(OvershootInterpolator(1.6f))
+                            .start()
+                    }
+                }
+                false
+            }
         }
     }
 

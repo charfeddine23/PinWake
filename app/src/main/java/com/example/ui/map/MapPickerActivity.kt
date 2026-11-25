@@ -123,7 +123,9 @@ class MapPickerActivity : AppCompatActivity() {
             if (granted) {
                 viewModel.saveAndActivateAlarm(pendingSave.first, pendingSave.second, activateNow = true) {
                     PinWakeService.startOrSync(this)
-                    finish()
+                    PermissionHelper.promptMandatoryBackgroundReadinessIfNeeded(this) {
+                        if (!isDestroyed && !isFinishing) finish()
+                    }
                 }
             } else {
                 viewModel.saveAndActivateAlarm(pendingSave.first, pendingSave.second, activateNow = false) {
@@ -178,18 +180,23 @@ class MapPickerActivity : AppCompatActivity() {
                     userEditedTitle = true
                     lockedGeocodeCoord = existing.latitude to existing.longitude
                     setTitleProgrammatically(existing.title)
-                    binding.sliderRadius.value = existing.radiusMeters.toFloat().coerceIn(200f, 5000f)
-                    binding.tvRadiusValue.text = DistanceFormatter.formatRadiusSliderValue(this, existing.radiusMeters)
+                    val snappedRadius = (((existing.radiusMeters.coerceIn(10, 5000) + 5) / 10) * 10)
+                        .coerceIn(10, 5000)
+                    if (snappedRadius != existing.radiusMeters) {
+                        viewModel.updateRadius(snappedRadius)
+                    }
+                    binding.sliderRadius.value = snappedRadius.toFloat()
+                    binding.tvRadiusValue.text = DistanceFormatter.formatRadiusSliderValue(this, snappedRadius)
                     binding.btnSaveAlarm.setText(R.string.map_update_alarm)
                     selectCategoryChip(existing.favoriteCategory)
                     moveCameraTo(
                         lat = existing.latitude,
                         lon = existing.longitude,
-                        zoom = 16.0,
+                        zoom = if (snappedRadius <= 100) 17.5 else 16.0,
                         animate = false,
                         triggerReverseGeocode = false
                     )
-                    updateCircleOverlay(existing.latitude, existing.longitude, existing.radiusMeters)
+                    updateCircleOverlay(existing.latitude, existing.longitude, snappedRadius)
                 }
                 hasSharedCoords -> {
                     selectCategoryChip(defaultCategory)
@@ -640,7 +647,9 @@ class MapPickerActivity : AppCompatActivity() {
                             onDismissed = { finish() }
                         )
                     } else {
-                        finish()
+                        PermissionHelper.promptMandatoryBackgroundReadinessIfNeeded(this) {
+                            if (!isDestroyed && !isFinishing) finish()
+                        }
                     }
                 }
             } else {
@@ -943,6 +952,15 @@ class MapPickerActivity : AppCompatActivity() {
         }
         binding.ivCrosshair.setColorFilter(ContextCompat.getColor(this, tintColorRes))
         binding.ivCrosshairCategoryIcon.setImageResource(iconRes)
+        binding.ivCrosshairCategoryIcon.animate().cancel()
+        binding.ivCrosshairCategoryIcon.scaleX = 0.82f
+        binding.ivCrosshairCategoryIcon.scaleY = 0.82f
+        binding.ivCrosshairCategoryIcon.animate()
+            .scaleX(1f)
+            .scaleY(1f)
+            .setDuration(220L)
+            .setInterpolator(OvershootInterpolator(1.8f))
+            .start()
     }
 
     private fun preFillCategoryTitle(category: FavoriteCategory) {

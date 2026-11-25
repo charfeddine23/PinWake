@@ -62,6 +62,7 @@ class PinWakeService : Service() {
     private var currentTier: PollingTier = PollingTier.STANDBY
     private var lastKnownLocation: Location? = null
     private var isForegroundStarted = false
+    private var isExplicitlyStopping = false
     private var trackingWakeLock: PowerManager.WakeLock? = null
     private var providersReceiverRegistered = false
     private val triggeredUpdatedAt = mutableMapOf<Long, Long>()
@@ -117,6 +118,7 @@ class PinWakeService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        isExplicitlyStopping = false
         // Always enter foreground synchronously before any async branching or stopSelf()
         // to satisfy Android 12+ startForegroundService() contract and avoid ANR/crash.
         if (!ensureForegroundStartedSafe()) {
@@ -240,6 +242,7 @@ class PinWakeService : Service() {
                 }
 
                 syncWakeLockForActiveTracking()
+                scheduleWatchdogRestart(WATCHDOG_HEARTBEAT_MS)
                 handleGpsAvailabilityChange()
 
                 if (lastKnownLocation == null || !isLocationFresh(lastKnownLocation)) {
@@ -327,7 +330,8 @@ class PinWakeService : Service() {
 
             val accuracyAcceptable = !location.hasAccuracy() ||
                 location.provider == LocationManager.GPS_PROVIDER ||
-                location.accuracy <= (alarm.radiusMeters * 1.5f).coerceAtLeast(500f)
+                location.accuracy <= (alarm.radiusMeters * 1.5f)
+                    .coerceAtLeast(if (alarm.radiusMeters < 100) 60f else 500f)
 
             val preAlertOffset = PreAlertPreferences.getPreAlertDistanceMeters(this@PinWakeService)
             val alreadyTriggeredForVersion = triggeredUpdatedAt[alarm.id] == alarm.updatedAt
@@ -375,6 +379,7 @@ class PinWakeService : Service() {
             notificationManager.cancel(NOTIFICATION_GPS_WATCHDOG_ID)
         }
         syncWakeLockForActiveTracking()
+        scheduleWatchdogRestart(WATCHDOG_HEARTBEAT_MS)
 
         repository.trackingStateManager.update {
             it.copy(
@@ -558,13 +563,11 @@ class PinWakeService : Service() {
 
     @SuppressLint("WakelockTimeout")
     private fun syncWakeLockForActiveTracking() {
-        val shouldHold = currentActiveAlarms.isNotEmpty() &&
-            PreAlertPreferences.isForcedGpsKeepOnEnabled(this)
-        if (shouldHold) {
+        if (currentActiveAlarms.isNotEmpty()) {
             val pm = getSystemService(PowerManager::class.java) ?: return
             val wl = trackingWakeLock ?: pm.newWakeLock(
                 PowerManager.PARTIAL_WAKE_LOCK,
-                "PinWake::ForcedGpsKeepAlive"
+                "PinWake::MandatoryBgWakeLock"
             ).also {
                 it.setReferenceCounted(false)
                 trackingWakeLock = it
@@ -801,7 +804,47 @@ class PinWakeService : Service() {
         }
     }
 
+    private fun scheduleWatchdogRestart(delayMs: Long) {
+        val restartIntent = Intent(this, BootAndWatchdogReceiver::class.java).apply {
+            action = BootAndWatchdogReceiver.ACTION_WATCHDOG_RESTART
+        }
+        val restartPending = PendingIntent.getBroadcast(
+            this,
+            NOTIFICATION_TRACKING_ID + 7,
+            restartIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val am = getSystemService(AlarmManager::class.java)
+        runCatching {
+            am?.setAndAllowWhileIdle(
+                AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                SystemClock.elapsedRealtime() + delayMs,
+                restartPending
+            )
+        }
+    }
+
+    private fun cancelWatchdogRestart() {
+        val restartIntent = Intent(this, BootAndWatchdogReceiver::class.java).apply {
+            action = BootAndWatchdogReceiver.ACTION_WATCHDOG_RESTART
+        }
+        val restartPending = PendingIntent.getBroadcast(
+            this,
+            NOTIFICATION_TRACKING_ID + 7,
+            restartIntent,
+            PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
+        )
+        if (restartPending != null) {
+            runCatching {
+                getSystemService(AlarmManager::class.java)?.cancel(restartPending)
+                restartPending.cancel()
+            }
+        }
+    }
+
     private fun stopTrackingAndSelf() {
+        isExplicitlyStopping = true
+        cancelWatchdogRestart()
         locationManager.removeUpdates(locationListener)
         notificationManager.cancel(NOTIFICATION_GPS_WATCHDOG_ID)
         releaseTrackingWakeLock()
@@ -814,31 +857,18 @@ class PinWakeService : Service() {
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         super.onTaskRemoved(rootIntent)
-        if (currentActiveAlarms.isNotEmpty() &&
-            PreAlertPreferences.isForcedGpsKeepOnEnabled(this) &&
-            hasLocationPermission()
-        ) {
-            val restartIntent = Intent(this, BootAndWatchdogReceiver::class.java).apply {
-                action = BootAndWatchdogReceiver.ACTION_WATCHDOG_RESTART
-            }
-            val restartPending = PendingIntent.getBroadcast(
-                this,
-                NOTIFICATION_TRACKING_ID + 7,
-                restartIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-            val am = getSystemService(AlarmManager::class.java)
-            runCatching {
-                am?.setAndAllowWhileIdle(
-                    AlarmManager.ELAPSED_REALTIME_WAKEUP,
-                    SystemClock.elapsedRealtime() + 1_500L,
-                    restartPending
-                )
-            }
+        if (currentActiveAlarms.isNotEmpty() && hasLocationPermission()) {
+            scheduleWatchdogRestart(1_200L)
         }
     }
 
     override fun onDestroy() {
+        val shouldSelfHeal = !isExplicitlyStopping &&
+            currentActiveAlarms.isNotEmpty() &&
+            hasLocationPermission()
+        if (shouldSelfHeal) {
+            scheduleWatchdogRestart(1_500L)
+        }
         locationManager.removeUpdates(locationListener)
         notificationManager.cancel(NOTIFICATION_GPS_WATCHDOG_ID)
         releaseTrackingWakeLock()
@@ -859,6 +889,7 @@ class PinWakeService : Service() {
         const val NOTIFICATION_ALARM_BASE_ID = 5000
         const val NOTIFICATION_PRE_ALERT_BASE_ID = 6500
         private const val MAX_CACHED_LOCATION_AGE_MS = 120_000L
+        private const val WATCHDOG_HEARTBEAT_MS = 60_000L
 
         const val ACTION_SYNC_TRACKING = "com.example.service.ACTION_SYNC_TRACKING"
         const val ACTION_STOP_TRACKING = "com.example.service.ACTION_STOP_TRACKING"

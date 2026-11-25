@@ -240,4 +240,10 @@
     <string name="offline_gps_pin_title">Offline GPS Pin</string>
     <string name="offline_gps_pin_address">Offline GPS coordinates (%1$.4f, %2$.4f)</string>
     <string name="offline_gps_waiting_satellite">Locking offline GPS satellites…</string>
+
+    <!-- Mandatory Background Keep-Alive -->
+    <string name="bg_tracking_locked_badge">BG LOCKED</string>
+    <string name="bg_readiness_dialog_title">Keep Active in Background</string>
+    <string name="bg_readiness_dialog_message_location">To keep Pin Wake forcefully monitoring in the background when the screen is off or the app is minimized, set Location access to \"Allow all the time\".</string>
+    <string name="bg_readiness_dialog_message_battery">To prevent Android from pausing active alarms in the background, allow Unrestricted battery usage.</string>
 </resources>

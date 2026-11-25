@@ -4,6 +4,7 @@ import android.Manifest
 import android.animation.ObjectAnimator
 import android.animation.ValueAnimator
 import android.annotation.SuppressLint
+import android.app.ActivityOptions
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -118,6 +119,8 @@ class MainActivity : AppCompatActivity() {
     private var quickAssignDialog: BottomSheetDialog? = null
     private var installUpdateDialog: BottomSheetDialog? = null
     private var brandArrowPulseAnimator: ObjectAnimator? = null
+    private var trackingDotPulseAnimator: ObjectAnimator? = null
+    private var heroRadarDotPulseAnimator: ObjectAnimator? = null
     private var pendingInstallApk: File? = null
     private var promptedGpsThisSession = false
     private var isGpsDialogShowing = false
@@ -164,6 +167,9 @@ class MainActivity : AppCompatActivity() {
                 viewModel.setAlarmActive(pendingToArm, true) { hasActive ->
                     if (hasActive) {
                         PinWakeService.startOrSync(this)
+                        if (GpsEnforcementHelper.isGpsProviderEnabled(this)) {
+                            PermissionHelper.promptMandatoryBackgroundReadinessIfNeeded(this)
+                        }
                     }
                 }
             } else {
@@ -335,6 +341,7 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         cancelPendingMapHold()
         stopBrandArrowPulse()
+        stopTelemetryDotPulse()
         quickAssignDialog?.dismiss()
         quickAssignDialog = null
         installUpdateDialog?.dismiss()
@@ -851,6 +858,8 @@ class MainActivity : AppCompatActivity() {
                         PinWakeService.startOrSync(this)
                         if (active && !GpsEnforcementHelper.isGpsProviderEnabled(this)) {
                             showGpsEnablePromptIfNeeded(mandatory = true)
+                        } else if (active) {
+                            PermissionHelper.promptMandatoryBackgroundReadinessIfNeeded(this)
                         }
                     } else if (!hasActive) {
                         PinWakeService.stopTracking(this)
@@ -904,6 +913,8 @@ class MainActivity : AppCompatActivity() {
                     PinWakeService.startOrSync(this)
                     if (!GpsEnforcementHelper.isGpsProviderEnabled(this)) {
                         showGpsEnablePromptIfNeeded(mandatory = true)
+                    } else {
+                        PermissionHelper.promptMandatoryBackgroundReadinessIfNeeded(this)
                     }
                 }
                 Toast.makeText(
@@ -1288,9 +1299,11 @@ class MainActivity : AppCompatActivity() {
         if (telemetry.isTracking && state.activeCount > 0) {
             binding.tvOfflineGpsChip.visibility =
                 if (offline || telemetry.isOfflineMode) View.VISIBLE else View.GONE
+            binding.tvBgLockedChip.visibility = View.VISIBLE
             binding.cardLiveTelemetry.setBackgroundResource(R.drawable.bg_liquid_glass_card_active)
             binding.viewTrackingDot.setBackgroundResource(R.drawable.bg_badge_emerald)
             binding.viewHeroRadarDot.setBackgroundResource(R.drawable.bg_badge_emerald)
+            startTelemetryDotPulse()
             binding.tvHeroRadarText.text = getString(R.string.hero_live_radar)
             binding.tvHeroRadarText.setTextColor(ContextCompat.getColor(this, R.color.accent_emerald))
             binding.tvTrackingTarget.text =
@@ -1332,8 +1345,10 @@ class MainActivity : AppCompatActivity() {
                 binding.btnShareTripStatus.visibility = View.GONE
             }
         } else {
+            stopTelemetryDotPulse()
             binding.tvOfflineGpsChip.visibility =
                 if (offline && state.activeCount > 0) View.VISIBLE else View.GONE
+            binding.tvBgLockedChip.visibility = View.GONE
             binding.cardLiveTelemetry.setBackgroundResource(R.drawable.bg_liquid_glass_card)
             binding.viewTrackingDot.setBackgroundResource(R.drawable.bg_badge_cyan)
             binding.viewHeroRadarDot.setBackgroundResource(R.drawable.bg_badge_cyan)
@@ -1348,6 +1363,44 @@ class MainActivity : AppCompatActivity() {
             )
             binding.btnShareTripStatus.visibility = View.GONE
         }
+    }
+
+    private fun startTelemetryDotPulse() {
+        if (trackingDotPulseAnimator?.isRunning != true) {
+            trackingDotPulseAnimator = ObjectAnimator.ofFloat(
+                binding.viewTrackingDot,
+                View.ALPHA,
+                1f,
+                0.35f
+            ).apply {
+                repeatCount = ValueAnimator.INFINITE
+                repeatMode = ValueAnimator.REVERSE
+                duration = 900L
+                start()
+            }
+        }
+        if (heroRadarDotPulseAnimator?.isRunning != true) {
+            heroRadarDotPulseAnimator = ObjectAnimator.ofFloat(
+                binding.viewHeroRadarDot,
+                View.ALPHA,
+                1f,
+                0.35f
+            ).apply {
+                repeatCount = ValueAnimator.INFINITE
+                repeatMode = ValueAnimator.REVERSE
+                duration = 900L
+                start()
+            }
+        }
+    }
+
+    private fun stopTelemetryDotPulse() {
+        trackingDotPulseAnimator?.cancel()
+        trackingDotPulseAnimator = null
+        heroRadarDotPulseAnimator?.cancel()
+        heroRadarDotPulseAnimator = null
+        binding.viewTrackingDot.alpha = 1f
+        binding.viewHeroRadarDot.alpha = 1f
     }
 
     private fun renderQuickFavorite(
@@ -1386,6 +1439,8 @@ class MainActivity : AppCompatActivity() {
                         PinWakeService.startOrSync(this)
                         if (nextActive && !GpsEnforcementHelper.isGpsProviderEnabled(this)) {
                             showGpsEnablePromptIfNeeded(mandatory = true)
+                        } else if (nextActive) {
+                            PermissionHelper.promptMandatoryBackgroundReadinessIfNeeded(this)
                         }
                     } else if (!hasActive) {
                         PinWakeService.stopTracking(this)
@@ -1613,6 +1668,9 @@ class MainActivity : AppCompatActivity() {
                 lastHeroCameraKey = null
                 if (hasAnyActive && PermissionHelper.hasTrackingLocation(this)) {
                     PinWakeService.startOrSync(this)
+                    if (activateAlarm && GpsEnforcementHelper.isGpsProviderEnabled(this)) {
+                        PermissionHelper.promptMandatoryBackgroundReadinessIfNeeded(this)
+                    }
                 } else if (!hasAnyActive) {
                     PinWakeService.stopTracking(this)
                 }
@@ -1788,7 +1846,12 @@ class MainActivity : AppCompatActivity() {
         val intent = Intent(this, SettingsActivity::class.java).apply {
             putExtra(SettingsActivity.EXTRA_SCROLL_TO_UPDATES, scrollToUpdates)
         }
-        startActivity(intent)
+        val options = ActivityOptions.makeCustomAnimation(
+            this,
+            R.anim.pinwake_activity_enter,
+            R.anim.pinwake_activity_exit
+        )
+        startActivity(intent, options.toBundle())
     }
 
     private fun requestFineLocation() {
@@ -1856,7 +1919,12 @@ class MainActivity : AppCompatActivity() {
             if (alarmId > 0L) putExtra(MapPickerActivity.EXTRA_ALARM_ID, alarmId)
             putExtra(MapPickerActivity.EXTRA_DEFAULT_CATEGORY, defaultCategory.name)
         }
-        startActivity(intent)
+        val options = ActivityOptions.makeCustomAnimation(
+            this,
+            R.anim.pinwake_activity_enter,
+            R.anim.pinwake_activity_exit
+        )
+        startActivity(intent, options.toBundle())
     }
 
     private fun checkGpsOnResume() {

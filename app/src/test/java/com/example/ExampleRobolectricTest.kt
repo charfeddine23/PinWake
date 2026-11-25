@@ -636,4 +636,71 @@ class ExampleRobolectricTest {
             context.deleteDatabase(dbName)
         }
     }
+
+    @Test
+    fun `geofence radius allows 10m precision minimum across repository snooze replay and backup`() = kotlinx.coroutines.runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val db = androidx.room.Room.inMemoryDatabaseBuilder(
+            context,
+            com.example.data.local.AppDatabase::class.java
+        ).allowMainThreadQueries().build()
+
+        try {
+            val repo = com.example.data.repository.PinWakeRepository(
+                geoAlarmDao = db.geoAlarmDao(),
+                tripHistoryDao = db.tripHistoryDao(),
+                nominatimApi = com.example.data.remote.NominatimApiService.create(),
+                trackingStateManager = com.example.data.repository.TrackingStateManager()
+            )
+            val id10 = repo.saveQuickAssignedLocation(
+                category = com.example.data.local.entity.FavoriteCategory.NONE,
+                title = "Doorstep",
+                address = "Gate A",
+                latitude = 36.75,
+                longitude = 3.05,
+                radiusMeters = 10,
+                isActive = true
+            )
+            assertEquals(10, repo.getAlarmById(id10)?.radiusMeters)
+
+            val idClamped = repo.saveQuickAssignedLocation(
+                category = com.example.data.local.entity.FavoriteCategory.NONE,
+                title = "SubMin",
+                address = "Gate B",
+                latitude = 36.76,
+                longitude = 3.06,
+                radiusMeters = 3,
+                isActive = true
+            )
+            assertEquals(10, repo.getAlarmById(idClamped)?.radiusMeters)
+
+            val id20 = repo.saveQuickAssignedLocation(
+                category = com.example.data.local.entity.FavoriteCategory.NONE,
+                title = "Tight Stop",
+                address = "Gate C",
+                latitude = 36.77,
+                longitude = 3.07,
+                radiusMeters = 20,
+                isActive = true
+            )
+            val alarm20 = repo.getAlarmById(id20)!!
+            repo.applySnooze500m(alarm20, currentDistanceMeters = 15f)
+            assertEquals(10, repo.getAlarmById(id20)?.radiusMeters)
+
+            val json = """
+                {
+                  "schemaVersion": 1,
+                  "alarms": [
+                    {"title": "Exact10", "address": "A", "latitude": 36.75, "longitude": 3.05, "radiusMeters": 10},
+                    {"title": "Clamp10", "address": "B", "latitude": 36.76, "longitude": 3.06, "radiusMeters": 2}
+                  ]
+                }
+            """.trimIndent()
+            val parsed = com.example.util.BackupManager.parseFromJson(json).getOrThrow()
+            assertEquals(10, parsed.alarms[0].radiusMeters)
+            assertEquals(10, parsed.alarms[1].radiusMeters)
+        } finally {
+            db.close()
+        }
+    }
 }

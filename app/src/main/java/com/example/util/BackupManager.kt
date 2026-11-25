@@ -40,7 +40,7 @@ object BackupManager {
                         put("address", alarm.address)
                         put("latitude", alarm.latitude)
                         put("longitude", alarm.longitude)
-                        put("radiusMeters", alarm.radiusMeters.coerceIn(200, 5000))
+                        put("radiusMeters", alarm.radiusMeters.coerceIn(10, 5000))
                         put("isActive", alarm.isActive)
                         put("isFavorite", alarm.isFavorite)
                         put("favoriteCategory", alarm.favoriteCategory.name)
@@ -115,7 +115,7 @@ object BackupManager {
                     address = rawAddress.ifBlank { rawTitle },
                     latitude = lat,
                     longitude = lon,
-                    radiusMeters = obj.optInt("radiusMeters", 500).coerceIn(200, 5000),
+                    radiusMeters = obj.optInt("radiusMeters", 500).coerceIn(10, 5000),
                     isActive = obj.optBoolean("isActive", false),
                     isFavorite = isFavorite,
                     favoriteCategory = category,

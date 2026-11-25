@@ -75,7 +75,7 @@ class PinWakeRepository(
                 address = cleanAddress,
                 latitude = latitude,
                 longitude = longitude,
-                radiusMeters = radiusMeters.coerceIn(200, 5000),
+                radiusMeters = radiusMeters.coerceIn(10, 5000),
                 isActive = isActive,
                 isFavorite = true,
                 favoriteCategory = category,
@@ -94,7 +94,7 @@ class PinWakeRepository(
                     address = cleanAddress,
                     latitude = latitude,
                     longitude = longitude,
-                    radiusMeters = radiusMeters.coerceIn(200, 5000),
+                    radiusMeters = radiusMeters.coerceIn(10, 5000),
                     isActive = isActive,
                     isFavorite = category != FavoriteCategory.NONE,
                     favoriteCategory = category,
@@ -119,12 +119,14 @@ class PinWakeRepository(
     suspend fun applySnooze500m(alarm: GeoAlarmEntity, currentDistanceMeters: Float?) {
         val shrunkRadius = when {
             currentDistanceMeters != null && currentDistanceMeters > 700f ->
-                (currentDistanceMeters - 500f).toInt().coerceIn(200, 4500)
+                (currentDistanceMeters - 500f).toInt().coerceIn(10, 4500)
             alarm.radiusMeters > 700 ->
-                (alarm.radiusMeters - 500).coerceAtLeast(200)
+                (alarm.radiusMeters - 500).coerceAtLeast(10)
             alarm.radiusMeters > 200 ->
-                (alarm.radiusMeters - 300).coerceAtLeast(200)
-            else -> 200
+                (alarm.radiusMeters - 300).coerceAtLeast(10)
+            alarm.radiusMeters > 10 ->
+                (alarm.radiusMeters / 2).coerceAtLeast(10)
+            else -> 10
         }
         // Only grant a short cooldown if user is already at the exact inner core (<= 220m) or radius didn't shrink below distance
         val stillInsideNewRadius = currentDistanceMeters != null && currentDistanceMeters <= shrunkRadius
@@ -191,7 +193,7 @@ class PinWakeRepository(
                 address = cleanAddress.take(240),
                 latitude = trip.latitude,
                 longitude = trip.longitude,
-                radiusMeters = trip.radiusMeters.coerceIn(200, 5000),
+                radiusMeters = trip.radiusMeters.coerceIn(10, 5000),
                 isActive = true,
                 isFavorite = false,
                 favoriteCategory = FavoriteCategory.NONE,
@@ -242,7 +244,7 @@ class PinWakeRepository(
                     address = cleanAddress,
                     latitude = item.latitude,
                     longitude = item.longitude,
-                    radiusMeters = item.radiusMeters.coerceIn(200, 5000),
+                    radiusMeters = item.radiusMeters.coerceIn(10, 5000),
                     isActive = item.isActive,
                     isFavorite = item.isFavorite || matchByLocation.isFavorite,
                     favoriteCategory = if (item.favoriteCategory != FavoriteCategory.NONE) {
@@ -265,7 +267,7 @@ class PinWakeRepository(
                     id = 0L,
                     title = cleanTitle,
                     address = cleanAddress,
-                    radiusMeters = item.radiusMeters.coerceIn(200, 5000),
+                    radiusMeters = item.radiusMeters.coerceIn(10, 5000),
                     lastDistanceMeters = null,
                     snoozedUntilMs = 0L,
                     updatedAt = now

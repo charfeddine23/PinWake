@@ -8,7 +8,7 @@ enum class PollingTier(val intervalMs: Long, val minDistanceMeters: Float) {
     STANDBY(intervalMs = 0L, minDistanceMeters = 0f),
     ECO_30S(intervalMs = 30_000L, minDistanceMeters = 50f),
     BALANCED_10S(intervalMs = 10_000L, minDistanceMeters = 15f),
-    PRECISION_2S(intervalMs = 2_000L, minDistanceMeters = 0f);
+    PRECISION_2S(intervalMs = 1_200L, minDistanceMeters = 0f);
 
     companion object {
         fun forDistance(distanceMeters: Float): PollingTier {

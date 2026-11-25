@@ -240,4 +240,10 @@
     <string name="offline_gps_pin_title">نقطة GPS بدون إنترنت</string>
     <string name="offline_gps_pin_address">إحداثيات GPS بدون إنترنت (%1$.4f, %2$.4f)</string>
     <string name="offline_gps_waiting_satellite">جاري التقاط موقع GPS عبر الأقمار الصناعية…</string>
+
+    <!-- العمل الإجباري في الخلفية -->
+    <string name="bg_tracking_locked_badge">يعمل بالخلفية</string>
+    <string name="bg_readiness_dialog_title">تشغيل إجباري في الخلفية</string>
+    <string name="bg_readiness_dialog_message_location">لضمان عمل المنبه إجبارياً في الخلفية حتى عند إغلاق التطبيق أو قفل الشاشة، اختر \"السماح طوال الوقت\" لصلاحية الموقع.</string>
+    <string name="bg_readiness_dialog_message_battery">لضمان عدم إيقاف النظام للمنبهات النشطة في الخلفية، اسمح باستخدام البطارية \"بدون قيود\".</string>
 </resources>

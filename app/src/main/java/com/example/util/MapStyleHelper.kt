@@ -477,7 +477,7 @@ object MapStyleHelper {
             val fillLayer = FillLayer(fillLayerId, sourceId).apply {
                 setProperties(
                     PropertyFactory.fillColor("#22D3EE"),
-                    PropertyFactory.fillOpacity(0.14f)
+                    PropertyFactory.fillOpacity(0.16f)
                 )
             }
             if (firstMapLabelId != null) {
@@ -489,8 +489,8 @@ object MapStyleHelper {
         if (style.getLayer(lineLayerId) == null) {
             val lineLayer = LineLayer(lineLayerId, sourceId).apply {
                 setProperties(
-                    PropertyFactory.lineColor("#22D3EE"),
-                    PropertyFactory.lineWidth(2.4f),
+                    PropertyFactory.lineColor("#38BDF8"),
+                    PropertyFactory.lineWidth(2.6f),
                     PropertyFactory.lineOpacity(0.95f)
                 )
             }

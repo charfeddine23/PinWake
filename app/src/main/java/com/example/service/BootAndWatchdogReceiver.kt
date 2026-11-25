@@ -5,14 +5,13 @@ import android.content.Context
 import android.content.Intent
 import com.example.PinWakeApplication
 import com.example.util.PermissionHelper
-import com.example.util.PreAlertPreferences
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 /**
  * Restores active GPS wake monitoring after device reboot, app update,
- * or task-swipe watchdog restart when alarms are armed.
+ * or watchdog restart whenever any wake alarm is armed.
  */
 class BootAndWatchdogReceiver : BroadcastReceiver() {
 
@@ -29,9 +28,7 @@ class BootAndWatchdogReceiver : BroadcastReceiver() {
 
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                if (PermissionHelper.hasTrackingLocation(context) &&
-                    (action != ACTION_WATCHDOG_RESTART || PreAlertPreferences.isForcedGpsKeepOnEnabled(context))
-                ) {
+                if (PermissionHelper.hasTrackingLocation(context)) {
                     val active = repo.getActiveAlarmsOnce()
                     if (active.isNotEmpty()) {
                         PinWakeService.startOrSync(context)
