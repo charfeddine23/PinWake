@@ -246,4 +246,20 @@
     <string name="bg_readiness_dialog_title">تشغيل إجباري في الخلفية</string>
     <string name="bg_readiness_dialog_message_location">لضمان عمل المنبه إجبارياً في الخلفية حتى عند إغلاق التطبيق أو قفل الشاشة، اختر \"السماح طوال الوقت\" لصلاحية الموقع.</string>
     <string name="bg_readiness_dialog_message_battery">لضمان عدم إيقاف النظام للمنبهات النشطة في الخلفية، اسمح باستخدام البطارية \"بدون قيود\".</string>
+
+    <!-- مساعد الملاحة عند الطلب -->
+    <string name="nav_assist_eta_unknown">الوقت --</string>
+    <string name="nav_assist_eta_now">وصول الآن</string>
+    <string name="nav_assist_eta_min">%1$d د</string>
+    <string name="nav_assist_eta_est_min">~%1$d د</string>
+    <string name="nav_assist_eta_hr_min">%1$d س %2$d د</string>
+    <string name="nav_assist_eta_est_hr_min">~%1$d س %2$d د</string>
+    <string name="nav_assist_distance_bearing">%1$s · %2$s (%3$d°)</string>
+    <string name="nav_assist_no_nav_app">لا يوجد تطبيق ملاحة متاح على الجهاز</string>
+    <string name="nav_assist_navigate">تنقل</string>
+    <string name="nav_assist_route_on">المسار مفعل</string>
+    <string name="nav_assist_route_off">المسار</string>
+    <string name="nav_assist_waiting_gps">انتظار GPS</string>
+    <string name="cd_toggle_route_line">تبديل خط المسار على الخريطة</string>
+    <string name="cd_launch_navigation">بدء الملاحة الخارجية</string>
 </resources>

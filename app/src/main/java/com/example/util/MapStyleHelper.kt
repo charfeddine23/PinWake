@@ -32,6 +32,7 @@ import org.maplibre.android.style.layers.SymbolLayer
 import org.maplibre.android.style.sources.GeoJsonSource
 import org.maplibre.geojson.Feature
 import org.maplibre.geojson.FeatureCollection
+import org.maplibre.geojson.LineString
 import org.maplibre.geojson.Point
 import org.maplibre.geojson.Polygon
 import kotlin.math.asin
@@ -499,6 +500,88 @@ object MapStyleHelper {
             } else {
                 style.addLayer(lineLayer)
             }
+        }
+    }
+
+    /**
+     * Installs, updates, or hides a dynamic cyan route LineLayer between current user GPS
+     * coordinates and the destination pin. Hidden with zero geometry when disabled.
+     */
+    fun ensureNavigationRouteLineLayer(
+        style: Style,
+        sourceId: String,
+        lineLayerId: String,
+        fromLat: Double?,
+        fromLon: Double?,
+        toLat: Double?,
+        toLon: Double?,
+        visible: Boolean,
+        belowLayerId: String? = null
+    ) {
+        if (!style.isFullyLoaded) return
+
+        val hasValidRoute = visible &&
+            fromLat != null &&
+            fromLon != null &&
+            toLat != null &&
+            toLon != null &&
+            !fromLat.isNaN() &&
+            !fromLon.isNaN() &&
+            !toLat.isNaN() &&
+            !toLon.isNaN()
+
+        val collection = if (hasValidRoute) {
+            val line = LineString.fromLngLats(
+                listOf(
+                    Point.fromLngLat(fromLon!!, fromLat!!),
+                    Point.fromLngLat(toLon!!, toLat!!)
+                )
+            )
+            FeatureCollection.fromFeature(Feature.fromGeometry(line))
+        } else {
+            FeatureCollection.fromFeatures(emptyList())
+        }
+
+        val existingSource = style.getSourceAs<GeoJsonSource>(sourceId)
+        if (existingSource == null) {
+            style.addSource(GeoJsonSource(sourceId, collection))
+        } else {
+            existingSource.setGeoJson(collection)
+        }
+
+        val visibilityProp = PropertyFactory.visibility(
+            if (hasValidRoute) Property.VISIBLE else Property.NONE
+        )
+        val existingLayer = style.getLayerAs<LineLayer>(lineLayerId)
+        if (existingLayer != null) {
+            existingLayer.setProperties(
+                visibilityProp,
+                PropertyFactory.lineOpacity(if (hasValidRoute) 0.92f else 0f)
+            )
+            return
+        }
+
+        val routeLayer = LineLayer(lineLayerId, sourceId).apply {
+            setProperties(
+                PropertyFactory.lineColor("#22D3EE"),
+                PropertyFactory.lineWidth(3.6f),
+                PropertyFactory.lineOpacity(if (hasValidRoute) 0.92f else 0f),
+                PropertyFactory.lineDasharray(arrayOf(2.4f, 1.4f)),
+                PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
+                PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
+                visibilityProp
+            )
+        }
+
+        val anchorBelowId = belowLayerId?.takeIf { style.getLayer(it) != null }
+            ?: style.layers.firstOrNull {
+                it is SymbolLayer && !it.id.startsWith("pinwake-")
+            }?.id
+
+        if (anchorBelowId != null) {
+            style.addLayerBelow(routeLayer, anchorBelowId)
+        } else {
+            style.addLayer(routeLayer)
         }
     }
 

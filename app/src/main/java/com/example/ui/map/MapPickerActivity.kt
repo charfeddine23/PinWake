@@ -42,9 +42,12 @@ import com.example.util.DistanceFormatter
 import com.example.util.GpsEnforcementHelper
 import com.example.util.LanguageManager
 import com.example.util.MapStyleHelper
+import com.example.util.NavigationAssistCalculator
+import com.example.util.NavigationAssistHelper
 import com.example.util.OpenFreeMapStyle
 import com.example.util.OpenFreeMapStyles
 import com.example.util.PermissionHelper
+import com.example.util.PreAlertPreferences
 import com.example.util.SafeMapLocationEngine
 import com.example.util.ShareTripHelper
 import kotlinx.coroutines.flow.combine
@@ -75,6 +78,10 @@ class MapPickerActivity : AppCompatActivity() {
     private var mapLibreMap: MapLibreMap? = null
     private lateinit var locationManager: LocationManager
     private var activeSingleFixListener: LocationListener? = null
+    private var navAssistLocationListener: LocationListener? = null
+    private var navAssistIntervalMs: Long = -1L
+    private var latestUserLocation: Location? = null
+    private var isResumedForNavAssist: Boolean = false
 
     private var userEditedTitle = false
     private var isProgrammaticTitleUpdate = false
@@ -140,6 +147,8 @@ class MapPickerActivity : AppCompatActivity() {
                 if (style.isFullyLoaded) enableLocationComponent(style)
             }
             centerOnCurrentLocation(silentIfUnavailable = false)
+            startOrSyncNavAssistLocationUpdates()
+            renderPickerNavAssist()
         }
     }
 
@@ -303,6 +312,7 @@ class MapPickerActivity : AppCompatActivity() {
                 currentLon = target.longitude
                 updateCircleOverlay(target.latitude, target.longitude, viewModel.uiState.value.radiusMeters)
                 viewModel.updateCoordinatesImmediate(target.latitude, target.longitude)
+                renderPickerNavAssist()
             }
 
             map.addOnCameraIdleListener {
@@ -312,6 +322,7 @@ class MapPickerActivity : AppCompatActivity() {
                 currentLon = target.longitude
                 updateCircleOverlay(target.latitude, target.longitude, viewModel.uiState.value.radiusMeters)
                 viewModel.updateCoordinatesImmediate(target.latitude, target.longitude)
+                renderPickerNavAssist()
                 val locked = lockedGeocodeCoord
                 val stillOnLockedSpot = locked != null &&
                     kotlin.math.abs(locked.first - target.latitude) < 0.0002 &&
@@ -388,6 +399,7 @@ class MapPickerActivity : AppCompatActivity() {
         if (hasLocationPermission()) {
             enableLocationComponent(style)
         }
+        renderPickerNavAssist()
     }
 
     private fun updateCircleOverlay(lat: Double, lon: Double, radiusMeters: Int) {
@@ -454,6 +466,7 @@ class MapPickerActivity : AppCompatActivity() {
             viewModel.selectSearchResult(place)
             binding.etSearchPlace.setText(place.shortTitle())
             binding.cardSearchResults.visibility = View.GONE
+            binding.cardPickerNavAssist.visibility = View.VISIBLE
             if (!userEditedTitle || binding.etAlarmTitle.text.isNullOrBlank()) {
                 setTitleProgrammatically(place.shortTitle())
             }
@@ -494,6 +507,7 @@ class MapPickerActivity : AppCompatActivity() {
             binding.etSearchPlace.setText("")
             viewModel.clearSearchResults()
             binding.cardSearchResults.visibility = View.GONE
+            binding.cardPickerNavAssist.visibility = View.VISIBLE
         }
     }
 
@@ -615,6 +629,26 @@ class MapPickerActivity : AppCompatActivity() {
             launchRingtonePicker()
         }
 
+        binding.btnPickerToggleRoute.setOnClickListener {
+            val nextEnabled = !PreAlertPreferences.isNavRouteLineEnabled(this)
+            PreAlertPreferences.setNavRouteLineEnabled(this, nextEnabled)
+            startOrSyncNavAssistLocationUpdates()
+            renderPickerNavAssist()
+        }
+
+        binding.btnPickerNavigate.setOnClickListener {
+            val state = viewModel.uiState.value
+            val label = binding.etAlarmTitle.text?.toString()?.trim()
+                ?.takeIf { it.isNotBlank() }
+                ?: state.suggestedTitle.ifBlank { state.resolvedAddress }
+            NavigationAssistHelper.launchTurnByTurnNavigation(
+                context = this,
+                latitude = currentLat,
+                longitude = currentLon,
+                label = label
+            )
+        }
+
         binding.btnSaveAlarm.setOnClickListener {
             val state = viewModel.uiState.value
             val isOffline = GpsEnforcementHelper.isOffline(this)
@@ -714,8 +748,11 @@ class MapPickerActivity : AppCompatActivity() {
                             if (state.isSearching) View.VISIBLE else View.GONE
 
                         searchAdapter.submitList(state.searchResults)
+                        val hasSearchResults = state.searchResults.isNotEmpty()
                         binding.cardSearchResults.visibility =
-                            if (state.searchResults.isNotEmpty()) View.VISIBLE else View.GONE
+                            if (hasSearchResults) View.VISIBLE else View.GONE
+                        binding.cardPickerNavAssist.visibility =
+                            if (hasSearchResults) View.GONE else View.VISIBLE
 
                         if (state.searchError) {
                             Toast.makeText(
@@ -818,6 +855,7 @@ class MapPickerActivity : AppCompatActivity() {
             map.moveCamera(CameraUpdateFactory.newCameraPosition(position))
         }
         updateCircleOverlay(lat, lon, viewModel.uiState.value.radiusMeters)
+        renderPickerNavAssist()
         if (triggerReverseGeocode) {
             viewModel.onMapCenterSettled(lat, lon, LanguageManager.getCurrentLanguageCode(this))
         }
@@ -857,6 +895,7 @@ class MapPickerActivity : AppCompatActivity() {
         val best = GpsEnforcementHelper.getBestLocation(this)
 
         if (best != null) {
+            latestUserLocation = best
             moveCameraTo(best.latitude, best.longitude, 16.0, animate = true)
             return
         }
@@ -895,6 +934,7 @@ class MapPickerActivity : AppCompatActivity() {
             override fun onLocationChanged(location: Location) {
                 runCatching { locationManager.removeUpdates(this) }
                 activeSingleFixListener = null
+                latestUserLocation = location
                 if (!isDestroyed && !isFinishing) {
                     moveCameraTo(location.latitude, location.longitude, 16.0, animate = true)
                 }
@@ -996,7 +1036,13 @@ class MapPickerActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        isResumedForNavAssist = true
         binding.mapView.onResume()
+        if (hasLocationPermission() && latestUserLocation == null) {
+            latestUserLocation = GpsEnforcementHelper.getBestLocation(this)
+        }
+        startOrSyncNavAssistLocationUpdates()
+        renderPickerNavAssist()
         if (!promptedGpsThisSession &&
             hasLocationPermission() &&
             !GpsEnforcementHelper.isGpsProviderEnabled(this)
@@ -1010,6 +1056,8 @@ class MapPickerActivity : AppCompatActivity() {
     }
 
     override fun onPause() {
+        isResumedForNavAssist = false
+        stopNavAssistLocationUpdates()
         binding.mapView.onPause()
         super.onPause()
     }
@@ -1030,6 +1078,8 @@ class MapPickerActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        isResumedForNavAssist = false
+        stopNavAssistLocationUpdates()
         activeSingleFixListener?.let { listener ->
             runCatching { locationManager.removeUpdates(listener) }
         }
@@ -1041,6 +1091,120 @@ class MapPickerActivity : AppCompatActivity() {
         binding.viewPinShadow.animate().cancel()
         binding.mapView.onDestroy()
         super.onDestroy()
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun startOrSyncNavAssistLocationUpdates() {
+        if (!isResumedForNavAssist || !hasLocationPermission()) {
+            stopNavAssistLocationUpdates()
+            return
+        }
+        val routeEnabled = PreAlertPreferences.isNavRouteLineEnabled(this)
+        val desiredIntervalMs = if (routeEnabled) 4_000L else 10_000L
+        if (navAssistLocationListener != null && navAssistIntervalMs == desiredIntervalMs) {
+            return
+        }
+
+        stopNavAssistLocationUpdates()
+        val listener = object : LocationListener {
+            override fun onLocationChanged(location: Location) {
+                latestUserLocation = location
+                if (!isDestroyed && !isFinishing) {
+                    renderPickerNavAssist()
+                }
+            }
+
+            override fun onProviderEnabled(provider: String) {}
+            override fun onProviderDisabled(provider: String) {}
+            @Deprecated("Deprecated in Java")
+            override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
+        }
+
+        var registeredAny = false
+        listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER).forEach { provider ->
+            runCatching {
+                if (locationManager.isProviderEnabled(provider)) {
+                    locationManager.requestLocationUpdates(
+                        provider,
+                        desiredIntervalMs,
+                        10f,
+                        listener,
+                        Looper.getMainLooper()
+                    )
+                    registeredAny = true
+                }
+            }
+        }
+        if (registeredAny) {
+            navAssistLocationListener = listener
+            navAssistIntervalMs = desiredIntervalMs
+        }
+    }
+
+    private fun stopNavAssistLocationUpdates() {
+        navAssistLocationListener?.let { listener ->
+            runCatching { locationManager.removeUpdates(listener) }
+        }
+        navAssistLocationListener = null
+        navAssistIntervalMs = -1L
+    }
+
+    private fun renderPickerNavAssist() {
+        val routeEnabled = PreAlertPreferences.isNavRouteLineEnabled(this)
+        if (routeEnabled) {
+            binding.btnPickerToggleRoute.setBackgroundResource(R.drawable.bg_luxury_glass_pill_cyan)
+            val cyan = ContextCompat.getColor(this, R.color.accent_cyan_glow)
+            binding.ivPickerToggleRoute.setColorFilter(cyan)
+            binding.tvPickerToggleRoute.setTextColor(cyan)
+            binding.tvPickerToggleRoute.setText(R.string.nav_assist_route_on)
+        } else {
+            binding.btnPickerToggleRoute.setBackgroundResource(R.drawable.bg_luxury_glass_pill)
+            val secondary = ContextCompat.getColor(this, R.color.text_secondary)
+            binding.ivPickerToggleRoute.setColorFilter(secondary)
+            binding.tvPickerToggleRoute.setTextColor(secondary)
+            binding.tvPickerToggleRoute.setText(R.string.nav_assist_route_off)
+        }
+
+        val userLoc = latestUserLocation
+            ?: (if (hasLocationPermission()) GpsEnforcementHelper.getBestLocation(this) else null)
+
+        if (userLoc != null) {
+            val metrics = NavigationAssistCalculator.computeMetrics(
+                currentLat = userLoc.latitude,
+                currentLon = userLoc.longitude,
+                currentSpeedMps = if (userLoc.hasSpeed()) userLoc.speed else null,
+                targetLat = currentLat,
+                targetLon = currentLon
+            )
+            binding.tvPickerNavMetrics.text = NavigationAssistCalculator.formatDistanceAndBearing(
+                context = this,
+                distanceMeters = metrics.distanceMeters,
+                bearingDegrees = metrics.bearingDegrees
+            )
+            binding.tvPickerNavEta.text = NavigationAssistCalculator.formatEtaCompact(
+                context = this,
+                etaSeconds = metrics.etaSeconds,
+                isLiveSpeed = metrics.isLiveSpeedEta
+            )
+        } else {
+            binding.tvPickerNavMetrics.text = getString(R.string.nav_assist_waiting_gps)
+            binding.tvPickerNavEta.text = getString(R.string.nav_assist_eta_unknown)
+        }
+
+        val style = mapLibreMap?.style
+        if (style != null && style.isFullyLoaded) {
+            MapStyleHelper.ensureNavigationRouteLineLayer(
+                style = style,
+                sourceId = PICKER_NAV_ROUTE_SOURCE_ID,
+                lineLayerId = PICKER_NAV_ROUTE_LINE_ID,
+                fromLat = userLoc?.latitude,
+                fromLon = userLoc?.longitude,
+                toLat = currentLat,
+                toLon = currentLon,
+                visible = routeEnabled,
+                belowLayerId = SAVED_PLACES_HALO_LAYER_ID
+            )
+        }
     }
 
     companion object {
@@ -1060,5 +1224,7 @@ class MapPickerActivity : AppCompatActivity() {
         private const val SAVED_PLACES_SOURCE_ID = "pinwake-saved-places-source"
         private const val SAVED_PLACES_HALO_LAYER_ID = "pinwake-saved-places-halo"
         private const val SAVED_PLACES_SYMBOL_LAYER_ID = "pinwake-saved-places-symbol"
+        private const val PICKER_NAV_ROUTE_SOURCE_ID = "pinwake-picker-nav-route-source"
+        private const val PICKER_NAV_ROUTE_LINE_ID = "pinwake-picker-nav-route-line"
     }
 }

@@ -23,7 +23,7 @@ interface GitHubReleaseApiService {
         private const val BASE_URL = "https://api.github.com/"
         const val REPO_OWNER = "charfeddine23"
         const val REPO_NAME = "PinWake"
-        const val REPO_RELEASES_URL = "https://github.com/$REPO_OWNER/$REPO_NAME/releases/latest"
+        const val REPO_RELEASES_URL = "https://github.com/$REPO_OWNER/$REPO_NAME/releases"
 
         fun create(): GitHubReleaseApiService {
             val headerInterceptor = Interceptor { chain ->

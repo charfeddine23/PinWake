@@ -267,6 +267,133 @@
             android:visibility="gone" />
     </LinearLayout>
 
+    <!-- Compact On-Demand Navigation Assist Bar -->
+    <LinearLayout
+        android:id="@+id/cardPickerNavAssist"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="16dp"
+        android:layout_marginTop="8dp"
+        android:background="@drawable/bg_liquid_glass_search"
+        android:elevation="7dp"
+        android:gravity="center_vertical"
+        android:minHeight="54dp"
+        android:orientation="horizontal"
+        android:paddingStart="10dp"
+        android:paddingEnd="8dp"
+        android:paddingVertical="4dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/searchBarContainer">
+
+        <ImageView
+            android:layout_width="18dp"
+            android:layout_height="18dp"
+            android:contentDescription="@null"
+            android:src="@drawable/ic_navigation"
+            app:tint="@color/accent_cyan_glow" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:layout_marginEnd="6dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/tvPickerNavMetrics"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="@string/nav_assist_waiting_gps"
+                android:textAppearance="@style/TextAppearance.PinWake.Mono"
+                android:textColor="@color/text_primary"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                tools:text="1.2 km · NE (45°)" />
+
+            <TextView
+                android:id="@+id/tvPickerNavEta"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:background="@drawable/bg_badge_cyan"
+                android:paddingHorizontal="6dp"
+                android:paddingVertical="1dp"
+                android:text="@string/nav_assist_eta_unknown"
+                android:textAppearance="@style/TextAppearance.PinWake.Mono"
+                android:textColor="@color/accent_cyan_glow"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                tools:text="~3 min" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/btnPickerToggleRoute"
+            android:layout_width="wrap_content"
+            android:layout_height="48dp"
+            android:layout_marginEnd="6dp"
+            android:background="@drawable/bg_luxury_glass_pill"
+            android:clickable="true"
+            android:contentDescription="@string/cd_toggle_route_line"
+            android:focusable="true"
+            android:gravity="center"
+            android:minWidth="48dp"
+            android:orientation="horizontal"
+            android:paddingHorizontal="10dp">
+
+            <ImageView
+                android:id="@+id/ivPickerToggleRoute"
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_route"
+                app:tint="@color/text_secondary" />
+
+            <TextView
+                android:id="@+id/tvPickerToggleRoute"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="5dp"
+                android:text="@string/nav_assist_route_off"
+                android:textColor="@color/text_secondary"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/btnPickerNavigate"
+            android:layout_width="wrap_content"
+            android:layout_height="48dp"
+            android:background="@drawable/bg_cyan_gradient_button"
+            android:clickable="true"
+            android:contentDescription="@string/cd_launch_navigation"
+            android:focusable="true"
+            android:gravity="center"
+            android:minWidth="48dp"
+            android:orientation="horizontal"
+            android:paddingHorizontal="12dp">
+
+            <ImageView
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_navigation"
+                app:tint="@color/text_on_accent" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="5dp"
+                android:text="@string/nav_assist_navigate"
+                android:textColor="@color/text_on_accent"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+    </LinearLayout>
+
     <!-- Autocomplete Results Overlay -->
     <LinearLayout
         android:id="@+id/cardSearchResults"

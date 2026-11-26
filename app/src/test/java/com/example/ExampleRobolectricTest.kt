@@ -703,4 +703,94 @@ class ExampleRobolectricTest {
             db.close()
         }
     }
+
+    @Test
+    fun `navigationAssistCalculator computes bearing cardinals distance and eta accurately`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+
+        // Northbound ~11.1 km (0.1 deg lat)
+        val (northDist, northBearing) = com.example.util.NavigationAssistCalculator.computeDistanceAndBearing(
+            startLat = 36.70,
+            startLon = 3.00,
+            endLat = 36.80,
+            endLon = 3.00
+        )
+        assertEquals(11_119f, northDist, 150f)
+        assertEquals(0f, northBearing, 1.5f)
+        assertEquals("N", com.example.util.NavigationAssistCalculator.cardinalFromBearing(northBearing))
+
+        // Eastbound bearing ~90 deg
+        val (_, eastBearing) = com.example.util.NavigationAssistCalculator.computeDistanceAndBearing(
+            startLat = 36.70,
+            startLon = 3.00,
+            endLat = 36.70,
+            endLon = 3.10
+        )
+        assertEquals(90f, eastBearing, 1.5f)
+        assertEquals("E", com.example.util.NavigationAssistCalculator.cardinalFromBearing(eastBearing))
+
+        // Live speed (10 m/s over ~11.1 km -> ~1112s -> ~19 min)
+        val liveMetrics = com.example.util.NavigationAssistCalculator.computeMetrics(
+            currentLat = 36.70,
+            currentLon = 3.00,
+            currentSpeedMps = 10.0f,
+            targetLat = 36.80,
+            targetLon = 3.00
+        )
+        assertTrue(liveMetrics.isLiveSpeedEta)
+        assertEquals(10.0f, liveMetrics.speedMetersPerSec ?: 0f, 0.01f)
+        assertEquals(19, (((liveMetrics.etaSeconds ?: 0L) + 29L) / 60L).toInt())
+        val liveEtaText = com.example.util.NavigationAssistCalculator.formatEtaCompact(
+            context = context,
+            etaSeconds = liveMetrics.etaSeconds,
+            isLiveSpeed = liveMetrics.isLiveSpeedEta
+        )
+        assertEquals("19 min", liveEtaText)
+
+        // Stationary fallback (~8.33 m/s urban estimate, prefixed with ~)
+        val estMetrics = com.example.util.NavigationAssistCalculator.computeMetrics(
+            currentLat = 36.70,
+            currentLon = 3.00,
+            currentSpeedMps = 0.0f,
+            targetLat = 36.72,
+            targetLon = 3.00
+        )
+        assertFalse(estMetrics.isLiveSpeedEta)
+        val estEtaText = com.example.util.NavigationAssistCalculator.formatEtaCompact(
+            context = context,
+            etaSeconds = estMetrics.etaSeconds,
+            isLiveSpeed = estMetrics.isLiveSpeedEta
+        )
+        assertTrue(estEtaText.startsWith("~"))
+    }
+
+    @Test
+    fun `navigationAssistHelper builds external navigation and geo fallback intents with label`() {
+        val navIntent = com.example.util.NavigationAssistHelper.buildGoogleNavigationIntent(
+            latitude = 36.7538,
+            longitude = 3.0588
+        )
+        assertEquals("google.navigation:q=36.753800,3.058800", navIntent.dataString)
+
+        val geoIntent = com.example.util.NavigationAssistHelper.buildGeoFallbackIntent(
+            latitude = 36.7538,
+            longitude = 3.0588,
+            label = "Central Station"
+        )
+        val dataStr = geoIntent.dataString ?: ""
+        assertTrue(dataStr.startsWith("geo:36.753800,3.058800?q=36.753800,3.058800("))
+        assertTrue(dataStr.contains("Central"))
+    }
+
+    @Test
+    fun `navRouteLinePreference defaults disabled and persists toggle`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        assertFalse(com.example.util.PreAlertPreferences.isNavRouteLineEnabled(context))
+
+        com.example.util.PreAlertPreferences.setNavRouteLineEnabled(context, true)
+        assertTrue(com.example.util.PreAlertPreferences.isNavRouteLineEnabled(context))
+
+        com.example.util.PreAlertPreferences.setNavRouteLineEnabled(context, false)
+        assertFalse(com.example.util.PreAlertPreferences.isNavRouteLineEnabled(context))
+    }
 }

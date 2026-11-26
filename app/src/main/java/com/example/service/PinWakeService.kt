@@ -39,6 +39,7 @@ import com.example.data.repository.PollingTier
 import com.example.ui.alarm.AlarmRingingActivity
 import com.example.util.DistanceFormatter
 import com.example.util.GpsEnforcementHelper
+import com.example.util.NavigationAssistCalculator
 import com.example.util.PreAlertPreferences
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -381,6 +382,14 @@ class PinWakeService : Service() {
         syncWakeLockForActiveTracking()
         scheduleWatchdogRestart(WATCHDOG_HEARTBEAT_MS)
 
+        val navMetrics = NavigationAssistCalculator.computeMetrics(
+            currentLat = location.latitude,
+            currentLon = location.longitude,
+            currentSpeedMps = if (location.hasSpeed()) location.speed else null,
+            targetLat = target.latitude,
+            targetLon = target.longitude
+        )
+
         repository.trackingStateManager.update {
             it.copy(
                 isTracking = true,
@@ -389,6 +398,10 @@ class PinWakeService : Service() {
                 closestAlarmId = target.id,
                 closestAlarmTitle = target.title,
                 closestDistanceMeters = minDistance,
+                closestBearingDegrees = navMetrics.bearingDegrees,
+                closestEtaSeconds = navMetrics.etaSeconds,
+                isEtaFromLiveSpeed = navMetrics.isLiveSpeedEta,
+                lastSpeedMetersPerSec = navMetrics.speedMetersPerSec,
                 lastFixAccuracyMeters = if (location.hasAccuracy()) location.accuracy else null,
                 lastLatitude = location.latitude,
                 lastLongitude = location.longitude,

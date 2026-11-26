@@ -246,4 +246,20 @@
     <string name="bg_readiness_dialog_title">Keep Active in Background</string>
     <string name="bg_readiness_dialog_message_location">To keep Pin Wake forcefully monitoring in the background when the screen is off or the app is minimized, set Location access to \"Allow all the time\".</string>
     <string name="bg_readiness_dialog_message_battery">To prevent Android from pausing active alarms in the background, allow Unrestricted battery usage.</string>
+
+    <!-- On-Demand Navigation Assist -->
+    <string name="nav_assist_eta_unknown">ETA --</string>
+    <string name="nav_assist_eta_now">Arriving</string>
+    <string name="nav_assist_eta_min">%1$d min</string>
+    <string name="nav_assist_eta_est_min">~%1$d min</string>
+    <string name="nav_assist_eta_hr_min">%1$dh %2$dm</string>
+    <string name="nav_assist_eta_est_hr_min">~%1$dh %2$dm</string>
+    <string name="nav_assist_distance_bearing">%1$s · %2$s (%3$d°)</string>
+    <string name="nav_assist_no_nav_app">No navigation app found on this device</string>
+    <string name="nav_assist_navigate">Navigate</string>
+    <string name="nav_assist_route_on">Route ON</string>
+    <string name="nav_assist_route_off">Route</string>
+    <string name="nav_assist_waiting_gps">Waiting GPS</string>
+    <string name="cd_toggle_route_line">Toggle route line on map</string>
+    <string name="cd_launch_navigation">Launch external turn-by-turn navigation</string>
 </resources>

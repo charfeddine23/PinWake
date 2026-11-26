@@ -66,6 +66,8 @@ import com.example.util.GpsEnforcementHelper
 import com.example.util.LanguageManager
 import com.example.util.MapLinkParser
 import com.example.util.MapStyleHelper
+import com.example.util.NavigationAssistCalculator
+import com.example.util.NavigationAssistHelper
 import com.example.util.OpenFreeMapStyle
 import com.example.util.OpenFreeMapStyles
 import com.example.util.PermissionHelper
@@ -112,6 +114,12 @@ class MainActivity : AppCompatActivity() {
     private var computedHalfSlideOffset: Float = 0.65f
     private var lastSheetState: Int = BottomSheetBehavior.STATE_HALF_EXPANDED
     private var activeSingleFixListener: LocationListener? = null
+    private var onDemandNavLocationListener: LocationListener? = null
+    private var onDemandNavIntervalMs: Long = -1L
+    private var onDemandUserLocation: Location? = null
+    private var isResumedForNavAssist: Boolean = false
+    private var navAssistBarHasTarget: Boolean = false
+    private var currentNavAssistTarget: GeoAlarmEntity? = null
     private var pendingCenterOnLocation: Boolean = false
     private var pendingArmAlarm: GeoAlarmEntity? = null
     private val mapHoldHandler = Handler(Looper.getMainLooper())
@@ -129,7 +137,9 @@ class MainActivity : AppCompatActivity() {
     private val providersChangedReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == LocationManager.PROVIDERS_CHANGED_ACTION) {
-                renderTelemetryBanner(viewModel.uiState.value)
+                val state = viewModel.uiState.value
+                renderTelemetryBanner(state)
+                renderNavigationAssist(state)
             }
         }
     }
@@ -291,10 +301,12 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        isResumedForNavAssist = true
         binding.dashboardMapView.onResume()
         refreshSettingsAttentionDot()
         syncTrackingServiceIfPossible()
         renderTelemetryBanner(viewModel.uiState.value)
+        renderNavigationAssist(viewModel.uiState.value)
         checkGpsOnResume()
 
         val savedStyle = OpenFreeMapStyles.getSavedStyle(this)
@@ -318,6 +330,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onPause() {
+        isResumedForNavAssist = false
+        stopOnDemandNavAssistUpdates()
         cancelPendingMapHold()
         binding.dashboardMapView.onPause()
         super.onPause()
@@ -339,6 +353,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        isResumedForNavAssist = false
+        stopOnDemandNavAssistUpdates()
         cancelPendingMapHold()
         stopBrandArrowPulse()
         stopTelemetryDotPulse()
@@ -521,7 +537,17 @@ class MainActivity : AppCompatActivity() {
         val gap = 12f * density
         val barBottom = binding.topFloatingBar.bottom.toFloat()
             .coerceAtLeast(sysTopInset + 68f * density)
-        val minRadarTop = barBottom + 10f * density
+        val assistTop = barBottom + 6f * density
+        val assistHeight = if (navAssistBarHasTarget) {
+            binding.cardNavAssistBar.height.takeIf { it > 0 }?.toFloat() ?: (62f * density)
+        } else {
+            0f
+        }
+        val minRadarTop = if (navAssistBarHasTarget) {
+            assistTop + assistHeight + 8f * density
+        } else {
+            barBottom + 10f * density
+        }
         val halfRadarY = (sheetTop - pillH - gap).coerceAtLeast(minRadarTop)
         binding.pillLiveRadar.translationY =
             minRadarTop + (halfRadarY - minRadarTop) * collapseFactor
@@ -532,6 +558,24 @@ class MainActivity : AppCompatActivity() {
         val pillVis = if (upperFade <= 0.02f) View.INVISIBLE else View.VISIBLE
         if (binding.pillLiveRadar.visibility != pillVis) {
             binding.pillLiveRadar.visibility = pillVis
+        }
+
+        binding.cardNavAssistBar.translationY = assistTop
+        val assistVisible = navAssistBarHasTarget && upperFade > 0.02f
+        binding.cardNavAssistBar.alpha = if (navAssistBarHasTarget) upperFade else 0f
+        val assistTargetVis = when {
+            !navAssistBarHasTarget -> View.GONE
+            assistVisible -> View.VISIBLE
+            else -> View.INVISIBLE
+        }
+        if (binding.cardNavAssistBar.visibility != assistTargetVis) {
+            binding.cardNavAssistBar.visibility = assistTargetVis
+        }
+        if (binding.btnToggleRouteLine.isClickable != assistVisible) {
+            binding.btnToggleRouteLine.isClickable = assistVisible
+            binding.btnToggleRouteLine.isFocusable = assistVisible
+            binding.btnAssistNavigate.isClickable = assistVisible
+            binding.btnAssistNavigate.isFocusable = assistVisible
         }
 
         // Dynamic staggered slide-in for the Full Map quick dock (My Location -> Work -> Home)
@@ -587,6 +631,7 @@ class MainActivity : AppCompatActivity() {
             lastHeroCameraKey = null
             updateHeroMapViewport(viewModel.uiState.value, animate = true)
         }
+        renderNavigationAssist(viewModel.uiState.value)
     }
 
     private fun enterFullMapMode() {
@@ -662,6 +707,7 @@ class MainActivity : AppCompatActivity() {
             )
             enableHeroLocationPuck(loadedStyle, forceReapplyStyle = true)
             updateHeroMapViewport(viewModel.uiState.value, forceRefresh = true)
+            renderNavigationAssist(viewModel.uiState.value)
         }
     }
 
@@ -943,8 +989,26 @@ class MainActivity : AppCompatActivity() {
             binding.btnQuickWorkFullMap,
             binding.btnQuickHomeFullMap,
             binding.btnSettings,
-            binding.pillBrandHeader
+            binding.pillBrandHeader,
+            binding.btnToggleRouteLine,
+            binding.btnAssistNavigate
         ).forEach { attachLuxuryPressFeedback(it) }
+
+        binding.btnToggleRouteLine.setOnClickListener {
+            val nextEnabled = !PreAlertPreferences.isNavRouteLineEnabled(this)
+            PreAlertPreferences.setNavRouteLineEnabled(this, nextEnabled)
+            renderNavigationAssist(viewModel.uiState.value)
+        }
+
+        binding.btnAssistNavigate.setOnClickListener {
+            val target = currentNavAssistTarget ?: return@setOnClickListener
+            NavigationAssistHelper.launchTurnByTurnNavigation(
+                context = this,
+                latitude = target.latitude,
+                longitude = target.longitude,
+                label = target.title
+            )
+        }
 
         binding.layoutSheetHandle.setOnClickListener {
             if (sheetBehavior.state == BottomSheetBehavior.STATE_COLLAPSED) {
@@ -972,6 +1036,7 @@ class MainActivity : AppCompatActivity() {
         binding.btnMyLocationFullMap.setOnClickListener {
             focusedPlaceLockId = null
             renderFullMapQuickDockStates(viewModel.uiState.value)
+            renderNavigationAssist(viewModel.uiState.value)
             if (hasFineOrCoarseLocation()) {
                 if (!GpsEnforcementHelper.isGpsProviderEnabled(this)) {
                     showGpsEnablePromptIfNeeded(mandatory = false)
@@ -1252,6 +1317,7 @@ class MainActivity : AppCompatActivity() {
 
         renderTelemetryBanner(state)
         updateHeroMapViewport(state)
+        renderNavigationAssist(state)
         renderQuickFavorite(
             card = binding.cardFavHome,
             statusView = binding.tvFavHomeStatus,
@@ -1505,6 +1571,7 @@ class MainActivity : AppCompatActivity() {
                     )
                 }
                 renderFullMapQuickDockStates(viewModel.uiState.value)
+                renderNavigationAssist(viewModel.uiState.value)
             }
 
             button.setOnLongClickListener {
@@ -1512,6 +1579,228 @@ class MainActivity : AppCompatActivity() {
                 true
             }
         }
+    }
+
+    private fun renderNavigationAssist(state: DashboardUiState) {
+        val activeAlarms = state.alarms.filter { it.isActive }
+        val isFullMap = sheetBehavior.state == BottomSheetBehavior.STATE_COLLAPSED
+        val lockedPlace = if (isFullMap && focusedPlaceLockId != null) {
+            state.alarms.firstOrNull { it.id == focusedPlaceLockId }
+        } else {
+            null
+        }
+        val telemetry = state.telemetry
+        val targetAlarm = lockedPlace
+            ?: telemetry.closestAlarmId?.let { id -> activeAlarms.firstOrNull { it.id == id } }
+            ?: activeAlarms.minByOrNull { it.lastDistanceMeters ?: Float.MAX_VALUE }
+            ?: state.alarms.firstOrNull()
+
+        currentNavAssistTarget = targetAlarm
+        val routeEnabled = PreAlertPreferences.isNavRouteLineEnabled(this)
+
+        if (targetAlarm == null) {
+            navAssistBarHasTarget = false
+            stopOnDemandNavAssistUpdates()
+            heroMap?.style?.let { style ->
+                MapStyleHelper.ensureNavigationRouteLineLayer(
+                    style = style,
+                    sourceId = HERO_NAV_ROUTE_SOURCE_ID,
+                    lineLayerId = HERO_NAV_ROUTE_LINE_ID,
+                    fromLat = null,
+                    fromLon = null,
+                    toLat = null,
+                    toLon = null,
+                    visible = false,
+                    belowLayerId = HERO_SAVED_PLACES_HALO_ID
+                )
+            }
+            val currentSlide = when (sheetBehavior.state) {
+                BottomSheetBehavior.STATE_COLLAPSED -> 0f
+                BottomSheetBehavior.STATE_EXPANDED -> 1f
+                else -> computedHalfSlideOffset
+            }
+            updateChromeForSlideOffset(currentSlide)
+            return
+        }
+
+        navAssistBarHasTarget = true
+        binding.tvNavAssistTitle.text = targetAlarm.title
+
+        if (routeEnabled) {
+            binding.btnToggleRouteLine.setBackgroundResource(R.drawable.bg_luxury_glass_pill_cyan)
+            val cyan = ContextCompat.getColor(this, R.color.accent_cyan_glow)
+            binding.ivToggleRouteLine.setColorFilter(cyan)
+            binding.tvToggleRouteLine.setTextColor(cyan)
+            binding.tvToggleRouteLine.setText(R.string.nav_assist_route_on)
+        } else {
+            binding.btnToggleRouteLine.setBackgroundResource(R.drawable.bg_luxury_glass_pill)
+            val secondary = ContextCompat.getColor(this, R.color.text_secondary)
+            binding.ivToggleRouteLine.setColorFilter(secondary)
+            binding.tvToggleRouteLine.setTextColor(secondary)
+            binding.tvToggleRouteLine.setText(R.string.nav_assist_route_off)
+        }
+
+        val canUseServiceTelemetry = state.activeCount > 0 &&
+            telemetry.isTracking &&
+            telemetry.closestAlarmId == targetAlarm.id &&
+            telemetry.lastLatitude != null &&
+            telemetry.lastLongitude != null
+
+        val fromLat: Double?
+        val fromLon: Double?
+        val metricsText: String
+        val etaText: String
+
+        if (canUseServiceTelemetry) {
+            val dist = telemetry.closestDistanceMeters
+            val bearing = telemetry.closestBearingDegrees
+            fromLat = telemetry.lastLatitude
+            fromLon = telemetry.lastLongitude
+            if (dist != null && bearing != null) {
+                metricsText = NavigationAssistCalculator.formatDistanceAndBearing(this, dist, bearing)
+                etaText = NavigationAssistCalculator.formatEtaCompact(
+                    context = this,
+                    etaSeconds = telemetry.closestEtaSeconds,
+                    isLiveSpeed = telemetry.isEtaFromLiveSpeed
+                )
+            } else {
+                val computed = NavigationAssistCalculator.computeMetrics(
+                    currentLat = fromLat!!,
+                    currentLon = fromLon!!,
+                    currentSpeedMps = telemetry.lastSpeedMetersPerSec,
+                    targetLat = targetAlarm.latitude,
+                    targetLon = targetAlarm.longitude
+                )
+                metricsText = NavigationAssistCalculator.formatDistanceAndBearing(
+                    this,
+                    computed.distanceMeters,
+                    computed.bearingDegrees
+                )
+                etaText = NavigationAssistCalculator.formatEtaCompact(
+                    context = this,
+                    etaSeconds = computed.etaSeconds,
+                    isLiveSpeed = computed.isLiveSpeedEta
+                )
+            }
+        } else {
+            val bestLoc = onDemandUserLocation
+                ?: (if (hasFineOrCoarseLocation()) GpsEnforcementHelper.getBestLocation(this) else null)
+            if (bestLoc != null) {
+                fromLat = bestLoc.latitude
+                fromLon = bestLoc.longitude
+                val computed = NavigationAssistCalculator.computeMetrics(
+                    currentLat = bestLoc.latitude,
+                    currentLon = bestLoc.longitude,
+                    currentSpeedMps = if (bestLoc.hasSpeed()) bestLoc.speed else null,
+                    targetLat = targetAlarm.latitude,
+                    targetLon = targetAlarm.longitude
+                )
+                metricsText = NavigationAssistCalculator.formatDistanceAndBearing(
+                    this,
+                    computed.distanceMeters,
+                    computed.bearingDegrees
+                )
+                etaText = NavigationAssistCalculator.formatEtaCompact(
+                    context = this,
+                    etaSeconds = computed.etaSeconds,
+                    isLiveSpeed = computed.isLiveSpeedEta
+                )
+            } else {
+                fromLat = null
+                fromLon = null
+                metricsText = getString(R.string.nav_assist_waiting_gps)
+                etaText = getString(R.string.nav_assist_eta_unknown)
+            }
+        }
+
+        binding.tvNavAssistMetrics.text = metricsText
+        binding.tvNavAssistEta.text = etaText
+
+        heroMap?.style?.let { style ->
+            MapStyleHelper.ensureNavigationRouteLineLayer(
+                style = style,
+                sourceId = HERO_NAV_ROUTE_SOURCE_ID,
+                lineLayerId = HERO_NAV_ROUTE_LINE_ID,
+                fromLat = fromLat,
+                fromLon = fromLon,
+                toLat = targetAlarm.latitude,
+                toLon = targetAlarm.longitude,
+                visible = routeEnabled,
+                belowLayerId = HERO_SAVED_PLACES_HALO_ID
+            )
+        }
+
+        syncOnDemandNavAssistListener(state, routeEnabled)
+
+        val currentSlide = when (sheetBehavior.state) {
+            BottomSheetBehavior.STATE_COLLAPSED -> 0f
+            BottomSheetBehavior.STATE_EXPANDED -> 1f
+            else -> computedHalfSlideOffset
+        }
+        updateChromeForSlideOffset(currentSlide)
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun syncOnDemandNavAssistListener(state: DashboardUiState, routeEnabled: Boolean) {
+        val shouldPollOnDemand = isResumedForNavAssist &&
+            state.alarms.isNotEmpty() &&
+            state.activeCount == 0 &&
+            hasFineOrCoarseLocation()
+
+        if (!shouldPollOnDemand) {
+            stopOnDemandNavAssistUpdates()
+            return
+        }
+
+        val desiredIntervalMs = if (routeEnabled) 4_000L else 10_000L
+        if (onDemandNavLocationListener != null && onDemandNavIntervalMs == desiredIntervalMs) {
+            return
+        }
+
+        stopOnDemandNavAssistUpdates()
+        val lm = getSystemService(LocationManager::class.java) ?: return
+        val listener = object : LocationListener {
+            override fun onLocationChanged(location: Location) {
+                onDemandUserLocation = location
+                if (!isDestroyed && !isFinishing) {
+                    renderNavigationAssist(viewModel.uiState.value)
+                }
+            }
+
+            override fun onProviderEnabled(provider: String) {}
+            override fun onProviderDisabled(provider: String) {}
+            @Deprecated("Deprecated in Java")
+            override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
+        }
+
+        val providers = listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
+        var registeredAny = false
+        providers.forEach { provider ->
+            runCatching {
+                if (lm.isProviderEnabled(provider)) {
+                    lm.requestLocationUpdates(
+                        provider,
+                        desiredIntervalMs,
+                        10f,
+                        listener,
+                        Looper.getMainLooper()
+                    )
+                    registeredAny = true
+                }
+            }
+        }
+        if (registeredAny) {
+            onDemandNavLocationListener = listener
+            onDemandNavIntervalMs = desiredIntervalMs
+        }
+    }
+
+    private fun stopOnDemandNavAssistUpdates() {
+        onDemandNavLocationListener?.let { listener ->
+            runCatching { getSystemService(LocationManager::class.java)?.removeUpdates(listener) }
+        }
+        onDemandNavLocationListener = null
+        onDemandNavIntervalMs = -1L
     }
 
     private fun showQuickAssignDialog(latitude: Double, longitude: Double) {
@@ -1972,5 +2261,7 @@ class MainActivity : AppCompatActivity() {
         private const val HERO_SAVED_PLACES_SOURCE_ID = "pinwake-hero-saved-places-source"
         private const val HERO_SAVED_PLACES_HALO_ID = "pinwake-hero-saved-places-halo"
         private const val HERO_SAVED_PLACES_SYMBOL_ID = "pinwake-hero-saved-places-symbol"
+        private const val HERO_NAV_ROUTE_SOURCE_ID = "pinwake-hero-nav-route-source"
+        private const val HERO_NAV_ROUTE_LINE_ID = "pinwake-hero-nav-route-line"
     }
 }
