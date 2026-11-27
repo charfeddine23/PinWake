@@ -240,6 +240,44 @@
             android:checked="false" />
     </LinearLayout>
 
+    <!-- Vibrate With Ringtone Toggle -->
+    <LinearLayout
+        android:id="@+id/rowQuickAssignVibrateToggle"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:layout_marginTop="2dp"
+        android:clickable="true"
+        android:contentDescription="@string/cd_toggle_vibrate"
+        android:focusable="true"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <ImageView
+            android:layout_width="18dp"
+            android:layout_height="18dp"
+            android:layout_marginEnd="8dp"
+            android:contentDescription="@null"
+            android:src="@drawable/ic_vibration"
+            app:tint="@color/accent_cyan_glow" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/map_vibrate_label"
+            android:textColor="@color/text_primary"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <com.google.android.material.materialswitch.MaterialSwitch
+            android:id="@+id/switchQuickAssignVibrate"
+            style="@style/Widget.PinWake.Switch"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:checked="true"
+            android:contentDescription="@string/cd_toggle_vibrate" />
+    </LinearLayout>
+
     <!-- Primary Confirm Button -->
     <TextView
         android:id="@+id/btnQuickAssignConfirm"

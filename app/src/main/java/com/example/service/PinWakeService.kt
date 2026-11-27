@@ -22,10 +22,6 @@ import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
 import android.os.SystemClock
-import android.os.VibrationAttributes
-import android.os.VibrationEffect
-import android.os.Vibrator
-import android.os.VibratorManager
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
@@ -37,6 +33,7 @@ import com.example.data.local.entity.TripOutcome
 import com.example.data.repository.PinWakeRepository
 import com.example.data.repository.PollingTier
 import com.example.ui.alarm.AlarmRingingActivity
+import com.example.util.AlarmVibrationHelper
 import com.example.util.DistanceFormatter
 import com.example.util.GpsEnforcementHelper
 import com.example.util.NavigationAssistCalculator
@@ -188,6 +185,7 @@ class PinWakeService : Service() {
     }
 
     private fun cancelAlarmNotifications(alarmId: Long) {
+        AlarmVibrationHelper.cancelVibration(this)
         notificationManager.cancel(NOTIFICATION_ALARM_ID)
         if (alarmId > 0L) {
             notificationManager.cancel(alarmNotificationId(alarmId))
@@ -546,32 +544,7 @@ class PinWakeService : Service() {
             .build()
 
         notificationManager.notify(NOTIFICATION_GPS_WATCHDOG_ID, alertNotification)
-        vibrateAttentionPattern(longArrayOf(0L, 350L, 150L, 350L, 150L, 450L))
-    }
-
-    private fun vibrateAttentionPattern(timings: LongArray) {
-        runCatching {
-            val vib = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                getSystemService(VibratorManager::class.java)?.defaultVibrator
-            } else {
-                @Suppress("DEPRECATION")
-                getSystemService(Vibrator::class.java)
-            }
-            if (vib?.hasVibrator() == true) {
-                val effect = VibrationEffect.createWaveform(timings, -1)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    vib.vibrate(
-                        effect,
-                        VibrationAttributes.Builder()
-                            .setUsage(VibrationAttributes.USAGE_ALARM)
-                            .build()
-                    )
-                } else {
-                    @Suppress("DEPRECATION")
-                    vib.vibrate(effect)
-                }
-            }
-        }
+        AlarmVibrationHelper.vibrateAttention(this)
     }
 
     @SuppressLint("WakelockTimeout")
@@ -689,6 +662,10 @@ class PinWakeService : Service() {
 
         notificationManager.notify(alarmNotificationId(alarm.id), alarmNotification)
 
+        if (alarm.vibrateEnabled || PreAlertPreferences.isForceSilentOverrideEnabled(this)) {
+            AlarmVibrationHelper.startLoopingArrivalVibration(this)
+        }
+
         runCatching {
             startActivity(alarmIntent)
         }
@@ -719,23 +696,8 @@ class PinWakeService : Service() {
 
         notificationManager.notify(preAlertNotificationId(alarm.id), notification)
 
-        if (alarm.vibrateEnabled) {
-            runCatching {
-                val vib = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    getSystemService(VibratorManager::class.java)?.defaultVibrator
-                } else {
-                    @Suppress("DEPRECATION")
-                    getSystemService(Vibrator::class.java)
-                }
-                if (vib?.hasVibrator() == true) {
-                    vib.vibrate(
-                        VibrationEffect.createWaveform(
-                            longArrayOf(0L, 180L, 120L, 180L),
-                            -1
-                        )
-                    )
-                }
-            }
+        if (alarm.vibrateEnabled || PreAlertPreferences.isForceSilentOverrideEnabled(this)) {
+            AlarmVibrationHelper.vibratePreAlert(this)
         }
     }
 
@@ -942,6 +904,7 @@ class PinWakeService : Service() {
         }
 
         fun snooze500m(context: Context, alarmId: Long, currentDistanceMeters: Float) {
+            AlarmVibrationHelper.cancelVibration(context)
             val nm = context.getSystemService(NotificationManager::class.java)
             nm?.cancel(NOTIFICATION_ALARM_ID)
             nm?.cancel(alarmNotificationIdFor(alarmId))
@@ -955,6 +918,7 @@ class PinWakeService : Service() {
         }
 
         fun dismissAlarm(context: Context, alarmId: Long) {
+            AlarmVibrationHelper.cancelVibration(context)
             val nm = context.getSystemService(NotificationManager::class.java)
             nm?.cancel(NOTIFICATION_ALARM_ID)
             if (alarmId > 0L) {

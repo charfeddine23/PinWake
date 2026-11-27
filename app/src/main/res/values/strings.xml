@@ -206,11 +206,14 @@
     <string name="perm_location_needed_to_arm">Grant location permission first so Pin Wake can monitor your arrival.</string>
     <string name="update_signature_invalid">Update blocked: APK signature does not match this app.</string>
 
-    <!-- Custom Ringtone per Alarm -->
+    <!-- Custom Ringtone & Vibration per Alarm -->
     <string name="map_ringtone_label">Alarm Ringtone</string>
     <string name="ringtone_default_alarm">Default Alarm Tone</string>
     <string name="ringtone_badge_format">♪ %1$s</string>
     <string name="cd_pick_ringtone">Choose alarm ringtone</string>
+    <string name="map_vibrate_label">Vibrate with Ringtone</string>
+    <string name="cd_toggle_vibrate">Toggle vibration with alarm ringtone</string>
+    <string name="badge_vibrate_on">Vibrate</string>
 
     <!-- Mandatory GPS Keep-On & Prompts -->
     <string name="gps_enable_dialog_title">GPS Is Turned Off</string>
@@ -261,5 +264,44 @@
     <string name="nav_assist_route_off">Route</string>
     <string name="nav_assist_waiting_gps">Waiting GPS</string>
     <string name="cd_toggle_route_line">Toggle route line on map</string>
-    <string name="cd_launch_navigation">Launch external turn-by-turn navigation</string>
+    <string name="cd_launch_navigation">Start in-app turn-by-turn navigation</string>
+
+    <!-- In-App Turn-by-Turn Navigation -->
+    <string name="nav_title">In-App Navigation</string>
+    <string name="nav_calculating_route">Calculating route…</string>
+    <string name="nav_mode_road">ROAD ROUTE</string>
+    <string name="nav_mode_offline_direct">OFFLINE GPS · DIRECT</string>
+    <string name="nav_rerouting">Recalculating route…</string>
+    <string name="nav_then_prefix">Then: %1$s</string>
+    <string name="nav_arrive_clock">Arrive %1$s</string>
+    <string name="nav_speed_kmh">%1$d km/h</string>
+    <string name="nav_end_button">End</string>
+    <string name="nav_recenter">Recenter</string>
+    <string name="nav_alarm_armed_radius">Wake Armed · %1$d m</string>
+    <string name="nav_alarm_off_radius">Arm Wake · %1$d m</string>
+    <string name="nav_profile_driving">Driving</string>
+    <string name="nav_profile_walking">Walking</string>
+    <string name="nav_arrived_status">Inside wake zone</string>
+    <string name="cd_nav_voice_toggle">Toggle voice guidance</string>
+    <string name="cd_nav_profile_toggle">Switch driving or walking mode</string>
+    <string name="cd_nav_recenter">Recenter map on current location</string>
+    <string name="cd_nav_back">Close navigation</string>
+    <string name="cd_navigate_alarm">Navigate inside app</string>
+
+    <!-- Maneuver Instructions -->
+    <string name="nav_maneuver_arrive">Arrive at destination</string>
+    <string name="nav_maneuver_arrive_named">Arrive at %1$s</string>
+    <string name="nav_maneuver_roundabout">Enter roundabout</string>
+    <string name="nav_maneuver_roundabout_onto">Enter roundabout onto %1$s</string>
+    <string name="nav_maneuver_roundabout_exit">Take exit %1$d at roundabout</string>
+    <string name="nav_maneuver_roundabout_exit_onto">Take exit %1$d onto %2$s</string>
+    <string name="nav_action_turn_left">Turn left</string>
+    <string name="nav_action_slight_left">Keep left</string>
+    <string name="nav_action_sharp_left">Sharp left</string>
+    <string name="nav_action_turn_right">Turn right</string>
+    <string name="nav_action_slight_right">Keep right</string>
+    <string name="nav_action_sharp_right">Sharp right</string>
+    <string name="nav_action_uturn">Make a U-turn</string>
+    <string name="nav_action_continue">Continue straight</string>
+    <string name="nav_maneuver_onto_format">%1$s onto %2$s</string>
 </resources>

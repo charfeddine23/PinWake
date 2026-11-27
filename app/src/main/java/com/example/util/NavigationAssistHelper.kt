@@ -1,62 +1,67 @@
 package com.example.util
 
+import android.app.ActivityOptions
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
-import android.widget.Toast
 import com.example.R
-import java.util.Locale
+import com.example.data.remote.dto.NominatimPlaceDto
+import com.example.ui.nav.InAppNavigationActivity
 
 object NavigationAssistHelper {
 
-    fun buildGoogleNavigationIntent(latitude: Double, longitude: Double): Intent {
-        val coords = String.format(Locale.US, "%.6f,%.6f", latitude, longitude)
-        return Intent(Intent.ACTION_VIEW, Uri.parse("google.navigation:q=$coords"))
-    }
-
-    fun buildGeoFallbackIntent(
+    fun buildInAppNavigationIntent(
+        context: Context,
         latitude: Double,
         longitude: Double,
-        label: String?
+        label: String?,
+        alarmId: Long = -1L,
+        radiusMeters: Int = 500
     ): Intent {
-        val coords = String.format(Locale.US, "%.6f,%.6f", latitude, longitude)
         val cleanLabel = label
-            ?.let { com.example.data.remote.dto.NominatimPlaceDto.stripUnsupportedGlyphs(it) }
+            ?.let { NominatimPlaceDto.stripUnsupportedGlyphs(it) }
             ?.trim()
             ?.take(80)
-        val query = if (!cleanLabel.isNullOrBlank()) {
-            "$coords(${Uri.encode(cleanLabel)})"
-        } else {
-            coords
+            .orEmpty()
+        return Intent(context, InAppNavigationActivity::class.java).apply {
+            putExtra(InAppNavigationActivity.EXTRA_DEST_LAT, latitude)
+            putExtra(InAppNavigationActivity.EXTRA_DEST_LON, longitude)
+            putExtra(InAppNavigationActivity.EXTRA_DEST_LABEL, cleanLabel)
+            if (alarmId > 0L) {
+                putExtra(InAppNavigationActivity.EXTRA_ALARM_ID, alarmId)
+            }
+            putExtra(InAppNavigationActivity.EXTRA_RADIUS_METERS, radiusMeters.coerceIn(10, 5000))
         }
-        return Intent(Intent.ACTION_VIEW, Uri.parse("geo:$coords?q=$query"))
-    }
-
-    fun buildWebDirectionsIntent(latitude: Double, longitude: Double): Intent {
-        val coords = String.format(Locale.US, "%.6f,%.6f", latitude, longitude)
-        val uri = Uri.parse("https://www.google.com/maps/dir/?api=1&destination=$coords")
-        return Intent(Intent.ACTION_VIEW, uri)
     }
 
     fun launchTurnByTurnNavigation(
         context: Context,
         latitude: Double,
         longitude: Double,
-        label: String?
+        label: String?,
+        alarmId: Long = -1L,
+        radiusMeters: Int = 500
     ): Boolean {
-        val candidates = listOf(
-            buildGoogleNavigationIntent(latitude, longitude),
-            buildGeoFallbackIntent(latitude, longitude, label),
-            buildWebDirectionsIntent(latitude, longitude)
+        val intent = buildInAppNavigationIntent(
+            context = context,
+            latitude = latitude,
+            longitude = longitude,
+            label = label,
+            alarmId = alarmId,
+            radiusMeters = radiusMeters
         )
-        for (intent in candidates) {
-            val launched = runCatching {
+        return runCatching {
+            val options = ActivityOptions.makeCustomAnimation(
+                context,
+                R.anim.pinwake_activity_enter,
+                R.anim.pinwake_activity_exit
+            )
+            context.startActivity(intent, options.toBundle())
+            true
+        }.getOrElse {
+            runCatching {
                 context.startActivity(intent)
                 true
             }.getOrDefault(false)
-            if (launched) return true
         }
-        Toast.makeText(context, R.string.nav_assist_no_nav_app, Toast.LENGTH_SHORT).show()
-        return false
     }
 }

@@ -7,6 +7,7 @@ import android.content.Intent
 import androidx.core.content.ContextCompat
 import com.example.PinWakeApplication
 import com.example.data.local.entity.TripOutcome
+import com.example.util.AlarmVibrationHelper
 import com.example.util.PermissionHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -19,6 +20,7 @@ class AlarmActionReceiver : BroadcastReceiver() {
         val repo = app?.container?.repository
         when (intent.action) {
             ACTION_CANCEL_ALARM -> {
+                AlarmVibrationHelper.cancelVibration(context)
                 val nm = context.getSystemService(NotificationManager::class.java)
                 val cancelIntent = Intent(context, PinWakeService::class.java).apply {
                     action = PinWakeService.ACTION_CANCEL_ALL
@@ -52,6 +54,7 @@ class AlarmActionReceiver : BroadcastReceiver() {
                 }
             }
             ACTION_DISMISS_ALARM -> {
+                AlarmVibrationHelper.cancelVibration(context)
                 val alarmId = intent.getLongExtra(PinWakeService.EXTRA_ALARM_ID, -1L)
                 context.sendBroadcast(
                     Intent(PinWakeService.ACTION_FINISH_RINGING_UI).setPackage(context.packageName)
@@ -59,6 +62,7 @@ class AlarmActionReceiver : BroadcastReceiver() {
                 PinWakeService.dismissAlarm(context, alarmId)
             }
             ACTION_SNOOZE_500M -> {
+                AlarmVibrationHelper.cancelVibration(context)
                 val alarmId = intent.getLongExtra(PinWakeService.EXTRA_ALARM_ID, -1L)
                 val dist = intent.getFloatExtra(PinWakeService.EXTRA_DISTANCE_METERS, 0f)
                 if (alarmId > 0L) {

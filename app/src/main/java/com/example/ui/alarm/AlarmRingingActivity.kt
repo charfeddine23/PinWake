@@ -16,10 +16,7 @@ import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.os.VibrationAttributes
-import android.os.VibrationEffect
 import android.os.Vibrator
-import android.os.VibratorManager
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
@@ -36,6 +33,7 @@ import androidx.lifecycle.lifecycleScope
 import com.example.R
 import com.example.databinding.ActivityAlarmRingingBinding
 import com.example.service.PinWakeService
+import com.example.util.AlarmVibrationHelper
 import com.example.util.DistanceFormatter
 import com.example.util.PreAlertPreferences
 import kotlinx.coroutines.Job
@@ -259,37 +257,7 @@ class AlarmRingingActivity : AppCompatActivity() {
     }
 
     private fun startAlarmVibration() {
-        val vib = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val manager = getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
-            manager.defaultVibrator
-        } else {
-            @Suppress("DEPRECATION")
-            getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
-        }
-        vibrator = vib
-
-        if (!vib.hasVibrator()) return
-        val timings = longArrayOf(0L, 550L, 220L, 750L, 220L, 550L, 600L)
-        val amplitudes = intArrayOf(0, 255, 0, 255, 0, 255, 0)
-        val effect = VibrationEffect.createWaveform(timings, amplitudes, 0)
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            vib.vibrate(
-                effect,
-                VibrationAttributes.Builder()
-                    .setUsage(VibrationAttributes.USAGE_ALARM)
-                    .build()
-            )
-        } else {
-            @Suppress("DEPRECATION")
-            vib.vibrate(
-                effect,
-                AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_ALARM)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                    .build()
-            )
-        }
+        vibrator = AlarmVibrationHelper.startLoopingArrivalVibration(this)
     }
 
     private fun handleSnooze500m() {
@@ -330,7 +298,9 @@ class AlarmRingingActivity : AppCompatActivity() {
             runCatching { audioManager?.abandonAudioFocusRequest(req) }
         }
         audioFocusRequest = null
-        runCatching { vibrator?.cancel() }
+        AlarmVibrationHelper.cancelVibrator(vibrator)
+        AlarmVibrationHelper.cancelVibration(this)
+        vibrator = null
     }
 
     @SuppressLint("ClickableViewAccessibility")

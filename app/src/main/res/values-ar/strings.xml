@@ -206,11 +206,14 @@
     <string name="perm_location_needed_to_arm">يرجى منح صلاحية الموقع أولاً لتفعيل مراقبة الوصول.</string>
     <string name="update_signature_invalid">تم حظر التحديث: توقيع الحزمة لا يطابق التطبيق الحالي.</string>
 
-    <!-- تخصيص نغمة لكل منبه -->
+    <!-- تخصيص نغمة والاهتزاز لكل منبه -->
     <string name="map_ringtone_label">نغمة المنبه</string>
     <string name="ringtone_default_alarm">نغمة المنبه الافتراضية</string>
     <string name="ringtone_badge_format">♪ %1$s</string>
     <string name="cd_pick_ringtone">اختيار نغمة المنبه</string>
+    <string name="map_vibrate_label">الاهتزاز مع النغمة</string>
+    <string name="cd_toggle_vibrate">تبديل الاهتزاز مع نغمة المنبه</string>
+    <string name="badge_vibrate_on">اهتزاز</string>
 
     <!-- طلب الـ GPS والتشغيل الإجباري -->
     <string name="gps_enable_dialog_title">نظام الـ GPS مغلق</string>
@@ -261,5 +264,44 @@
     <string name="nav_assist_route_off">المسار</string>
     <string name="nav_assist_waiting_gps">انتظار GPS</string>
     <string name="cd_toggle_route_line">تبديل خط المسار على الخريطة</string>
-    <string name="cd_launch_navigation">بدء الملاحة الخارجية</string>
+    <string name="cd_launch_navigation">بدء الملاحة داخل التطبيق</string>
+
+    <!-- الملاحة الكاملة داخل التطبيق -->
+    <string name="nav_title">الملاحة داخل التطبيق</string>
+    <string name="nav_calculating_route">جاري حساب المسار…</string>
+    <string name="nav_mode_road">مسار الطرق</string>
+    <string name="nav_mode_offline_direct">GPS بدون إنترنت · مباشر</string>
+    <string name="nav_rerouting">جاري إعادة حساب المسار…</string>
+    <string name="nav_then_prefix">ثم: %1$s</string>
+    <string name="nav_arrive_clock">الوصول %1$s</string>
+    <string name="nav_speed_kmh">%1$d كم/س</string>
+    <string name="nav_end_button">إنهاء</string>
+    <string name="nav_recenter">توسيط</string>
+    <string name="nav_alarm_armed_radius">المنبه مفعّل · %1$d م</string>
+    <string name="nav_alarm_off_radius">تفعيل المنبه · %1$d م</string>
+    <string name="nav_profile_driving">قيادة</string>
+    <string name="nav_profile_walking">مشي</string>
+    <string name="nav_arrived_status">وصلت لنطاق الوجهة</string>
+    <string name="cd_nav_voice_toggle">تبديل التوجيه الصوتي</string>
+    <string name="cd_nav_profile_toggle">التبديل بين القيادة والمشي</string>
+    <string name="cd_nav_recenter">إعادة توسيط الخريطة على موقعي</string>
+    <string name="cd_nav_back">إغلاق الملاحة</string>
+    <string name="cd_navigate_alarm">الملاحة داخل التطبيق</string>
+
+    <!-- تعليمات الانعطاف -->
+    <string name="nav_maneuver_arrive">الوصول إلى الوجهة</string>
+    <string name="nav_maneuver_arrive_named">الوصول إلى %1$s</string>
+    <string name="nav_maneuver_roundabout">ادخل الدوار</string>
+    <string name="nav_maneuver_roundabout_onto">ادخل الدوار نحو %1$s</string>
+    <string name="nav_maneuver_roundabout_exit">اسلك المخرج %1$d من الدوار</string>
+    <string name="nav_maneuver_roundabout_exit_onto">اسلك المخرج %1$d نحو %2$s</string>
+    <string name="nav_action_turn_left">انعطف يساراً</string>
+    <string name="nav_action_slight_left">التزم اليسار</string>
+    <string name="nav_action_sharp_left">انعطاف حاد يساراً</string>
+    <string name="nav_action_turn_right">انعطف يميناً</string>
+    <string name="nav_action_slight_right">التزم اليمين</string>
+    <string name="nav_action_sharp_right">انعطاف حاد يميناً</string>
+    <string name="nav_action_uturn">استدر للخلف</string>
+    <string name="nav_action_continue">استمر للأمام مباشرة</string>
+    <string name="nav_maneuver_onto_format">%1$s نحو %2$s</string>
 </resources>

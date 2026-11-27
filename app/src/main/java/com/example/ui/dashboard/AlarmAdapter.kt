@@ -27,6 +27,7 @@ import java.util.Locale
 class AlarmAdapter(
     private val onToggleActive: (GeoAlarmEntity, Boolean) -> Unit,
     private val onEditClick: (GeoAlarmEntity) -> Unit,
+    private val onNavigateClick: (GeoAlarmEntity) -> Unit,
     private val onShareClick: (GeoAlarmEntity) -> Unit,
     private val onDeleteClick: (GeoAlarmEntity) -> Unit
 ) : ListAdapter<GeoAlarmEntity, AlarmAdapter.AlarmViewHolder>(AlarmDiffCallback) {
@@ -61,6 +62,7 @@ class AlarmAdapter(
         init {
             attachLuxuryPressFeedback(binding.cardAlarmRoot)
             attachLuxuryPressFeedback(binding.btnEditAlarm)
+            attachLuxuryPressFeedback(binding.btnNavigateAlarm)
             attachLuxuryPressFeedback(binding.btnShareAlarm)
             attachLuxuryPressFeedback(binding.btnDeleteAlarm)
         }
@@ -130,6 +132,9 @@ class AlarmAdapter(
                 binding.tvRingtoneBadge.visibility = View.GONE
             }
 
+            binding.badgeVibrateOn.visibility =
+                if (item.vibrateEnabled) View.VISIBLE else View.GONE
+
             if (item.isActive) {
                 val dist = item.lastDistanceMeters
                 val insideZone = dist != null && dist <= item.radiusMeters
@@ -173,6 +178,7 @@ class AlarmAdapter(
             }
 
             binding.btnEditAlarm.setOnClickListener { onEditClick(item) }
+            binding.btnNavigateAlarm.setOnClickListener { onNavigateClick(item) }
             binding.btnShareAlarm.setOnClickListener { onShareClick(item) }
             binding.btnDeleteAlarm.setOnClickListener { onDeleteClick(item) }
             binding.cardAlarmRoot.setOnClickListener { onEditClick(item) }

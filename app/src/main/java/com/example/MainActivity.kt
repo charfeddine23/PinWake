@@ -915,6 +915,16 @@ class MainActivity : AppCompatActivity() {
             onEditClick = { alarm ->
                 openMapPicker(alarmId = alarm.id)
             },
+            onNavigateClick = { alarm ->
+                NavigationAssistHelper.launchTurnByTurnNavigation(
+                    context = this,
+                    latitude = alarm.latitude,
+                    longitude = alarm.longitude,
+                    label = alarm.title,
+                    alarmId = alarm.id,
+                    radiusMeters = alarm.radiusMeters
+                )
+            },
             onShareClick = { alarm ->
                 ShareTripHelper.launchShareSheet(
                     context = this,
@@ -1006,7 +1016,9 @@ class MainActivity : AppCompatActivity() {
                 context = this,
                 latitude = target.latitude,
                 longitude = target.longitude,
-                label = target.title
+                label = target.title,
+                alarmId = target.id,
+                radiusMeters = target.radiusMeters
             )
         }
 
@@ -1903,6 +1915,11 @@ class MainActivity : AppCompatActivity() {
                 !dialogBinding.switchQuickAssignActive.isChecked
         }
 
+        dialogBinding.rowQuickAssignVibrateToggle.setOnClickListener {
+            dialogBinding.switchQuickAssignVibrate.isChecked =
+                !dialogBinding.switchQuickAssignVibrate.isChecked
+        }
+
         attachLuxuryPressFeedback(dialogBinding.btnQuickAssignConfirm)
 
         val lang = LanguageManager.getCurrentLanguageCode(this)
@@ -1950,7 +1967,8 @@ class MainActivity : AppCompatActivity() {
                 latitude = latitude,
                 longitude = longitude,
                 radiusMeters = radiusMeters,
-                isActive = activateAlarm
+                isActive = activateAlarm,
+                vibrateEnabled = dialogBinding.switchQuickAssignVibrate.isChecked
             ) { savedId, hasAnyActive ->
                 if (isDestroyed || isFinishing) return@saveQuickAssignedLocation
                 focusedPlaceLockId = savedId

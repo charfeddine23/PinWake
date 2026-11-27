@@ -585,6 +585,98 @@ object MapStyleHelper {
         }
     }
 
+    /**
+     * Installs or updates a multi-point turn-by-turn route polyline with dark cyan casing
+     * (#0E7490) and bright cyan foreground (#22D3EE), or dashed styling for offline direct mode.
+     */
+    fun ensureNavigationPolylineLayers(
+        style: Style,
+        sourceId: String,
+        casingLayerId: String,
+        lineLayerId: String,
+        points: List<Point>,
+        isDashed: Boolean,
+        visible: Boolean,
+        belowLayerId: String? = null
+    ) {
+        if (!style.isFullyLoaded) return
+
+        val hasValidRoute = visible && points.size >= 2
+        val collection = if (hasValidRoute) {
+            FeatureCollection.fromFeature(Feature.fromGeometry(LineString.fromLngLats(points)))
+        } else {
+            FeatureCollection.fromFeatures(emptyList())
+        }
+
+        val existingSource = style.getSourceAs<GeoJsonSource>(sourceId)
+        if (existingSource == null) {
+            style.addSource(GeoJsonSource(sourceId, collection))
+        } else {
+            existingSource.setGeoJson(collection)
+        }
+
+        val visibilityProp = PropertyFactory.visibility(
+            if (hasValidRoute) Property.VISIBLE else Property.NONE
+        )
+
+        val anchorBelowId = belowLayerId?.takeIf { style.getLayer(it) != null }
+            ?: style.layers.firstOrNull {
+                it is SymbolLayer && !it.id.startsWith("pinwake-")
+            }?.id
+
+        val existingCasing = style.getLayerAs<LineLayer>(casingLayerId)
+        if (existingCasing != null) {
+            existingCasing.setProperties(
+                visibilityProp,
+                PropertyFactory.lineOpacity(if (hasValidRoute && !isDashed) 0.90f else 0f)
+            )
+        } else {
+            val casingLayer = LineLayer(casingLayerId, sourceId).apply {
+                setProperties(
+                    PropertyFactory.lineColor("#0E7490"),
+                    PropertyFactory.lineWidth(8.0f),
+                    PropertyFactory.lineOpacity(if (hasValidRoute && !isDashed) 0.90f else 0f),
+                    PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
+                    PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
+                    visibilityProp
+                )
+            }
+            if (anchorBelowId != null) {
+                style.addLayerBelow(casingLayer, anchorBelowId)
+            } else {
+                style.addLayer(casingLayer)
+            }
+        }
+
+        val dashArray = if (isDashed) arrayOf(2.4f, 1.5f) else arrayOf(1f, 0f)
+        val existingLine = style.getLayerAs<LineLayer>(lineLayerId)
+        if (existingLine != null) {
+            existingLine.setProperties(
+                visibilityProp,
+                PropertyFactory.lineOpacity(if (hasValidRoute) 0.96f else 0f),
+                PropertyFactory.lineWidth(if (isDashed) 3.8f else 4.8f),
+                PropertyFactory.lineDasharray(dashArray)
+            )
+        } else {
+            val routeLayer = LineLayer(lineLayerId, sourceId).apply {
+                setProperties(
+                    PropertyFactory.lineColor("#22D3EE"),
+                    PropertyFactory.lineWidth(if (isDashed) 3.8f else 4.8f),
+                    PropertyFactory.lineOpacity(if (hasValidRoute) 0.96f else 0f),
+                    PropertyFactory.lineDasharray(dashArray),
+                    PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
+                    PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
+                    visibilityProp
+                )
+            }
+            if (anchorBelowId != null) {
+                style.addLayerBelow(routeLayer, anchorBelowId)
+            } else {
+                style.addLayer(routeLayer)
+            }
+        }
+    }
+
     fun createGeodesicCircleFeature(
         lat: Double,
         lon: Double,

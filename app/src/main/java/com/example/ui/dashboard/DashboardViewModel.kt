@@ -178,6 +178,7 @@ class DashboardViewModel(
         longitude: Double,
         radiusMeters: Int,
         isActive: Boolean,
+        vibrateEnabled: Boolean = true,
         onDone: (savedId: Long, hasAnyActive: Boolean) -> Unit
     ) {
         viewModelScope.launch {
@@ -188,7 +189,8 @@ class DashboardViewModel(
                 latitude = latitude,
                 longitude = longitude,
                 radiusMeters = radiusMeters,
-                isActive = isActive
+                isActive = isActive,
+                vibrateEnabled = vibrateEnabled
             )
             val hasAnyActive = repository.getActiveAlarmsOnce().isNotEmpty()
             if (!hasAnyActive) {

@@ -32,6 +32,7 @@ data class MapPickerUiState(
     val searchResults: List<NominatimPlaceDto> = emptyList(),
     val searchError: Boolean = false,
     val selectedCategory: FavoriteCategory = FavoriteCategory.NONE,
+    val vibrateEnabled: Boolean = true,
     val ringtoneUri: String? = null,
     val ringtoneTitle: String? = null
 )
@@ -107,6 +108,7 @@ class MapPickerViewModel(
                     resolvedAddress = existing.address,
                     suggestedTitle = existing.title,
                     selectedCategory = existing.favoriteCategory,
+                    vibrateEnabled = existing.vibrateEnabled,
                     ringtoneUri = existing.ringtoneUri,
                     ringtoneTitle = existing.ringtoneTitle
                 )
@@ -182,6 +184,10 @@ class MapPickerViewModel(
         _uiState.value = _uiState.value.copy(selectedCategory = category)
     }
 
+    fun updateVibrateEnabled(enabled: Boolean) {
+        _uiState.value = _uiState.value.copy(vibrateEnabled = enabled)
+    }
+
     fun updateRingtone(uri: String?, title: String?) {
         _uiState.value = _uiState.value.copy(
             ringtoneUri = uri,
@@ -214,6 +220,7 @@ class MapPickerViewModel(
                     longitude = state.longitude,
                     radiusMeters = state.radiusMeters,
                     isActive = activateNow,
+                    vibrateEnabled = state.vibrateEnabled,
                     ringtoneUri = state.ringtoneUri,
                     ringtoneTitle = state.ringtoneTitle
                 )
@@ -228,7 +235,7 @@ class MapPickerViewModel(
                     isActive = activateNow,
                     isFavorite = category != FavoriteCategory.NONE,
                     favoriteCategory = category,
-                    vibrateEnabled = existing?.vibrateEnabled ?: true,
+                    vibrateEnabled = state.vibrateEnabled,
                     ringtoneUri = state.ringtoneUri,
                     ringtoneTitle = state.ringtoneTitle,
                     lastDistanceMeters = null,

@@ -86,6 +86,7 @@ class MapPickerActivity : AppCompatActivity() {
     private var userEditedTitle = false
     private var isProgrammaticTitleUpdate = false
     private var isSyncing3dSwitch = false
+    private var isSyncingVibrateSwitch = false
     private var isPinLifted = false
     private var lockedGeocodeCoord: Pair<Double, Double>? = null
     private var pendingCameraTarget: Triple<Double, Double, Double>? = null
@@ -629,6 +630,16 @@ class MapPickerActivity : AppCompatActivity() {
             launchRingtonePicker()
         }
 
+        binding.rowAlarmVibrate.setOnClickListener {
+            binding.switchAlarmVibrate.toggle()
+        }
+
+        binding.switchAlarmVibrate.setOnCheckedChangeListener { _, isChecked ->
+            if (!isSyncingVibrateSwitch) {
+                viewModel.updateVibrateEnabled(isChecked)
+            }
+        }
+
         binding.btnPickerToggleRoute.setOnClickListener {
             val nextEnabled = !PreAlertPreferences.isNavRouteLineEnabled(this)
             PreAlertPreferences.setNavRouteLineEnabled(this, nextEnabled)
@@ -645,7 +656,9 @@ class MapPickerActivity : AppCompatActivity() {
                 context = this,
                 latitude = currentLat,
                 longitude = currentLon,
-                label = label
+                label = label,
+                alarmId = state.existingAlarm?.id ?: -1L,
+                radiusMeters = state.radiusMeters
             )
         }
 
@@ -736,6 +749,12 @@ class MapPickerActivity : AppCompatActivity() {
                         binding.tvSelectedRingtone.text =
                             state.ringtoneTitle?.takeIf { it.isNotBlank() }
                                 ?: getString(R.string.ringtone_default_alarm)
+
+                        if (binding.switchAlarmVibrate.isChecked != state.vibrateEnabled) {
+                            isSyncingVibrateSwitch = true
+                            binding.switchAlarmVibrate.isChecked = state.vibrateEnabled
+                            isSyncingVibrateSwitch = false
+                        }
 
                         if (!userEditedTitle &&
                             state.suggestedTitle.isNotBlank() &&

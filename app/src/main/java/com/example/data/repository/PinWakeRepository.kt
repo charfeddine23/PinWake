@@ -7,7 +7,11 @@ import com.example.data.local.entity.GeoAlarmEntity
 import com.example.data.local.entity.TripHistoryEntity
 import com.example.data.local.entity.TripOutcome
 import com.example.data.remote.NominatimApiService
+import com.example.data.remote.OsrmRoutingApiService
 import com.example.data.remote.dto.NominatimPlaceDto
+import com.example.util.InAppNavigationEngine
+import com.example.util.NavRoute
+import com.example.util.TravelProfile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
@@ -16,7 +20,8 @@ class PinWakeRepository(
     private val geoAlarmDao: GeoAlarmDao,
     private val tripHistoryDao: TripHistoryDao,
     private val nominatimApi: NominatimApiService,
-    val trackingStateManager: TrackingStateManager
+    val trackingStateManager: TrackingStateManager,
+    private val osrmApi: OsrmRoutingApiService = OsrmRoutingApiService.create()
 ) {
     val allAlarms: Flow<List<GeoAlarmEntity>> = geoAlarmDao.observeAllAlarms()
     val activeAlarms: Flow<List<GeoAlarmEntity>> = geoAlarmDao.observeActiveAlarms()
@@ -55,6 +60,7 @@ class PinWakeRepository(
         longitude: Double,
         radiusMeters: Int,
         isActive: Boolean,
+        vibrateEnabled: Boolean = true,
         ringtoneUri: String? = null,
         ringtoneTitle: String? = null
     ): Long {
@@ -79,6 +85,7 @@ class PinWakeRepository(
                 isActive = isActive,
                 isFavorite = true,
                 favoriteCategory = category,
+                vibrateEnabled = vibrateEnabled,
                 ringtoneUri = ringtoneUri ?: existing.ringtoneUri,
                 ringtoneTitle = ringtoneTitle ?: existing.ringtoneTitle,
                 lastDistanceMeters = null,
@@ -98,6 +105,7 @@ class PinWakeRepository(
                     isActive = isActive,
                     isFavorite = category != FavoriteCategory.NONE,
                     favoriteCategory = category,
+                    vibrateEnabled = vibrateEnabled,
                     ringtoneUri = ringtoneUri,
                     ringtoneTitle = ringtoneTitle,
                     createdAt = now,
@@ -309,5 +317,35 @@ class PinWakeRepository(
                 acceptLanguage = languageCode
             )
         }
+    }
+
+    suspend fun fetchNavigationRoute(
+        fromLat: Double,
+        fromLon: Double,
+        toLat: Double,
+        toLon: Double,
+        profile: TravelProfile
+    ): NavRoute = withContext(Dispatchers.IO) {
+        val coords = InAppNavigationEngine.formatCoordinatesParam(
+            fromLat = fromLat,
+            fromLon = fromLon,
+            toLat = toLat,
+            toLon = toLon
+        )
+        val osrmRoute = runCatching {
+            val response = osrmApi.getRoute(
+                profile = profile.osrmProfile,
+                coordinates = coords
+            )
+            InAppNavigationEngine.fromOsrmResponse(response, profile)
+        }.getOrNull()
+
+        osrmRoute ?: InAppNavigationEngine.buildDirectFallbackRoute(
+            fromLat = fromLat,
+            fromLon = fromLon,
+            toLat = toLat,
+            toLon = toLon,
+            profile = profile
+        )
     }
 }

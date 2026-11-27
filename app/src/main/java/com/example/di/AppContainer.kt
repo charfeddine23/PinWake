@@ -4,6 +4,7 @@ import android.content.Context
 import com.example.data.local.AppDatabase
 import com.example.data.remote.GitHubReleaseApiService
 import com.example.data.remote.NominatimApiService
+import com.example.data.remote.OsrmRoutingApiService
 import com.example.data.repository.PinWakeRepository
 import com.example.data.repository.TrackingStateManager
 import com.example.util.ApkUpdateManager
@@ -15,6 +16,10 @@ class AppContainer(context: Context) {
 
     private val nominatimApi: NominatimApiService by lazy {
         NominatimApiService.create()
+    }
+
+    private val osrmApi: OsrmRoutingApiService by lazy {
+        OsrmRoutingApiService.create()
     }
 
     private val gitHubReleaseApi: GitHubReleaseApiService by lazy {
@@ -30,7 +35,8 @@ class AppContainer(context: Context) {
             geoAlarmDao = database.geoAlarmDao(),
             tripHistoryDao = database.tripHistoryDao(),
             nominatimApi = nominatimApi,
-            trackingStateManager = trackingStateManager
+            trackingStateManager = trackingStateManager,
+            osrmApi = osrmApi
         )
     }
 

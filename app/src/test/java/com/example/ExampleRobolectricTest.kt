@@ -765,21 +765,148 @@ class ExampleRobolectricTest {
     }
 
     @Test
-    fun `navigationAssistHelper builds external navigation and geo fallback intents with label`() {
-        val navIntent = com.example.util.NavigationAssistHelper.buildGoogleNavigationIntent(
-            latitude = 36.7538,
-            longitude = 3.0588
-        )
-        assertEquals("google.navigation:q=36.753800,3.058800", navIntent.dataString)
-
-        val geoIntent = com.example.util.NavigationAssistHelper.buildGeoFallbackIntent(
+    fun `navigationAssistHelper builds exclusive in-app navigation intent without Google Maps redirect`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val navIntent = com.example.util.NavigationAssistHelper.buildInAppNavigationIntent(
+            context = context,
             latitude = 36.7538,
             longitude = 3.0588,
-            label = "Central Station"
+            label = "Central Station / ⴷⵣⴰⵢⵔ",
+            alarmId = 42L,
+            radiusMeters = 250
         )
-        val dataStr = geoIntent.dataString ?: ""
-        assertTrue(dataStr.startsWith("geo:36.753800,3.058800?q=36.753800,3.058800("))
-        assertTrue(dataStr.contains("Central"))
+        assertEquals(
+            com.example.ui.nav.InAppNavigationActivity::class.java.name,
+            navIntent.component?.className
+        )
+        assertEquals(null, navIntent.data)
+        assertEquals(36.7538, navIntent.getDoubleExtra(com.example.ui.nav.InAppNavigationActivity.EXTRA_DEST_LAT, 0.0), 0.0001)
+        assertEquals(3.0588, navIntent.getDoubleExtra(com.example.ui.nav.InAppNavigationActivity.EXTRA_DEST_LON, 0.0), 0.0001)
+        assertEquals(42L, navIntent.getLongExtra(com.example.ui.nav.InAppNavigationActivity.EXTRA_ALARM_ID, -1L))
+        assertEquals(250, navIntent.getIntExtra(com.example.ui.nav.InAppNavigationActivity.EXTRA_RADIUS_METERS, 0))
+        val label = navIntent.getStringExtra(com.example.ui.nav.InAppNavigationActivity.EXTRA_DEST_LABEL).orEmpty()
+        assertTrue(label.contains("Central Station"))
+        assertFalse(label.any { it in '\u2D30'..'\u2D7F' })
+    }
+
+    @Test
+    fun `inAppNavigationEngine parses OSRM route tracks step progression off-route and arrival`() {
+        val response = com.example.data.remote.dto.OsrmRouteResponseDto(
+            code = "Ok",
+            routes = listOf(
+                com.example.data.remote.dto.OsrmRouteDto(
+                    distance = 2200.0,
+                    duration = 240.0,
+                    geometry = com.example.data.remote.dto.OsrmGeometryDto(
+                        type = "LineString",
+                        coordinates = listOf(
+                            listOf(3.0000, 36.7000),
+                            listOf(3.0000, 36.7100),
+                            listOf(3.0100, 36.7100)
+                        )
+                    ),
+                    legs = listOf(
+                        com.example.data.remote.dto.OsrmLegDto(
+                            distance = 2200.0,
+                            duration = 240.0,
+                            steps = listOf(
+                                com.example.data.remote.dto.OsrmStepDto(
+                                    distance = 1110.0,
+                                    duration = 120.0,
+                                    name = "Rue Didouche",
+                                    maneuver = com.example.data.remote.dto.OsrmManeuverDto(
+                                        type = "depart",
+                                        modifier = "straight",
+                                        location = listOf(3.0000, 36.7000),
+                                        bearingAfter = 0.0
+                                    )
+                                ),
+                                com.example.data.remote.dto.OsrmStepDto(
+                                    distance = 900.0,
+                                    duration = 120.0,
+                                    name = "Boulevard Amirouche",
+                                    maneuver = com.example.data.remote.dto.OsrmManeuverDto(
+                                        type = "turn",
+                                        modifier = "right",
+                                        location = listOf(3.0000, 36.7100),
+                                        bearingAfter = 90.0
+                                    )
+                                ),
+                                com.example.data.remote.dto.OsrmStepDto(
+                                    distance = 0.0,
+                                    duration = 0.0,
+                                    name = "",
+                                    maneuver = com.example.data.remote.dto.OsrmManeuverDto(
+                                        type = "arrive",
+                                        modifier = null,
+                                        location = listOf(3.0100, 36.7100),
+                                        bearingAfter = 90.0
+                                    )
+                                )
+                            )
+                        )
+                    )
+                )
+            )
+        )
+
+        val route = com.example.util.InAppNavigationEngine.fromOsrmResponse(
+            response = response,
+            profile = com.example.util.TravelProfile.DRIVING
+        )!!
+        assertFalse(route.isOfflineDirectFallback)
+        assertEquals(3, route.points.size)
+        assertEquals(3, route.steps.size)
+
+        // Partway along leg 1 -> upcoming step is turn right onto Boulevard Amirouche
+        val onLeg1 = com.example.util.InAppNavigationEngine.computeProgress(
+            route = route,
+            currentLat = 36.7050,
+            currentLon = 3.0000,
+            currentSpeedMps = 10f,
+            geofenceRadiusMeters = 100
+        )
+        assertEquals(com.example.util.ManeuverIconType.RIGHT, onLeg1.upcomingStep.iconType)
+        assertFalse(onLeg1.shouldReroute)
+        assertFalse(onLeg1.hasArrived)
+        assertTrue(onLeg1.distanceToNextTurnMeters in 450f..650f)
+
+        // > 65m perpendicular off route -> shouldReroute triggers
+        val offRoute = com.example.util.InAppNavigationEngine.computeProgress(
+            route = route,
+            currentLat = 36.7050,
+            currentLon = 3.0030,
+            currentSpeedMps = 10f,
+            geofenceRadiusMeters = 100
+        )
+        assertTrue(offRoute.shouldReroute)
+
+        // Near destination -> arrives and offline direct fallback produces valid non-rerouting route
+        val arrived = com.example.util.InAppNavigationEngine.computeProgress(
+            route = route,
+            currentLat = 36.7100,
+            currentLon = 3.0099,
+            currentSpeedMps = 2f,
+            geofenceRadiusMeters = 100
+        )
+        assertTrue(arrived.hasArrived)
+
+        val directFallback = com.example.util.InAppNavigationEngine.buildDirectFallbackRoute(
+            fromLat = 36.7000,
+            fromLon = 3.0000,
+            toLat = 36.7100,
+            toLon = 3.0100,
+            profile = com.example.util.TravelProfile.WALKING
+        )
+        assertTrue(directFallback.isOfflineDirectFallback)
+        val offlineProgress = com.example.util.InAppNavigationEngine.computeProgress(
+            route = directFallback,
+            currentLat = 36.7050,
+            currentLon = 3.0200,
+            currentSpeedMps = null,
+            geofenceRadiusMeters = 100
+        )
+        assertFalse(offlineProgress.shouldReroute)
     }
 
     @Test
@@ -792,5 +919,72 @@ class ExampleRobolectricTest {
 
         com.example.util.PreAlertPreferences.setNavRouteLineEnabled(context, false)
         assertFalse(com.example.util.PreAlertPreferences.isNavRouteLineEnabled(context))
+    }
+
+    @Test
+    fun `alarmVibrationHelper builds looping arrival waveform with and without amplitude control`() {
+        val withAmplitude = com.example.util.AlarmVibrationHelper.buildLoopingArrivalEffect(
+            hasAmplitudeControl = true
+        )
+        val withoutAmplitude = com.example.util.AlarmVibrationHelper.buildLoopingArrivalEffect(
+            hasAmplitudeControl = false
+        )
+        val preAlert = com.example.util.AlarmVibrationHelper.buildOneShotPatternEffect(
+            com.example.util.AlarmVibrationHelper.PRE_ALERT_TIMINGS
+        )
+        assertTrue(withAmplitude is android.os.VibrationEffect)
+        assertTrue(withoutAmplitude is android.os.VibrationEffect)
+        assertTrue(preAlert is android.os.VibrationEffect)
+    }
+
+    @Test
+    fun `vibrateEnabled persists through quick assign and mapPickerViewModel toggle`() = kotlinx.coroutines.runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val db = androidx.room.Room.inMemoryDatabaseBuilder(
+            context,
+            com.example.data.local.AppDatabase::class.java
+        ).allowMainThreadQueries().build()
+
+        try {
+            val repo = com.example.data.repository.PinWakeRepository(
+                geoAlarmDao = db.geoAlarmDao(),
+                tripHistoryDao = db.tripHistoryDao(),
+                nominatimApi = com.example.data.remote.NominatimApiService.create(),
+                trackingStateManager = com.example.data.repository.TrackingStateManager()
+            )
+            val savedMutedId = repo.saveQuickAssignedLocation(
+                category = com.example.data.local.entity.FavoriteCategory.HOME,
+                title = "Home",
+                address = "Silent Test",
+                latitude = 36.75,
+                longitude = 3.05,
+                radiusMeters = 300,
+                isActive = true,
+                vibrateEnabled = false
+            )
+            assertFalse(repo.getAlarmById(savedMutedId)?.vibrateEnabled ?: true)
+
+            val viewModel = com.example.ui.map.MapPickerViewModel(repo)
+            assertTrue(viewModel.uiState.value.vibrateEnabled)
+
+            val done = kotlinx.coroutines.CompletableDeferred<Unit>()
+            viewModel.initialize(savedMutedId, com.example.data.local.entity.FavoriteCategory.HOME, "en") {
+                done.complete(Unit)
+            }
+            done.await()
+            assertFalse(viewModel.uiState.value.vibrateEnabled)
+
+            viewModel.updateVibrateEnabled(true)
+            assertTrue(viewModel.uiState.value.vibrateEnabled)
+
+            val savedDone = kotlinx.coroutines.CompletableDeferred<Long>()
+            viewModel.saveAndActivateAlarm("Home", "Fallback", activateNow = true) { id ->
+                savedDone.complete(id)
+            }
+            val updatedId = savedDone.await()
+            assertTrue(repo.getAlarmById(updatedId)?.vibrateEnabled == true)
+        } finally {
+            db.close()
+        }
     }
 }

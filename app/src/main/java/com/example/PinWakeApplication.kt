@@ -7,6 +7,7 @@ import android.media.AudioAttributes
 import android.media.RingtoneManager
 import android.os.Build
 import com.example.di.AppContainer
+import com.example.util.AlarmVibrationHelper
 import com.example.util.LanguageManager
 import org.maplibre.android.MapLibre
 
@@ -52,6 +53,7 @@ class PinWakeApplication : Application() {
             description = getString(R.string.notif_channel_alarm_desc)
             lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
             enableVibration(true)
+            vibrationPattern = AlarmVibrationHelper.ARRIVAL_TIMINGS
             setBypassDnd(true)
             setSound(alarmSound, alarmAttributes)
         }
@@ -75,6 +77,7 @@ class PinWakeApplication : Application() {
         ).apply {
             description = getString(R.string.notif_channel_pre_alert_desc)
             enableVibration(true)
+            vibrationPattern = AlarmVibrationHelper.PRE_ALERT_TIMINGS
         }
 
         manager.createNotificationChannel(trackingChannel)
@@ -85,8 +88,8 @@ class PinWakeApplication : Application() {
 
     companion object {
         const val CHANNEL_TRACKING = "pin_wake_tracking_channel"
-        const val CHANNEL_ALARM = "pin_wake_alarm_channel_v2"
+        const val CHANNEL_ALARM = "pin_wake_alarm_channel_v3"
         const val CHANNEL_GPS_WATCHDOG = "pin_wake_gps_watchdog_channel"
-        const val CHANNEL_PRE_ALERT = "pin_wake_pre_alert_channel"
+        const val CHANNEL_PRE_ALERT = "pin_wake_pre_alert_channel_v2"
     }
 }

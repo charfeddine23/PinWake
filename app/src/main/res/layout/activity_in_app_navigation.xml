@@ -1,0 +1,469 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/navRoot"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg_midnight"
+    android:layoutDirection="ltr"
+    tools:context=".ui.nav.InAppNavigationActivity">
+
+    <!-- Full-Screen Navigation Map Canvas -->
+    <org.maplibre.android.maps.MapView
+        android:id="@+id/navMapView"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <!-- Top Edge Liquid Glass Scrim -->
+    <com.example.ui.widget.LiquidGlassTopFadeView
+        android:id="@+id/navTopLiquidBlur"
+        android:layout_width="0dp"
+        android:layout_height="128dp"
+        android:elevation="4dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <View
+        android:layout_width="0dp"
+        android:layout_height="120dp"
+        android:background="@drawable/bg_map_scrim_bottom"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+
+    <!-- Top Turn-by-Turn Maneuver Banner -->
+    <LinearLayout
+        android:id="@+id/cardManeuverHud"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="14dp"
+        android:layout_marginTop="12dp"
+        android:background="@drawable/bg_liquid_glass_search"
+        android:elevation="10dp"
+        android:orientation="vertical"
+        android:padding="14dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <ImageButton
+                android:id="@+id/btnNavBack"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginEnd="6dp"
+                android:background="@drawable/bg_luxury_glass_pill"
+                android:contentDescription="@string/cd_nav_back"
+                android:padding="13dp"
+                android:scaleType="centerInside"
+                android:src="@drawable/ic_back_arrow"
+                app:tint="@color/text_primary" />
+
+            <FrameLayout
+                android:layout_width="52dp"
+                android:layout_height="52dp"
+                android:background="@drawable/bg_icon_circle_dark">
+
+                <ImageView
+                    android:id="@+id/ivManeuverIcon"
+                    android:layout_width="30dp"
+                    android:layout_height="30dp"
+                    android:layout_gravity="center"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_turn_straight"
+                    app:tint="@color/accent_cyan_glow" />
+            </FrameLayout>
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="12dp"
+                android:layout_marginEnd="8dp"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/tvManeuverDistance"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textAppearance="@style/TextAppearance.PinWake.Display"
+                        android:textColor="@color/accent_cyan_glow"
+                        android:textSize="22sp"
+                        android:textStyle="bold"
+                        tools:text="240 m" />
+
+                    <ProgressBar
+                        android:id="@+id/progressRouteFetch"
+                        style="?android:attr/progressBarStyleSmall"
+                        android:layout_width="18dp"
+                        android:layout_height="18dp"
+                        android:layout_marginStart="8dp"
+                        android:indeterminateTint="@color/accent_cyan_glow"
+                        android:visibility="gone" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/tvManeuverInstruction"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:ellipsize="end"
+                    android:maxLines="2"
+                    android:text="@string/nav_calculating_route"
+                    android:textColor="@color/text_primary"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/tvNavRouteModeBadge"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_badge_cyan"
+                android:maxWidth="112dp"
+                android:maxLines="2"
+                android:paddingHorizontal="9dp"
+                android:paddingVertical="5dp"
+                android:text="@string/nav_mode_road"
+                android:textAlignment="center"
+                android:textAppearance="@style/TextAppearance.PinWake.Mono"
+                android:textColor="@color/accent_cyan_glow"
+                android:textSize="9sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- Following Step Preview / Rerouting Strip -->
+        <LinearLayout
+            android:id="@+id/layoutNextStepStrip"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:background="@drawable/bg_liquid_glass_pill"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="12dp"
+            android:paddingVertical="7dp"
+            android:visibility="gone"
+            tools:visibility="visible">
+
+            <ImageView
+                android:id="@+id/ivNextStepIcon"
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_turn_right"
+                app:tint="@color/accent_cyan_glow" />
+
+            <TextView
+                android:id="@+id/tvNextStepInstruction"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="@color/text_secondary"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                tools:text="Then: Turn right onto Didouche Mourad" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Right-Side Floating Navigation Controls (Profile, Voice, Recenter) -->
+    <LinearLayout
+        android:id="@+id/stackNavControls"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="14dp"
+        android:layout_marginBottom="14dp"
+        android:elevation="9dp"
+        android:gravity="end"
+        android:orientation="vertical"
+        app:layout_constraintBottom_toTopOf="@+id/cardNavBottomHud"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <LinearLayout
+            android:id="@+id/btnToggleProfile"
+            android:layout_width="wrap_content"
+            android:layout_height="48dp"
+            android:layout_marginBottom="10dp"
+            android:background="@drawable/bg_luxury_glass_pill"
+            android:clickable="true"
+            android:contentDescription="@string/cd_nav_profile_toggle"
+            android:focusable="true"
+            android:gravity="center"
+            android:minWidth="48dp"
+            android:orientation="horizontal"
+            android:paddingHorizontal="13dp">
+
+            <ImageView
+                android:id="@+id/ivNavProfileIcon"
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_directions_car"
+                app:tint="@color/accent_cyan_glow" />
+
+            <TextView
+                android:id="@+id/tvNavProfileLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:text="@string/nav_profile_driving"
+                android:textColor="@color/text_primary"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <ImageButton
+            android:id="@+id/btnToggleVoice"
+            android:layout_width="50dp"
+            android:layout_height="50dp"
+            android:layout_marginBottom="10dp"
+            android:background="@drawable/bg_luxury_glass_pill_cyan"
+            android:contentDescription="@string/cd_nav_voice_toggle"
+            android:padding="13dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_volume_on"
+            app:tint="@color/accent_cyan_glow" />
+
+        <LinearLayout
+            android:id="@+id/btnRecenterNav"
+            android:layout_width="wrap_content"
+            android:layout_height="50dp"
+            android:background="@drawable/bg_luxury_glass_pill_cyan"
+            android:clickable="true"
+            android:contentDescription="@string/cd_nav_recenter"
+            android:focusable="true"
+            android:gravity="center"
+            android:minWidth="50dp"
+            android:orientation="horizontal"
+            android:paddingHorizontal="13dp">
+
+            <ImageView
+                android:id="@+id/ivRecenterNav"
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_my_location"
+                app:tint="@color/accent_cyan_glow" />
+
+            <TextView
+                android:id="@+id/tvRecenterLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:text="@string/nav_recenter"
+                android:textColor="@color/accent_cyan_glow"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:visibility="gone"
+                tools:visibility="visible" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Bottom Liquid Glass Telemetry & Wake Control HUD -->
+    <LinearLayout
+        android:id="@+id/cardNavBottomHud"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:background="@drawable/bg_liquid_glass_sheet"
+        android:elevation="12dp"
+        android:orientation="vertical"
+        android:paddingHorizontal="18dp"
+        android:paddingTop="14dp"
+        android:paddingBottom="18dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
+
+        <!-- ETA, Clock Arrival, Distance & Speed Row -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:gravity="bottom"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/tvNavEtaDuration"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/nav_assist_eta_unknown"
+                        android:textAppearance="@style/TextAppearance.PinWake.Display"
+                        android:textColor="@color/accent_emerald"
+                        android:textSize="24sp"
+                        android:textStyle="bold"
+                        tools:text="14 min" />
+
+                    <TextView
+                        android:id="@+id/tvNavRemainingDist"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="10dp"
+                        android:textAppearance="@style/TextAppearance.PinWake.Mono"
+                        android:textColor="@color/text_primary"
+                        android:textSize="14sp"
+                        android:textStyle="bold"
+                        tools:text="5.2 km" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/tvNavArrivalClock"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textAppearance="@style/TextAppearance.PinWake.Mono"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="12sp"
+                        tools:text="Arrive 14:38" />
+
+                    <TextView
+                        android:id="@+id/tvNavSpeed"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:background="@drawable/bg_badge_cyan"
+                        android:paddingHorizontal="7dp"
+                        android:paddingVertical="2dp"
+                        android:textAppearance="@style/TextAppearance.PinWake.Mono"
+                        android:textColor="@color/accent_cyan_glow"
+                        android:textSize="10sp"
+                        android:textStyle="bold"
+                        tools:text="42 km/h" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/btnEndNavigation"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:background="@drawable/bg_luxury_glass_pill_rose"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:minWidth="82dp"
+                android:orientation="horizontal"
+                android:paddingHorizontal="16dp">
+
+                <ImageView
+                    android:layout_width="16dp"
+                    android:layout_height="16dp"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_close"
+                    app:tint="@color/accent_rose" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:text="@string/nav_end_button"
+                    android:textColor="@color/accent_rose"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginVertical="11dp"
+            android:background="@drawable/bg_hairline_gradient" />
+
+        <!-- Destination Title & Linked Wake Alarm Toggle Pill -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <ImageView
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_flag_destination"
+                app:tint="@color/accent_cyan_glow" />
+
+            <TextView
+                android:id="@+id/tvNavDestTitle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_marginEnd="8dp"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="@color/text_primary"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                tools:text="Central Station" />
+
+            <LinearLayout
+                android:id="@+id/btnNavWakeAlarmToggle"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:background="@drawable/bg_luxury_glass_pill"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:minWidth="48dp"
+                android:orientation="horizontal"
+                android:paddingHorizontal="12dp">
+
+                <ImageView
+                    android:id="@+id/ivNavWakeBell"
+                    android:layout_width="15dp"
+                    android:layout_height="15dp"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_alarm_bell"
+                    app:tint="@color/text_secondary" />
+
+                <TextView
+                    android:id="@+id/tvNavWakeStatus"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:textAppearance="@style/TextAppearance.PinWake.Mono"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="11sp"
+                    android:textStyle="bold"
+                    tools:text="Wake Armed · 500 m" />
+            </LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>
