@@ -155,7 +155,7 @@ class MainActivity : AppCompatActivity() {
 
     private val restoreSheetBackCallback = object : OnBackPressedCallback(false) {
         override fun handleOnBackPressed() {
-            sheetBehavior.state = BottomSheetBehavior.STATE_HALF_EXPANDED
+            sheetBehavior.state = BottomSheetBehavior.STATE_EXPANDED
         }
     }
 
@@ -241,15 +241,15 @@ class MainActivity : AppCompatActivity() {
         maybeHandlePromptEnableGpsIntent(intent)
     }
 
-    private fun setupBottomSheet(initialHalfExpanded: Boolean) {
+    private fun setupBottomSheet(initialExpanded: Boolean) {
         sheetBehavior = BottomSheetBehavior.from(binding.scrollDashboard).apply {
-            isFitToContents = false
+            isFitToContents = true
             isHideable = false
             skipCollapsed = false
             isDraggable = true
-            if (initialHalfExpanded) {
-                state = BottomSheetBehavior.STATE_HALF_EXPANDED
-                lastSheetState = BottomSheetBehavior.STATE_HALF_EXPANDED
+            if (initialExpanded) {
+                state = BottomSheetBehavior.STATE_EXPANDED
+                lastSheetState = BottomSheetBehavior.STATE_EXPANDED
             } else {
                 lastSheetState = state
             }
@@ -270,7 +270,7 @@ class MainActivity : AppCompatActivity() {
                 }
                 val previous = lastSheetState
                 lastSheetState = newState
-                restoreSheetBackCallback.isEnabled = newState != BottomSheetBehavior.STATE_HALF_EXPANDED
+                restoreSheetBackCallback.isEnabled = newState == BottomSheetBehavior.STATE_COLLAPSED
                 syncModeForSheetState(
                     state = newState,
                     animateCamera = previous != newState
@@ -408,7 +408,6 @@ class MainActivity : AppCompatActivity() {
         if (parentHeight <= 0) return
 
         val density = resources.displayMetrics.density
-        val desiredHeroTop = (244f * density).toInt() + sysTopInset
         val expandedOffsetPx = (78f * density).toInt() + sysTopInset
 
         val handleHeight = if (binding.layoutSheetHandle.height > 0) {
@@ -426,31 +425,20 @@ class MainActivity : AppCompatActivity() {
         val targetPeekHeight = (topPadPx + handleHeight + whereToHeight + bottomGapPx)
             .coerceAtMost((parentHeight * 0.45f).toInt())
 
-        val targetHalfRatio = (1f - desiredHeroTop.toFloat() / parentHeight.toFloat())
-            .coerceIn(0.45f, 0.78f)
-
         if (sheetBehavior.peekHeight != targetPeekHeight) {
             sheetBehavior.peekHeight = targetPeekHeight
         }
-        if (sheetBehavior.expandedOffset != expandedOffsetPx) {
-            sheetBehavior.expandedOffset = expandedOffsetPx
+        val targetMaxHeight = (parentHeight - expandedOffsetPx).coerceAtLeast(targetPeekHeight)
+        if (sheetBehavior.maxHeight != targetMaxHeight) {
+            sheetBehavior.maxHeight = targetMaxHeight
         }
-        if (kotlin.math.abs(sheetBehavior.halfExpandedRatio - targetHalfRatio) > 0.005f) {
-            sheetBehavior.halfExpandedRatio = targetHalfRatio
-        }
-
-        val targetSheetHeight = (parentHeight - expandedOffsetPx).coerceAtLeast(targetPeekHeight)
         val scrollParams = binding.scrollDashboard.layoutParams
-        if (scrollParams.height != targetSheetHeight) {
-            scrollParams.height = targetSheetHeight
+        if (scrollParams.height != android.view.ViewGroup.LayoutParams.WRAP_CONTENT) {
+            scrollParams.height = android.view.ViewGroup.LayoutParams.WRAP_CONTENT
             binding.scrollDashboard.layoutParams = scrollParams
         }
 
-        val collapsedOffset = parentHeight - targetPeekHeight
-        val halfOffset = (parentHeight * (1f - targetHalfRatio)).toInt()
-        val range = (collapsedOffset - expandedOffsetPx).coerceAtLeast(1)
-        computedHalfSlideOffset = ((collapsedOffset - halfOffset).toFloat() / range)
-            .coerceIn(0.15f, 0.95f)
+        computedHalfSlideOffset = 1f
 
         val stackParams = binding.stackQuickFavMapButtons.layoutParams as
             androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams
@@ -462,16 +450,13 @@ class MainActivity : AppCompatActivity() {
 
         val currentSlide = when (sheetBehavior.state) {
             BottomSheetBehavior.STATE_COLLAPSED -> 0f
-            BottomSheetBehavior.STATE_EXPANDED -> 1f
-            else -> computedHalfSlideOffset
+            else -> 1f
         }
         updateChromeForSlideOffset(currentSlide)
     }
 
     private fun updateChromeForSlideOffset(slideOffset: Float) {
-        val safeSlide = slideOffset.coerceIn(0f, 1f)
-        val half = computedHalfSlideOffset.coerceAtLeast(0.15f)
-        val collapseFactor = (safeSlide / half).coerceIn(0f, 1f)
+        val collapseFactor = slideOffset.coerceIn(0f, 1f)
 
         val bodyAlpha = ((collapseFactor - 0.12f) / 0.48f).coerceIn(0f, 1f)
         binding.sheetBodyContainer.alpha = bodyAlpha
@@ -495,7 +480,7 @@ class MainActivity : AppCompatActivity() {
         val sheetTop = if (measuredSheetTop > 0) {
             measuredSheetTop.toFloat()
         } else {
-            (244f * density) + sysTopInset
+            (280f * density) + sysTopInset
         }
         val pillH = if (binding.pillLiveRadar.height > 0) {
             binding.pillLiveRadar.height.toFloat()
@@ -510,10 +495,9 @@ class MainActivity : AppCompatActivity() {
         binding.pillLiveRadar.translationY =
             minRadarTop + (halfRadarY - minRadarTop) * collapseFactor
 
-        val aboveHalfRange = (1f - half).coerceAtLeast(0.1f)
-        val upperFade = 1f - ((safeSlide - half) / (aboveHalfRange * 0.28f)).coerceIn(0f, 1f)
-        val showRadarPill = isHeroRadarActive && upperFade > 0.02f
-        binding.pillLiveRadar.alpha = if (isHeroRadarActive) upperFade else 0f
+        val hasRoomAboveSheet = sheetTop >= minRadarTop + pillH * 0.4f
+        val showRadarPill = isHeroRadarActive && hasRoomAboveSheet
+        binding.pillLiveRadar.alpha = if (showRadarPill) 1f else 0f
         val pillVis = if (showRadarPill) View.VISIBLE else View.INVISIBLE
         if (binding.pillLiveRadar.visibility != pillVis) {
             binding.pillLiveRadar.visibility = pillVis
@@ -563,8 +547,7 @@ class MainActivity : AppCompatActivity() {
         } else {
             focusedPlaceLockId = null
             cancelPendingMapHold()
-            binding.btnMapHeroTap.visibility =
-                if (state == BottomSheetBehavior.STATE_HALF_EXPANDED) View.VISIBLE else View.GONE
+            binding.btnMapHeroTap.visibility = View.VISIBLE
             setHeroMapGesturesEnabled(false)
         }
 
@@ -808,11 +791,14 @@ class MainActivity : AppCompatActivity() {
         val parentHeight = binding.rootCoordinator.height
         val isFullMap = sheetBehavior.state == BottomSheetBehavior.STATE_COLLAPSED
         val topPad = sysTopInset.toDouble() + (56f * density)
+        val visibleSheetTop = binding.scrollDashboard.top
         val bottomPad = when {
             parentHeight <= 0 -> 0.0
             isFullMap -> sheetBehavior.peekHeight.toDouble()
+            visibleSheetTop in 1 until parentHeight ->
+                (parentHeight - visibleSheetTop).coerceAtLeast(0).toDouble()
             else -> {
-                val visibleHero = (244f * density) + sysTopInset
+                val visibleHero = (260f * density) + sysTopInset
                 (parentHeight - visibleHero).coerceAtLeast(0f).toDouble()
             }
         }
@@ -867,7 +853,7 @@ class MainActivity : AppCompatActivity() {
 
         binding.layoutSheetHandle.setOnClickListener {
             if (sheetBehavior.state == BottomSheetBehavior.STATE_COLLAPSED) {
-                sheetBehavior.state = BottomSheetBehavior.STATE_HALF_EXPANDED
+                sheetBehavior.state = BottomSheetBehavior.STATE_EXPANDED
             } else {
                 enterFullMapMode()
             }
@@ -1298,8 +1284,13 @@ class MainActivity : AppCompatActivity() {
             }
             card.setOnClickListener {
                 if (category == FavoriteCategory.HOME || category == FavoriteCategory.WORK) {
-                    selectedQuickNavCategory = category
-                    focusedPlaceLockId = favorite.id
+                    if (selectedQuickNavCategory == category) {
+                        selectedQuickNavCategory = null
+                        focusedPlaceLockId = null
+                    } else {
+                        selectedQuickNavCategory = category
+                        focusedPlaceLockId = favorite.id
+                    }
                     val currentState = viewModel.uiState.value
                     renderFullMapQuickDockStates(currentState)
                     renderNavigationAssist(currentState)
@@ -1350,7 +1341,8 @@ class MainActivity : AppCompatActivity() {
             }
             button.setOnLongClickListener(null)
         } else {
-            val isHighlighted = favorite.isActive || favorite.id == focusedPlaceLockId
+            val isNavSelected = selectedQuickNavCategory == category
+            val isHighlighted = favorite.isActive || favorite.id == focusedPlaceLockId || isNavSelected
             if (isHighlighted) {
                 button.setBackgroundResource(R.drawable.bg_luxury_glass_pill_active)
                 labelView.setTextColor(ContextCompat.getColor(this, R.color.accent_emerald))
@@ -1366,20 +1358,26 @@ class MainActivity : AppCompatActivity() {
                 dotView.alpha = 0.9f
             }
 
-            // Select Home / Work as Navigate target in place of "Where are you heading?" and focus camera
+            // First tap selects Home / Work and shows Navigate; second tap on the same button hides Navigate
             button.setOnClickListener {
-                selectedQuickNavCategory = category
-                focusedPlaceLockId = favorite.id
-                lastHeroCameraKey =
-                    "alarm:full:${favorite.id}:${favorite.latitude}:${favorite.longitude}"
-                heroMap?.let { map ->
-                    moveHeroCameraWithSheetPadding(
-                        map = map,
-                        lat = favorite.latitude,
-                        lon = favorite.longitude,
-                        zoom = 16.0,
-                        animate = true
-                    )
+                if (selectedQuickNavCategory == category) {
+                    selectedQuickNavCategory = null
+                    focusedPlaceLockId = null
+                    lastHeroCameraKey = null
+                } else {
+                    selectedQuickNavCategory = category
+                    focusedPlaceLockId = favorite.id
+                    lastHeroCameraKey =
+                        "alarm:full:${favorite.id}:${favorite.latitude}:${favorite.longitude}"
+                    heroMap?.let { map ->
+                        moveHeroCameraWithSheetPadding(
+                            map = map,
+                            lat = favorite.latitude,
+                            lon = favorite.longitude,
+                            zoom = 16.0,
+                            animate = true
+                        )
+                    }
                 }
                 val currentState = viewModel.uiState.value
                 renderFullMapQuickDockStates(currentState)

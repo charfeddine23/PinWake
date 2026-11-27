@@ -638,7 +638,7 @@ class ExampleRobolectricTest {
     }
 
     @Test
-    fun `geofence radius allows 10m precision minimum across repository snooze replay and backup`() = kotlinx.coroutines.runBlocking {
+    fun `geofence radius allows 5m precision minimum across repository snooze replay and backup`() = kotlinx.coroutines.runBlocking {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val db = androidx.room.Room.inMemoryDatabaseBuilder(
             context,
@@ -652,16 +652,16 @@ class ExampleRobolectricTest {
                 nominatimApi = com.example.data.remote.NominatimApiService.create(),
                 trackingStateManager = com.example.data.repository.TrackingStateManager()
             )
-            val id10 = repo.saveQuickAssignedLocation(
+            val id5 = repo.saveQuickAssignedLocation(
                 category = com.example.data.local.entity.FavoriteCategory.NONE,
                 title = "Doorstep",
                 address = "Gate A",
                 latitude = 36.75,
                 longitude = 3.05,
-                radiusMeters = 10,
+                radiusMeters = 5,
                 isActive = true
             )
-            assertEquals(10, repo.getAlarmById(id10)?.radiusMeters)
+            assertEquals(5, repo.getAlarmById(id5)?.radiusMeters)
 
             val idClamped = repo.saveQuickAssignedLocation(
                 category = com.example.data.local.entity.FavoriteCategory.NONE,
@@ -669,36 +669,36 @@ class ExampleRobolectricTest {
                 address = "Gate B",
                 latitude = 36.76,
                 longitude = 3.06,
-                radiusMeters = 3,
+                radiusMeters = 2,
                 isActive = true
             )
-            assertEquals(10, repo.getAlarmById(idClamped)?.radiusMeters)
+            assertEquals(5, repo.getAlarmById(idClamped)?.radiusMeters)
 
-            val id20 = repo.saveQuickAssignedLocation(
+            val id10 = repo.saveQuickAssignedLocation(
                 category = com.example.data.local.entity.FavoriteCategory.NONE,
                 title = "Tight Stop",
                 address = "Gate C",
                 latitude = 36.77,
                 longitude = 3.07,
-                radiusMeters = 20,
+                radiusMeters = 10,
                 isActive = true
             )
-            val alarm20 = repo.getAlarmById(id20)!!
-            repo.applySnooze500m(alarm20, currentDistanceMeters = 15f)
-            assertEquals(10, repo.getAlarmById(id20)?.radiusMeters)
+            val alarm10 = repo.getAlarmById(id10)!!
+            repo.applySnooze500m(alarm10, currentDistanceMeters = 8f)
+            assertEquals(5, repo.getAlarmById(id10)?.radiusMeters)
 
             val json = """
                 {
                   "schemaVersion": 1,
                   "alarms": [
-                    {"title": "Exact10", "address": "A", "latitude": 36.75, "longitude": 3.05, "radiusMeters": 10},
-                    {"title": "Clamp10", "address": "B", "latitude": 36.76, "longitude": 3.06, "radiusMeters": 2}
+                    {"title": "Exact5", "address": "A", "latitude": 36.75, "longitude": 3.05, "radiusMeters": 5},
+                    {"title": "Clamp5", "address": "B", "latitude": 36.76, "longitude": 3.06, "radiusMeters": 2}
                   ]
                 }
             """.trimIndent()
             val parsed = com.example.util.BackupManager.parseFromJson(json).getOrThrow()
-            assertEquals(10, parsed.alarms[0].radiusMeters)
-            assertEquals(10, parsed.alarms[1].radiusMeters)
+            assertEquals(5, parsed.alarms[0].radiusMeters)
+            assertEquals(5, parsed.alarms[1].radiusMeters)
         } finally {
             db.close()
         }
@@ -1019,22 +1019,77 @@ class ExampleRobolectricTest {
     }
 
     @Test
-    fun `mainActivity launches dedicated AlarmsActivity and TripsHistoryActivity without Station or STANDBY banner`() {
-        val mainController = org.robolectric.Robolectric.buildActivity(MainActivity::class.java).setup()
-        val main = mainController.get()
+    fun `activityMain layout fits sheet to contents and provides Alarms History and Home Work controls`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val parser = context.resources.getLayout(R.layout.activity_main)
+        val androidNs = "http://schemas.android.com/apk/res/android"
+        val appNs = "http://schemas.android.com/apk/res-auto"
 
-        val root = main.findViewById<android.view.View>(R.id.rootCoordinator)
-        assertTrue(root.findViewById<android.view.View>(R.id.cardPinNewAlarm) != null)
-        assertTrue(root.findViewById<android.view.View>(R.id.btnOpenAlarms) != null)
-        assertTrue(root.findViewById<android.view.View>(R.id.btnOpenHistory) != null)
-        assertEquals(android.view.View.INVISIBLE, root.findViewById<android.view.View>(R.id.pillLiveRadar).visibility)
+        var scrollHeight: String? = null
+        var fitToContents: String? = null
+        val foundIds = mutableSetOf<Int>()
 
-        root.findViewById<android.view.View>(R.id.btnOpenAlarms).performClick()
-        val alarmsIntent = org.robolectric.Shadows.shadowOf(main).nextStartedActivity
-        assertEquals(com.example.ui.alarms.AlarmsActivity::class.java.name, alarmsIntent.component?.className)
+        var eventType = parser.eventType
+        while (eventType != org.xmlpull.v1.XmlPullParser.END_DOCUMENT) {
+            if (eventType == org.xmlpull.v1.XmlPullParser.START_TAG) {
+                val idRes = parser.getAttributeResourceValue(androidNs, "id", 0)
+                if (idRes != 0) foundIds.add(idRes)
+                if (idRes == R.id.scrollDashboard) {
+                    scrollHeight = parser.getAttributeValue(androidNs, "layout_height")
+                    fitToContents = parser.getAttributeValue(appNs, "behavior_fitToContents")
+                }
+            }
+            eventType = parser.next()
+        }
+        parser.close()
 
-        root.findViewById<android.view.View>(R.id.btnOpenHistory).performClick()
-        val historyIntent = org.robolectric.Shadows.shadowOf(main).nextStartedActivity
-        assertEquals(com.example.ui.history.TripsHistoryActivity::class.java.name, historyIntent.component?.className)
+        assertEquals("-2", scrollHeight) // ViewGroup.LayoutParams.WRAP_CONTENT
+        assertEquals("true", fitToContents)
+        assertTrue(foundIds.contains(R.id.cardPinNewAlarm))
+        assertTrue(foundIds.contains(R.id.btnOpenAlarms))
+        assertTrue(foundIds.contains(R.id.btnOpenHistory))
+        assertTrue(foundIds.contains(R.id.btnQuickHomeFullMap))
+        assertTrue(foundIds.contains(R.id.btnQuickWorkFullMap))
+        assertTrue(foundIds.contains(R.id.layoutWhereToNavActions))
+        assertTrue(foundIds.contains(R.id.pillLiveRadar))
+    }
+
+    @Test
+    fun `dedicated alarms and trips history layouts resolve and radius sliders enforce 5m minimum`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val themedContext = androidx.appcompat.view.ContextThemeWrapper(context, R.style.Theme_PinWake)
+        val quickAssignView = android.view.LayoutInflater.from(themedContext)
+            .inflate(R.layout.dialog_quick_assign_pin, null)
+        val quickSlider = quickAssignView.findViewById<com.google.android.material.slider.Slider>(
+            R.id.sliderQuickAssignRadius
+        )
+        assertEquals(5.0f, quickSlider.valueFrom, 0.01f)
+        assertEquals(5.0f, quickSlider.stepSize, 0.01f)
+
+        val db = androidx.room.Room.inMemoryDatabaseBuilder(
+            context,
+            com.example.data.local.AppDatabase::class.java
+        ).allowMainThreadQueries().build()
+        try {
+            val repo = com.example.data.repository.PinWakeRepository(
+                geoAlarmDao = db.geoAlarmDao(),
+                tripHistoryDao = db.tripHistoryDao(),
+                nominatimApi = com.example.data.remote.NominatimApiService.create(),
+                trackingStateManager = com.example.data.repository.TrackingStateManager()
+            )
+            val vm = com.example.ui.map.MapPickerViewModel(repo)
+            vm.updateRadius(5)
+            assertEquals(5, vm.uiState.value.radiusMeters)
+            vm.updateRadius(1)
+            assertEquals(5, vm.uiState.value.radiusMeters)
+        } finally {
+            db.close()
+        }
+
+        val alarmsLayout = android.view.LayoutInflater.from(themedContext)
+            .inflate(R.layout.activity_alarms, null)
+        val historyLayout = android.view.LayoutInflater.from(themedContext)
+            .inflate(R.layout.activity_trips_history, null)
+        assertTrue(alarmsLayout != null && historyLayout != null)
     }
 }

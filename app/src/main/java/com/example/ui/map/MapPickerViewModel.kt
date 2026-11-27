@@ -177,7 +177,7 @@ class MapPickerViewModel(
     }
 
     fun updateRadius(radiusMeters: Int) {
-        _uiState.value = _uiState.value.copy(radiusMeters = radiusMeters.coerceIn(10, 5000))
+        _uiState.value = _uiState.value.copy(radiusMeters = radiusMeters.coerceIn(5, 5000))
     }
 
     fun updateCategory(category: FavoriteCategory) {

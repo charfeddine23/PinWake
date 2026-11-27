@@ -126,7 +126,7 @@ class InAppNavigationActivity : AppCompatActivity() {
         destLon = intent.getDoubleExtra(EXTRA_DEST_LON, 0.0)
         destLabel = intent.getStringExtra(EXTRA_DEST_LABEL).orEmpty().trim()
         alarmId = intent.getLongExtra(EXTRA_ALARM_ID, -1L)
-        radiusMeters = intent.getIntExtra(EXTRA_RADIUS_METERS, 500).coerceIn(10, 5000)
+        radiusMeters = intent.getIntExtra(EXTRA_RADIUS_METERS, 500).coerceIn(5, 5000)
 
         binding.tvNavDestTitle.text = destLabel.ifBlank {
             getString(R.string.map_unknown_address, destLat, destLon)
@@ -262,7 +262,7 @@ class InAppNavigationActivity : AppCompatActivity() {
         lifecycleScope.launch {
             linkedAlarm = repository.getAlarmById(alarmId)
             linkedAlarm?.let { alarm ->
-                radiusMeters = alarm.radiusMeters.coerceIn(10, 5000)
+                radiusMeters = alarm.radiusMeters.coerceIn(5, 5000)
                 if (destLabel.isBlank()) {
                     destLabel = alarm.title
                     binding.tvNavDestTitle.text = destLabel

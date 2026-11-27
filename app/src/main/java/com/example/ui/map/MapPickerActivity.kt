@@ -210,8 +210,8 @@ class MapPickerActivity : AppCompatActivity() {
                     userEditedTitle = true
                     lockedGeocodeCoord = existing.latitude to existing.longitude
                     setTitleProgrammatically(existing.title)
-                    val snappedRadius = (((existing.radiusMeters.coerceIn(10, 5000) + 5) / 10) * 10)
-                        .coerceIn(10, 5000)
+                    val snappedRadius = (((existing.radiusMeters.coerceIn(5, 5000) + 2) / 5) * 5)
+                        .coerceIn(5, 5000)
                     if (snappedRadius != existing.radiusMeters) {
                         viewModel.updateRadius(snappedRadius)
                     }

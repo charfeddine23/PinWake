@@ -27,7 +27,7 @@ object NavigationAssistHelper {
             if (alarmId > 0L) {
                 putExtra(InAppNavigationActivity.EXTRA_ALARM_ID, alarmId)
             }
-            putExtra(InAppNavigationActivity.EXTRA_RADIUS_METERS, radiusMeters.coerceIn(10, 5000))
+            putExtra(InAppNavigationActivity.EXTRA_RADIUS_METERS, radiusMeters.coerceIn(5, 5000))
         }
     }
 
