@@ -10,6 +10,26 @@ enum class PollingTier(val intervalMs: Long, val minDistanceMeters: Float) {
     BALANCED_10S(intervalMs = 10_000L, minDistanceMeters = 15f),
     PRECISION_2S(intervalMs = 1_200L, minDistanceMeters = 0f);
 
+    fun effectiveIntervalMs(batterySaverEnabled: Boolean): Long {
+        if (!batterySaverEnabled) return intervalMs
+        return when (this) {
+            STANDBY -> 0L
+            ECO_30S -> 60_000L
+            BALANCED_10S -> 25_000L
+            PRECISION_2S -> 5_000L
+        }
+    }
+
+    fun effectiveMinDistanceMeters(batterySaverEnabled: Boolean): Float {
+        if (!batterySaverEnabled) return minDistanceMeters
+        return when (this) {
+            STANDBY -> 0f
+            ECO_30S -> 150f
+            BALANCED_10S -> 40f
+            PRECISION_2S -> 0f
+        }
+    }
+
     companion object {
         fun forDistance(distanceMeters: Float): PollingTier {
             return when {
@@ -39,6 +59,7 @@ data class TrackingTelemetry(
     val isGpsEnabled: Boolean = true,
     val isGpsDisabledWarning: Boolean = false,
     val isOfflineMode: Boolean = false,
+    val isBatterySaver: Boolean = false,
     val locationProvider: String? = null
 )
 
@@ -53,7 +74,8 @@ class TrackingStateManager {
     fun resetToStandby() {
         _telemetry.value = TrackingTelemetry(
             isTracking = false,
-            pollingTier = PollingTier.STANDBY
+            pollingTier = PollingTier.STANDBY,
+            isBatterySaver = false
         )
     }
 }

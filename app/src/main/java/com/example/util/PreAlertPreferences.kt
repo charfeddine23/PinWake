@@ -9,6 +9,7 @@ object PreAlertPreferences {
     private const val KEY_FORCE_GPS_KEEP_ON = "force_gps_keep_on"
     private const val KEY_FORCE_SILENT_OVERRIDE = "force_silent_override"
     private const val KEY_NAV_ROUTE_LINE_ENABLED = "nav_route_line_enabled"
+    private const val KEY_BATTERY_SAVER = "battery_saver_enabled"
 
     const val PRE_ALERT_OFF = 0
     const val PRE_ALERT_300M = 300
@@ -70,6 +71,18 @@ object PreAlertPreferences {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
             .putBoolean(KEY_NAV_ROUTE_LINE_ENABLED, enabled)
+            .apply()
+    }
+
+    fun isBatterySaverEnabled(context: Context): Boolean {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(KEY_BATTERY_SAVER, false)
+    }
+
+    fun setBatterySaverEnabled(context: Context, enabled: Boolean) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(KEY_BATTERY_SAVER, enabled)
             .apply()
     }
 

@@ -312,4 +312,9 @@
     <string name="settings_tab_appearance">Appearance</string>
     <string name="settings_tab_data">Updates &amp; Data</string>
     <string name="map_vibrate_short">Vibrate</string>
+
+    <!-- Battery Saver Mode -->
+    <string name="settings_battery_saver_title">Battery Saver</string>
+    <string name="settings_battery_saver_subtitle">Reduce GPS polling frequency (60s / 25s / 5s) to save power while keeping arrival alarms reliable</string>
+    <string name="battery_saver_tier_format">%1$s · Saver</string>
 </resources>

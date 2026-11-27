@@ -1359,11 +1359,16 @@ class MainActivity : AppCompatActivity() {
             binding.tvTrackingSubtitle.text =
                 DistanceFormatter.formatDistanceBadge(this, telemetry.closestDistanceMeters)
 
-            val tierText = when (telemetry.pollingTier) {
+            val baseTierText = when (telemetry.pollingTier) {
                 PollingTier.STANDBY -> getString(R.string.status_standby)
                 PollingTier.ECO_30S -> getString(R.string.status_tracking_eco)
                 PollingTier.BALANCED_10S -> getString(R.string.status_tracking_balanced)
                 PollingTier.PRECISION_2S -> getString(R.string.status_tracking_precision)
+            }
+            val tierText = if (telemetry.isBatterySaver && telemetry.pollingTier != PollingTier.STANDBY) {
+                getString(R.string.battery_saver_tier_format, baseTierText)
+            } else {
+                baseTierText
             }
             binding.tvPollingTierBadge.text = tierText
             binding.tvPollingTierBadge.setBackgroundResource(R.drawable.bg_badge_emerald)
@@ -1746,7 +1751,7 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        val desiredIntervalMs = 4_000L
+        val desiredIntervalMs = if (PreAlertPreferences.isBatterySaverEnabled(this)) 8_000L else 4_000L
         if (onDemandNavLocationListener != null && onDemandNavIntervalMs == desiredIntervalMs) {
             return
         }

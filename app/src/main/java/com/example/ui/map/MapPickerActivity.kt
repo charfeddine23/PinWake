@@ -1155,7 +1155,13 @@ class MapPickerActivity : AppCompatActivity() {
             return
         }
         val routeEnabled = PreAlertPreferences.isNavRouteLineEnabled(this)
-        val desiredIntervalMs = if (routeEnabled) 4_000L else 10_000L
+        val batterySaver = PreAlertPreferences.isBatterySaverEnabled(this)
+        val desiredIntervalMs = when {
+            batterySaver && routeEnabled -> 8_000L
+            batterySaver -> 20_000L
+            routeEnabled -> 4_000L
+            else -> 10_000L
+        }
         if (navAssistLocationListener != null && navAssistIntervalMs == desiredIntervalMs) {
             return
         }

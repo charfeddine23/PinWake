@@ -987,4 +987,27 @@ class ExampleRobolectricTest {
             db.close()
         }
     }
+
+    @Test
+    fun `batterySaver preference defaults false persists toggle and relaxes polling intervals safely`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        assertFalse(com.example.util.PreAlertPreferences.isBatterySaverEnabled(context))
+
+        com.example.util.PreAlertPreferences.setBatterySaverEnabled(context, true)
+        assertTrue(com.example.util.PreAlertPreferences.isBatterySaverEnabled(context))
+
+        assertEquals(30_000L, PollingTier.ECO_30S.effectiveIntervalMs(false))
+        assertEquals(10_000L, PollingTier.BALANCED_10S.effectiveIntervalMs(false))
+        assertEquals(1_200L, PollingTier.PRECISION_2S.effectiveIntervalMs(false))
+
+        assertEquals(60_000L, PollingTier.ECO_30S.effectiveIntervalMs(true))
+        assertEquals(150f, PollingTier.ECO_30S.effectiveMinDistanceMeters(true), 0.1f)
+        assertEquals(25_000L, PollingTier.BALANCED_10S.effectiveIntervalMs(true))
+        assertEquals(40f, PollingTier.BALANCED_10S.effectiveMinDistanceMeters(true), 0.1f)
+        assertEquals(5_000L, PollingTier.PRECISION_2S.effectiveIntervalMs(true))
+        assertEquals(0f, PollingTier.PRECISION_2S.effectiveMinDistanceMeters(true), 0.1f)
+
+        com.example.util.PreAlertPreferences.setBatterySaverEnabled(context, false)
+        assertFalse(com.example.util.PreAlertPreferences.isBatterySaverEnabled(context))
+    }
 }

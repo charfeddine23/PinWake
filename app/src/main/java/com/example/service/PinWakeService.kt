@@ -58,6 +58,7 @@ class PinWakeService : Service() {
     private var alarmsObserverJob: Job? = null
     private var currentActiveAlarms: List<GeoAlarmEntity> = emptyList()
     private var currentTier: PollingTier = PollingTier.STANDBY
+    private var currentBatterySaver: Boolean = false
     private var lastKnownLocation: Location? = null
     private var isForegroundStarted = false
     private var isExplicitlyStopping = false
@@ -83,7 +84,10 @@ class PinWakeService : Service() {
             if (provider == LocationManager.GPS_PROVIDER) {
                 handleGpsAvailabilityChange()
                 if (currentActiveAlarms.isNotEmpty() && currentTier != PollingTier.STANDBY) {
-                    applyPollingTier(currentTier)
+                    applyPollingTier(
+                        currentTier,
+                        PreAlertPreferences.isBatterySaverEnabled(this@PinWakeService)
+                    )
                 }
             }
         }
@@ -178,6 +182,26 @@ class PinWakeService : Service() {
                 return START_STICKY
             }
             else -> {
+                val desiredBatterySaver = PreAlertPreferences.isBatterySaverEnabled(this)
+                if (currentActiveAlarms.isNotEmpty() &&
+                    currentTier != PollingTier.STANDBY &&
+                    desiredBatterySaver != currentBatterySaver
+                ) {
+                    applyPollingTier(currentTier, desiredBatterySaver)
+                    repository.trackingStateManager.update {
+                        it.copy(isBatterySaver = desiredBatterySaver)
+                    }
+                    val target = repository.trackingStateManager.telemetry.value.closestAlarmTitle
+                        ?: currentActiveAlarms.first().title
+                    val dist = repository.trackingStateManager.telemetry.value.closestDistanceMeters
+                        ?: currentActiveAlarms.first().lastDistanceMeters
+                    updateTrackingNotification(
+                        targetTitle = target,
+                        distanceMeters = dist,
+                        tier = currentTier,
+                        batterySaver = desiredBatterySaver
+                    )
+                }
                 observeActiveAlarms()
                 return START_STICKY
             }
@@ -195,9 +219,13 @@ class PinWakeService : Service() {
 
     private fun ensureForegroundStartedSafe(): Boolean {
         if (isForegroundStarted) return true
+        val batterySaver = PreAlertPreferences.isBatterySaverEnabled(this)
         val notification = buildTrackingNotification(
             title = getString(R.string.app_name),
-            body = getString(R.string.notif_tracking_body_waiting, tierDisplayLabel(PollingTier.BALANCED_10S))
+            body = getString(
+                R.string.notif_tracking_body_waiting,
+                tierDisplayLabel(PollingTier.BALANCED_10S, batterySaver)
+            )
         )
         return runCatching {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -256,8 +284,14 @@ class PinWakeService : Service() {
                         evaluateAlarmsAgainstLocation(loc, currentActiveAlarms)
                     }
                 } else {
-                    if (currentTier == PollingTier.STANDBY) {
-                        applyPollingTier(PollingTier.BALANCED_10S)
+                    val batterySaver = PreAlertPreferences.isBatterySaverEnabled(this@PinWakeService)
+                    if (currentTier == PollingTier.STANDBY || currentBatterySaver != batterySaver) {
+                        val nextTier = if (currentTier == PollingTier.STANDBY) {
+                            PollingTier.BALANCED_10S
+                        } else {
+                            currentTier
+                        }
+                        applyPollingTier(nextTier, batterySaver)
                     }
                     val first = active.first()
                     repository.trackingStateManager.update {
@@ -271,13 +305,15 @@ class PinWakeService : Service() {
                             isGpsEnabled = gpsReady,
                             isGpsDisabledWarning = !gpsReady &&
                                 PreAlertPreferences.isForcedGpsKeepOnEnabled(this@PinWakeService),
-                            isOfflineMode = offline
+                            isOfflineMode = offline,
+                            isBatterySaver = batterySaver
                         )
                     }
                     updateTrackingNotification(
                         targetTitle = first.title,
                         distanceMeters = first.lastDistanceMeters,
-                        tier = currentTier
+                        tier = currentTier,
+                        batterySaver = batterySaver
                     )
                 }
             }
@@ -366,9 +402,10 @@ class PinWakeService : Service() {
             return@withLock
         }
 
+        val batterySaver = PreAlertPreferences.isBatterySaverEnabled(this@PinWakeService)
         val targetTier = PollingTier.forDistance(minDistance)
-        if (targetTier != currentTier) {
-            applyPollingTier(targetTier)
+        if (targetTier != currentTier || batterySaver != currentBatterySaver) {
+            applyPollingTier(targetTier, batterySaver)
         }
 
         val target = closestAlarm ?: remaining.first()
@@ -408,6 +445,7 @@ class PinWakeService : Service() {
                 isGpsDisabledWarning = !gpsReady &&
                     PreAlertPreferences.isForcedGpsKeepOnEnabled(this@PinWakeService),
                 isOfflineMode = offline,
+                isBatterySaver = batterySaver,
                 locationProvider = location.provider
             )
         }
@@ -415,7 +453,8 @@ class PinWakeService : Service() {
         updateTrackingNotification(
             targetTitle = target.title,
             distanceMeters = minDistance,
-            tier = currentTier
+            tier = currentTier,
+            batterySaver = batterySaver
         )
     }
 
@@ -426,14 +465,15 @@ class PinWakeService : Service() {
     }
 
     @SuppressLint("MissingPermission")
-    private fun applyPollingTier(tier: PollingTier) {
+    private fun applyPollingTier(tier: PollingTier, batterySaver: Boolean) {
         if (!hasLocationPermission()) return
         locationManager.removeUpdates(locationListener)
         currentTier = tier
+        currentBatterySaver = batterySaver
         if (tier == PollingTier.STANDBY) return
 
-        val intervalMs = tier.intervalMs
-        val minDist = tier.minDistanceMeters
+        val intervalMs = tier.effectiveIntervalMs(batterySaver)
+        val minDist = tier.effectiveMinDistanceMeters(batterySaver)
 
         // Hardware GPS provider works 100% offline with zero internet connectivity
         try {
@@ -714,10 +754,11 @@ class PinWakeService : Service() {
     private fun updateTrackingNotification(
         targetTitle: String,
         distanceMeters: Float?,
-        tier: PollingTier
+        tier: PollingTier,
+        batterySaver: Boolean
     ) {
         val title = getString(R.string.notif_tracking_title, targetTitle)
-        val tierLabel = tierDisplayLabel(tier)
+        val tierLabel = tierDisplayLabel(tier, batterySaver)
         val body = if (distanceMeters != null) {
             getString(
                 R.string.notif_tracking_body_dist,
@@ -770,12 +811,17 @@ class PinWakeService : Service() {
             .build()
     }
 
-    private fun tierDisplayLabel(tier: PollingTier): String {
-        return when (tier) {
+    private fun tierDisplayLabel(tier: PollingTier, batterySaver: Boolean): String {
+        val base = when (tier) {
             PollingTier.STANDBY -> getString(R.string.status_standby)
             PollingTier.ECO_30S -> getString(R.string.status_tracking_eco)
             PollingTier.BALANCED_10S -> getString(R.string.status_tracking_balanced)
             PollingTier.PRECISION_2S -> getString(R.string.status_tracking_precision)
+        }
+        return if (batterySaver && tier != PollingTier.STANDBY) {
+            getString(R.string.battery_saver_tier_format, base)
+        } else {
+            base
         }
     }
 
@@ -824,6 +870,7 @@ class PinWakeService : Service() {
         notificationManager.cancel(NOTIFICATION_GPS_WATCHDOG_ID)
         releaseTrackingWakeLock()
         currentTier = PollingTier.STANDBY
+        currentBatterySaver = false
         repository.trackingStateManager.resetToStandby()
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         isForegroundStarted = false

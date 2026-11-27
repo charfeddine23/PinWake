@@ -323,6 +323,15 @@ class SettingsActivity : AppCompatActivity() {
             }
         }
 
+        binding.rowBatterySaver.setOnClickListener {
+            binding.switchBatterySaver.toggle()
+        }
+        binding.switchBatterySaver.setOnCheckedChangeListener { _, isChecked ->
+            if (isSyncingEnforcementSwitches) return@setOnCheckedChangeListener
+            PreAlertPreferences.setBatterySaverEnabled(this, isChecked)
+            syncTrackingServiceIfPossible()
+        }
+
         // Background Permissions
         binding.btnPermFineLocation.setOnClickListener { requestFineLocation() }
         binding.btnPermBackgroundLocation.setOnClickListener { requestBackgroundLocation() }
@@ -475,6 +484,7 @@ class SettingsActivity : AppCompatActivity() {
         isSyncingEnforcementSwitches = true
         binding.switchForceGpsKeepOn.isChecked = PreAlertPreferences.isForcedGpsKeepOnEnabled(this)
         binding.switchForceSilentOverride.isChecked = PreAlertPreferences.isForceSilentOverrideEnabled(this)
+        binding.switchBatterySaver.isChecked = PreAlertPreferences.isBatterySaverEnabled(this)
         isSyncingEnforcementSwitches = false
     }
 

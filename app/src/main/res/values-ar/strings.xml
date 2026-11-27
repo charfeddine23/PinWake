@@ -312,4 +312,9 @@
     <string name="settings_tab_appearance">المظهر واللغة</string>
     <string name="settings_tab_data">التحديث والنسخ</string>
     <string name="map_vibrate_short">اهتزاز</string>
+
+    <!-- وضع توفير البطارية -->
+    <string name="settings_battery_saver_title">موفر البطارية</string>
+    <string name="settings_battery_saver_subtitle">تقليل معدل فحص الـ GPS (60ث / 25ث / 5ث) لتوفير الطاقة مع الحفاظ على دقة تنبيه الوصول</string>
+    <string name="battery_saver_tier_format">%1$s · توفير</string>
 </resources>
