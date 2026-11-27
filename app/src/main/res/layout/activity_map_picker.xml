@@ -475,7 +475,7 @@
                     android:textAppearance="@style/TextAppearance.PinWake.Mono"
                     android:textColor="@color/accent_cyan_glow"
                     android:textSize="10sp"
-                    tools:text="48.85660, 2.35220" />
+                    tools:text="36.77274, 3.05884" />
 
                 <ImageButton
                     android:id="@+id/btnSharePin"

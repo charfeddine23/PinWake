@@ -22,8 +22,8 @@ import kotlinx.coroutines.launch
 
 data class MapPickerUiState(
     val existingAlarm: GeoAlarmEntity? = null,
-    val latitude: Double = 48.8566,
-    val longitude: Double = 2.3522,
+    val latitude: Double = 36.77274,
+    val longitude: Double = 3.05884,
     val radiusMeters: Int = 500,
     val resolvedAddress: String = "",
     val suggestedTitle: String = "",

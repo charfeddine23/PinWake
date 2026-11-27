@@ -38,7 +38,7 @@
             android:focusable="true" />
     </FrameLayout>
 
-    <!-- Live Radar Pill anchored dynamically above Sheet Edge -->
+    <!-- Live Radar Pill anchored dynamically above Sheet Edge (Shown only during active tracking) -->
     <LinearLayout
         android:id="@+id/pillLiveRadar"
         android:layout_width="wrap_content"
@@ -50,7 +50,8 @@
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingHorizontal="12dp"
-        android:paddingVertical="6dp">
+        android:paddingVertical="6dp"
+        android:visibility="invisible">
 
         <View
             android:id="@+id/viewHeroRadarDot"
@@ -221,7 +222,7 @@
         android:clipToPadding="false"
         android:elevation="8dp"
         android:fillViewport="true"
-        android:paddingBottom="104dp"
+        android:paddingBottom="28dp"
         app:behavior_fitToContents="false"
         app:behavior_halfExpandedRatio="0.68"
         app:behavior_hideable="false"
@@ -555,15 +556,16 @@
                         android:textSize="11sp" />
                 </LinearLayout>
 
-                <!-- Station Quick Card -->
+                <!-- Pin New Alarm Quick Card (Moved from FAB into 3rd slot) -->
                 <LinearLayout
-                    android:id="@+id/cardFavStation"
+                    android:id="@+id/cardPinNewAlarm"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="6dp"
                     android:layout_weight="1"
                     android:background="@drawable/bg_liquid_glass_card"
                     android:clickable="true"
+                    android:contentDescription="@string/btn_new_alarm"
                     android:focusable="true"
                     android:foreground="?attr/selectableItemBackground"
                     android:gravity="center_horizontal"
@@ -575,326 +577,195 @@
                         android:layout_width="38dp"
                         android:layout_height="38dp"
                         android:background="@drawable/bg_icon_circle_dark"
-                        android:contentDescription="@string/fav_station"
+                        android:contentDescription="@string/btn_new_alarm"
                         android:padding="8dp"
-                        android:src="@drawable/ic_train"
+                        android:src="@drawable/ic_add"
                         app:tint="@color/accent_cyan_glow" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="7dp"
-                        android:text="@string/fav_station"
+                        android:ellipsize="end"
+                        android:gravity="center"
+                        android:maxLines="1"
+                        android:text="@string/btn_new_alarm"
                         android:textColor="@color/text_primary"
-                        android:textSize="13sp"
+                        android:textSize="12sp"
                         android:textStyle="bold" />
 
                     <TextView
-                        android:id="@+id/tvFavStationStatus"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="2dp"
                         android:ellipsize="end"
                         android:maxLines="1"
-                        android:text="@string/fav_tap_to_pin"
-                        android:textColor="@color/text_secondary"
+                        android:text="@string/fav_drop_on_map"
+                        android:textColor="@color/accent_cyan_glow"
                         android:textSize="11sp" />
                 </LinearLayout>
             </LinearLayout>
 
-            <!-- Live Adaptive Tracking Status Banner -->
+            <!-- GPS Wake Alarms Page Button -->
             <LinearLayout
-                android:id="@+id/cardLiveTelemetry"
+                android:id="@+id/btnOpenAlarms"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="14dp"
+                android:layout_marginTop="18dp"
                 android:background="@drawable/bg_liquid_glass_card"
+                android:clickable="true"
+                android:contentDescription="@string/cd_open_alarms"
+                android:focusable="true"
+                android:foreground="?attr/selectableItemBackground"
                 android:gravity="center_vertical"
+                android:minHeight="72dp"
                 android:orientation="horizontal"
                 android:paddingHorizontal="14dp"
-                android:paddingVertical="11dp">
+                android:paddingVertical="12dp">
 
-                <View
-                    android:id="@+id/viewTrackingDot"
-                    android:layout_width="10dp"
-                    android:layout_height="10dp"
-                    android:background="@drawable/bg_badge_cyan" />
+                <ImageView
+                    android:layout_width="42dp"
+                    android:layout_height="42dp"
+                    android:background="@drawable/bg_icon_circle_dark"
+                    android:contentDescription="@string/section_gps_alarms"
+                    android:padding="10dp"
+                    android:src="@drawable/ic_alarm_bell"
+                    app:tint="@color/accent_cyan_glow" />
 
                 <LinearLayout
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="11dp"
+                    android:layout_marginStart="12dp"
                     android:layout_marginEnd="8dp"
                     android:layout_weight="1"
                     android:orientation="vertical">
 
                     <TextView
-                        android:id="@+id/tvTrackingTarget"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:ellipsize="end"
                         android:maxLines="1"
-                        android:text="@string/status_standby"
-                        android:textColor="@color/text_primary"
-                        android:textSize="13sp"
+                        android:text="@string/section_gps_alarms"
+                        android:textAppearance="@style/TextAppearance.PinWake.Title"
+                        android:textSize="15sp"
                         android:textStyle="bold" />
 
                     <TextView
-                        android:id="@+id/tvTrackingSubtitle"
+                        android:id="@+id/tvAlarmsButtonSubtitle"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="1dp"
+                        android:layout_marginTop="2dp"
                         android:ellipsize="end"
                         android:maxLines="1"
-                        android:text="@string/app_tagline"
+                        android:text="@string/alarms_button_subtitle_empty"
                         android:textColor="@color/text_secondary"
                         android:textSize="11sp" />
                 </LinearLayout>
 
                 <TextView
-                    android:id="@+id/tvOfflineGpsChip"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginEnd="6dp"
-                    android:background="@drawable/bg_badge_amber"
-                    android:paddingHorizontal="8dp"
-                    android:paddingVertical="4dp"
-                    android:text="@string/offline_gps_badge"
-                    android:textAppearance="@style/TextAppearance.PinWake.Mono"
-                    android:textColor="@color/accent_amber"
-                    android:textSize="10sp"
-                    android:visibility="gone"
-                    tools:visibility="visible" />
-
-                <TextView
-                    android:id="@+id/tvBgLockedChip"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginEnd="6dp"
-                    android:background="@drawable/bg_badge_emerald"
-                    android:paddingHorizontal="8dp"
-                    android:paddingVertical="4dp"
-                    android:text="@string/bg_tracking_locked_badge"
-                    android:textAppearance="@style/TextAppearance.PinWake.Mono"
-                    android:textColor="@color/accent_emerald"
-                    android:textSize="10sp"
-                    android:visibility="gone"
-                    tools:visibility="visible" />
-
-                <TextView
-                    android:id="@+id/tvPollingTierBadge"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:background="@drawable/bg_badge_cyan"
-                    android:paddingHorizontal="10dp"
-                    android:paddingVertical="5dp"
-                    android:text="@string/status_standby"
-                    android:textAppearance="@style/TextAppearance.PinWake.Mono"
-                    android:textColor="@color/accent_cyan_glow"
-                    android:textSize="10sp" />
-
-                <ImageButton
-                    android:id="@+id/btnShareTripStatus"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
-                    android:layout_marginStart="6dp"
-                    android:background="@drawable/bg_luxury_glass_pill"
-                    android:contentDescription="@string/cd_share_destination"
-                    android:minWidth="48dp"
-                    android:minHeight="48dp"
-                    android:padding="10dp"
-                    android:scaleType="centerInside"
-                    android:src="@drawable/ic_share"
-                    android:visibility="gone"
-                    app:tint="@color/accent_cyan_glow"
-                    tools:visibility="visible" />
-            </LinearLayout>
-
-            <!-- GPS Alarms Header -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="22dp"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
-
-                <ImageView
-                    android:layout_width="30dp"
-                    android:layout_height="30dp"
-                    android:layout_marginEnd="10dp"
-                    android:background="@drawable/bg_icon_circle_dark"
-                    android:contentDescription="@null"
-                    android:padding="7dp"
-                    android:src="@drawable/ic_alarm_bell"
-                    app:tint="@color/accent_cyan_glow" />
-
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="@string/section_gps_alarms"
-                    android:textAppearance="@style/TextAppearance.PinWake.Title"
-                    android:textSize="16sp"
-                    android:textStyle="bold" />
-
-                <TextView
                     android:id="@+id/tvActiveAlarmCount"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:layout_marginEnd="8dp"
                     android:background="@drawable/bg_liquid_glass_pill"
-                    android:paddingHorizontal="12dp"
+                    android:paddingHorizontal="11dp"
                     android:paddingVertical="5dp"
                     android:textAppearance="@style/TextAppearance.PinWake.Mono"
                     android:textColor="@color/text_secondary"
                     android:textSize="11sp"
+                    android:textStyle="bold"
                     tools:text="1 Active" />
-            </LinearLayout>
-
-            <!-- Alarms RecyclerView -->
-            <androidx.recyclerview.widget.RecyclerView
-                android:id="@+id/rvAlarms"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:clipChildren="false"
-                android:clipToPadding="false"
-                android:nestedScrollingEnabled="false"
-                android:paddingBottom="8dp"
-                tools:itemCount="2"
-                tools:listitem="@layout/item_alarm_card" />
-
-            <!-- Empty Alarms State -->
-            <LinearLayout
-                android:id="@+id/emptyAlarmsCard"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:background="@drawable/bg_alarm_card_luxury"
-                android:gravity="center"
-                android:orientation="vertical"
-                android:padding="28dp"
-                android:visibility="gone"
-                tools:visibility="visible">
 
                 <ImageView
-                    android:layout_width="52dp"
-                    android:layout_height="52dp"
-                    android:background="@drawable/bg_icon_circle_dark"
-                    android:contentDescription="@string/cd_alarm_icon"
-                    android:padding="12dp"
-                    android:src="@drawable/ic_pin_wake" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
-                    android:text="@string/empty_alarms_title"
-                    android:textAppearance="@style/TextAppearance.PinWake.Title"
-                    android:textSize="16sp"
-                    android:textStyle="bold" />
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="6dp"
-                    android:gravity="center"
-                    android:text="@string/empty_alarms_desc"
-                    android:textColor="@color/text_secondary"
-                    android:textSize="13sp" />
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_chevron_right"
+                    app:tint="@color/text_secondary" />
             </LinearLayout>
 
-            <!-- Trip History Section -->
+            <!-- Trips & History Page Button -->
             <LinearLayout
-                android:id="@+id/sectionHistory"
+                android:id="@+id/btnOpenHistory"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="24dp"
-                android:orientation="vertical"
-                android:visibility="gone"
-                tools:visibility="visible">
+                android:layout_marginTop="12dp"
+                android:background="@drawable/bg_liquid_glass_card"
+                android:clickable="true"
+                android:contentDescription="@string/cd_open_history"
+                android:focusable="true"
+                android:foreground="?attr/selectableItemBackground"
+                android:gravity="center_vertical"
+                android:minHeight="72dp"
+                android:orientation="horizontal"
+                android:paddingHorizontal="14dp"
+                android:paddingVertical="12dp">
+
+                <ImageView
+                    android:layout_width="42dp"
+                    android:layout_height="42dp"
+                    android:background="@drawable/bg_icon_circle_dark"
+                    android:contentDescription="@string/section_trip_history"
+                    android:padding="10dp"
+                    android:src="@drawable/ic_replay"
+                    app:tint="@color/accent_emerald" />
 
                 <LinearLayout
-                    android:layout_width="match_parent"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
+                    android:layout_marginStart="12dp"
+                    android:layout_marginEnd="8dp"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
 
                     <TextView
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="@string/section_trip_history"
-                        android:textAppearance="@style/TextAppearance.PinWake.Title"
-                        android:textSize="16sp"
-                        android:textStyle="bold" />
-
-                    <TextView
-                        android:id="@+id/btnClearHistory"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:clickable="true"
-                        android:focusable="true"
-                        android:gravity="center"
-                        android:minWidth="48dp"
-                        android:minHeight="48dp"
-                        android:paddingHorizontal="10dp"
-                        android:text="@string/action_clear_history"
-                        android:textColor="@color/accent_cyan_glow"
-                        android:textSize="13sp"
+                        android:ellipsize="end"
+                        android:maxLines="1"
+                        android:text="@string/section_trip_history"
+                        android:textAppearance="@style/TextAppearance.PinWake.Title"
+                        android:textSize="15sp"
                         android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/tvHistoryButtonSubtitle"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:ellipsize="end"
+                        android:maxLines="1"
+                        android:text="@string/history_button_subtitle_empty"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="11sp" />
                 </LinearLayout>
 
-                <androidx.recyclerview.widget.RecyclerView
-                    android:id="@+id/rvTripHistory"
-                    android:layout_width="match_parent"
+                <TextView
+                    android:id="@+id/tvHistoryCountBadge"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:nestedScrollingEnabled="false"
-                    tools:itemCount="2"
-                    tools:listitem="@layout/item_trip_history" />
+                    android:layout_marginEnd="8dp"
+                    android:background="@drawable/bg_liquid_glass_pill"
+                    android:paddingHorizontal="11dp"
+                    android:paddingVertical="5dp"
+                    android:textAppearance="@style/TextAppearance.PinWake.Mono"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="11sp"
+                    android:textStyle="bold"
+                    tools:text="0" />
+
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_chevron_right"
+                    app:tint="@color/text_secondary" />
             </LinearLayout>
 
             </LinearLayout>
 
         </LinearLayout>
     </androidx.core.widget.NestedScrollView>
-
-    <!-- Primary Pin New Alarm CTA Button -->
-    <LinearLayout
-        android:id="@+id/fabPinAlarm"
-        android:layout_width="wrap_content"
-        android:layout_height="56dp"
-        android:layout_gravity="bottom|end"
-        android:layout_marginEnd="16dp"
-        android:layout_marginBottom="20dp"
-        android:background="@drawable/bg_luxury_cta_pill"
-        android:clickable="true"
-        android:elevation="14dp"
-        android:focusable="true"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:paddingStart="10dp"
-        android:paddingEnd="18dp"
-        android:translationZ="2dp">
-
-        <ImageView
-            android:layout_width="36dp"
-            android:layout_height="36dp"
-            android:background="@drawable/bg_icon_circle_dark"
-            android:contentDescription="@string/btn_new_alarm"
-            android:padding="8dp"
-            android:src="@drawable/ic_add"
-            app:tint="@color/accent_cyan_glow" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="10dp"
-            android:letterSpacing="0.01"
-            android:text="@string/btn_new_alarm"
-            android:textColor="@color/text_on_accent"
-            android:textSize="14sp"
-            android:textStyle="bold" />
-    </LinearLayout>
 
     <!-- Full-Map Quick Stacked Dock (Top: My Location, Middle: Work, Bottom: Home) -->
     <LinearLayout

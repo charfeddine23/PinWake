@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/rootAlarms"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg_midnight"
+    android:layoutDirection="ltr"
+    tools:context=".ui.alarms.AlarmsActivity">
+
+    <!-- Alarms List -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rvAlarmsPage"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:clipChildren="false"
+        android:clipToPadding="false"
+        android:paddingHorizontal="20dp"
+        android:paddingTop="84dp"
+        android:paddingBottom="104dp"
+        tools:itemCount="3"
+        tools:listitem="@layout/item_alarm_card" />
+
+    <!-- Empty Alarms State -->
+    <LinearLayout
+        android:id="@+id/emptyAlarmsCard"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:layout_marginHorizontal="24dp"
+        android:background="@drawable/bg_alarm_card_luxury"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:padding="28dp"
+        android:visibility="gone"
+        tools:visibility="visible">
+
+        <ImageView
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:background="@drawable/bg_icon_circle_dark"
+            android:contentDescription="@string/cd_alarm_icon"
+            android:padding="13dp"
+            android:src="@drawable/ic_pin_wake" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:text="@string/empty_alarms_title"
+            android:textAppearance="@style/TextAppearance.PinWake.Title"
+            android:textSize="17sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:gravity="center"
+            android:text="@string/empty_alarms_desc"
+            android:textColor="@color/text_secondary"
+            android:textSize="13sp" />
+    </LinearLayout>
+
+    <!-- Solid Dark Liquid Glass Top Bar -->
+    <LinearLayout
+        android:id="@+id/alarmsTopBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top"
+        android:background="#E60B0F19"
+        android:elevation="12dp"
+        android:orientation="vertical"
+        android:paddingTop="12dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="16dp"
+            android:paddingBottom="10dp">
+
+            <ImageButton
+                android:id="@+id/btnAlarmsBack"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="@drawable/bg_luxury_glass_pill"
+                android:contentDescription="@string/map_back_cd"
+                android:elevation="4dp"
+                android:padding="12dp"
+                android:scaleType="centerInside"
+                android:src="@drawable/ic_back_arrow" />
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:layout_marginStart="10dp"
+                android:background="@drawable/bg_luxury_glass_pill"
+                android:elevation="4dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingStart="12dp"
+                android:paddingEnd="16dp">
+
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:contentDescription="@string/section_gps_alarms"
+                    android:src="@drawable/ic_alarm_bell"
+                    app:tint="@color/accent_cyan_glow" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text="@string/section_gps_alarms"
+                    android:textAppearance="@style/TextAppearance.PinWake.Title"
+                    android:textSize="15sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
+
+            <TextView
+                android:id="@+id/tvAlarmsPageActiveCount"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_liquid_glass_pill"
+                android:paddingHorizontal="12dp"
+                android:paddingVertical="6dp"
+                android:textAppearance="@style/TextAppearance.PinWake.Mono"
+                android:textColor="@color/text_secondary"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                tools:text="1 Active" />
+        </LinearLayout>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#1AFFFFFF" />
+    </LinearLayout>
+
+    <!-- Primary Pin New Alarm CTA Pill -->
+    <LinearLayout
+        android:id="@+id/fabAlarmsPageNew"
+        android:layout_width="wrap_content"
+        android:layout_height="56dp"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="20dp"
+        android:background="@drawable/bg_luxury_cta_pill"
+        android:clickable="true"
+        android:elevation="14dp"
+        android:focusable="true"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="10dp"
+        android:paddingEnd="18dp"
+        android:translationZ="2dp">
+
+        <ImageView
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:background="@drawable/bg_icon_circle_dark"
+            android:contentDescription="@string/btn_new_alarm"
+            android:padding="8dp"
+            android:src="@drawable/ic_add"
+            app:tint="@color/accent_cyan_glow" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:letterSpacing="0.01"
+            android:text="@string/btn_new_alarm"
+            android:textColor="@color/text_on_accent"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+</FrameLayout>

@@ -317,4 +317,15 @@
     <string name="settings_battery_saver_title">Battery Saver</string>
     <string name="settings_battery_saver_subtitle">Reduce GPS polling frequency (60s / 25s / 5s) to save power while keeping arrival alarms reliable</string>
     <string name="battery_saver_tier_format">%1$s · Saver</string>
+
+    <!-- Dedicated Alarms & History Navigation Buttons & Pages -->
+    <string name="fav_drop_on_map">Drop on map</string>
+    <string name="alarms_button_subtitle_count">%1$d saved · Tap to manage</string>
+    <string name="alarms_button_subtitle_empty">No saved alarms · Tap to open</string>
+    <string name="history_button_subtitle_count">%1$d recorded · Tap to replay</string>
+    <string name="history_button_subtitle_empty">View past arrivals &amp; cancelled trips</string>
+    <string name="empty_history_title">No Trips Recorded Yet</string>
+    <string name="empty_history_desc">Arrivals, snoozes, and cancelled GPS wake trips will appear here for one-tap replay.</string>
+    <string name="cd_open_alarms">Open GPS Wake Alarms page</string>
+    <string name="cd_open_history">Open Trips and History page</string>
 </resources>

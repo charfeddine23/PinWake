@@ -317,4 +317,15 @@
     <string name="settings_battery_saver_title">موفر البطارية</string>
     <string name="settings_battery_saver_subtitle">تقليل معدل فحص الـ GPS (60ث / 25ث / 5ث) لتوفير الطاقة مع الحفاظ على دقة تنبيه الوصول</string>
     <string name="battery_saver_tier_format">%1$s · توفير</string>
+
+    <!-- أزرار وصفحات المنبهات والرحلات المستقلة -->
+    <string name="fav_drop_on_map">تحديد على الخريطة</string>
+    <string name="alarms_button_subtitle_count">%1$d منبه محفوظ · اضغط للإدارة</string>
+    <string name="alarms_button_subtitle_empty">لا توجد منبهات · اضغط للفتح</string>
+    <string name="history_button_subtitle_count">%1$d رحلة مسجلة · اضغط لإعادة التفعيل</string>
+    <string name="history_button_subtitle_empty">عرض رحلات الوصول السابقة والملغاة</string>
+    <string name="empty_history_title">لا توجد رحلات مسجلة بعد</string>
+    <string name="empty_history_desc">ستظهر هنا رحلات الوصول والغفوة والمنبهات الملغاة لإعادة تفعيلها بضغطة واحدة.</string>
+    <string name="cd_open_alarms">فتح صفحة منبهات GPS</string>
+    <string name="cd_open_history">فتح صفحة الرحلات والسجل</string>
 </resources>

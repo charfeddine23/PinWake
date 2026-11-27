@@ -50,7 +50,7 @@
             android:maxLines="1"
             android:textColor="@color/text_secondary"
             android:textSize="12sp"
-            tools:text="Paris, Ile-de-France, France" />
+            tools:text="Algiers, Algeria" />
     </LinearLayout>
 
 </LinearLayout>

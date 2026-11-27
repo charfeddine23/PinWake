@@ -80,6 +80,18 @@
             android:windowSoftInputMode="adjustResize" />
 
         <activity
+            android:name=".ui.alarms.AlarmsActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity"
+            android:theme="@style/Theme.PinWake" />
+
+        <activity
+            android:name=".ui.history.TripsHistoryActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity"
+            android:theme="@style/Theme.PinWake" />
+
+        <activity
             android:name=".ui.settings.SettingsActivity"
             android:exported="false"
             android:parentActivityName=".MainActivity"

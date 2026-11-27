@@ -1010,4 +1010,31 @@ class ExampleRobolectricTest {
         com.example.util.PreAlertPreferences.setBatterySaverEnabled(context, false)
         assertFalse(com.example.util.PreAlertPreferences.isBatterySaverEnabled(context))
     }
+
+    @Test
+    fun `mapPickerUiState defaults to Algiers coordinates 36_77274_3_05884 instead of Paris`() {
+        val state = com.example.ui.map.MapPickerUiState()
+        assertEquals(36.77274, state.latitude, 0.00001)
+        assertEquals(3.05884, state.longitude, 0.00001)
+    }
+
+    @Test
+    fun `mainActivity launches dedicated AlarmsActivity and TripsHistoryActivity without Station or STANDBY banner`() {
+        val mainController = org.robolectric.Robolectric.buildActivity(MainActivity::class.java).setup()
+        val main = mainController.get()
+
+        val root = main.findViewById<android.view.View>(R.id.rootCoordinator)
+        assertTrue(root.findViewById<android.view.View>(R.id.cardPinNewAlarm) != null)
+        assertTrue(root.findViewById<android.view.View>(R.id.btnOpenAlarms) != null)
+        assertTrue(root.findViewById<android.view.View>(R.id.btnOpenHistory) != null)
+        assertEquals(android.view.View.INVISIBLE, root.findViewById<android.view.View>(R.id.pillLiveRadar).visibility)
+
+        root.findViewById<android.view.View>(R.id.btnOpenAlarms).performClick()
+        val alarmsIntent = org.robolectric.Shadows.shadowOf(main).nextStartedActivity
+        assertEquals(com.example.ui.alarms.AlarmsActivity::class.java.name, alarmsIntent.component?.className)
+
+        root.findViewById<android.view.View>(R.id.btnOpenHistory).performClick()
+        val historyIntent = org.robolectric.Shadows.shadowOf(main).nextStartedActivity
+        assertEquals(com.example.ui.history.TripsHistoryActivity::class.java.name, historyIntent.component?.className)
+    }
 }

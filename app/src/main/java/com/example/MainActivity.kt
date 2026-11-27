@@ -41,23 +41,20 @@ import androidx.core.widget.doAfterTextChanged
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
-import androidx.recyclerview.widget.DefaultItemAnimator
-import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.example.data.local.entity.FavoriteCategory
 import com.example.data.local.entity.GeoAlarmEntity
-import com.example.data.repository.PollingTier
 import com.example.databinding.ActivityMainBinding
 import com.example.databinding.DialogInstallUpdateBinding
 import com.example.databinding.DialogQuickAssignPinBinding
 import com.example.service.PinWakeService
-import com.example.ui.dashboard.AlarmAdapter
+import com.example.ui.alarms.AlarmsActivity
 import com.example.ui.dashboard.DashboardUiState
 import com.example.ui.dashboard.DashboardViewModel
-import com.example.ui.dashboard.TripHistoryAdapter
 import com.example.ui.dashboard.UpdateUiState
+import com.example.ui.history.TripsHistoryActivity
 import com.example.ui.map.MapPickerActivity
 import com.example.ui.settings.SettingsActivity
 import com.example.util.ApkUpdateManager
@@ -74,7 +71,6 @@ import com.example.util.OpenFreeMapStyles
 import com.example.util.PermissionHelper
 import com.example.util.PreAlertPreferences
 import com.example.util.SafeMapLocationEngine
-import com.example.util.ShareTripHelper
 import com.example.util.TransitionHelper
 import kotlinx.coroutines.launch
 import org.maplibre.android.MapLibre
@@ -101,8 +97,6 @@ class MainActivity : AppCompatActivity() {
         DashboardViewModel.Factory(container.repository, container.apkUpdateManager)
     }
 
-    private lateinit var alarmAdapter: AlarmAdapter
-    private lateinit var historyAdapter: TripHistoryAdapter
     private lateinit var sheetBehavior: BottomSheetBehavior<NestedScrollView>
     private var heroMap: MapLibreMap? = null
     private var loadedHeroStyle: OpenFreeMapStyle? = null
@@ -120,6 +114,7 @@ class MainActivity : AppCompatActivity() {
     private var onDemandNavIntervalMs: Long = -1L
     private var onDemandUserLocation: Location? = null
     private var isResumedForNavAssist: Boolean = false
+    private var isHeroRadarActive: Boolean = false
     private var selectedQuickNavCategory: FavoriteCategory? = null
     private var pendingCenterOnLocation: Boolean = false
     private var pendingArmAlarm: GeoAlarmEntity? = null
@@ -128,7 +123,6 @@ class MainActivity : AppCompatActivity() {
     private var quickAssignDialog: BottomSheetDialog? = null
     private var installUpdateDialog: BottomSheetDialog? = null
     private var brandArrowPulseAnimator: ObjectAnimator? = null
-    private var trackingDotPulseAnimator: ObjectAnimator? = null
     private var heroRadarDotPulseAnimator: ObjectAnimator? = null
     private var pendingInstallApk: File? = null
     private var promptedGpsThisSession = false
@@ -200,7 +194,6 @@ class MainActivity : AppCompatActivity() {
             pendingCenterOnLocation = false
             if (pendingToArm != null) {
                 Toast.makeText(this, R.string.perm_location_needed_to_arm, Toast.LENGTH_LONG).show()
-                alarmAdapter.notifyDataSetChanged()
             }
         }
     }
@@ -222,7 +215,6 @@ class MainActivity : AppCompatActivity() {
         setupBottomSheet(savedInstanceState == null)
         applyEdgeToEdgeInsets()
         setupHeroMap()
-        setupRecyclerViews()
         setupClicks()
         observeDashboard()
 
@@ -382,7 +374,6 @@ class MainActivity : AppCompatActivity() {
         val density = resources.displayMetrics.density
         val baseTopPad = binding.topFloatingBar.paddingTop
         val baseScrollBottom = binding.scrollDashboard.paddingBottom
-        val fabBaseMargin = (20f * density).toInt()
 
         ViewCompat.setOnApplyWindowInsetsListener(binding.rootCoordinator) { _, insets ->
             val sysBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
@@ -397,14 +388,6 @@ class MainActivity : AppCompatActivity() {
             val targetScrollBottom = baseScrollBottom + sysBars.bottom
             if (binding.scrollDashboard.paddingBottom != targetScrollBottom) {
                 binding.scrollDashboard.updatePadding(bottom = targetScrollBottom)
-            }
-
-            val fabParams = binding.fabPinAlarm.layoutParams as
-                androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams
-            val targetFabMargin = fabBaseMargin + sysBars.bottom
-            if (fabParams.bottomMargin != targetFabMargin) {
-                fabParams.bottomMargin = targetFabMargin
-                binding.fabPinAlarm.layoutParams = fabParams
             }
 
             val targetBlurHeight = (94f * density).toInt() + sysBars.top
@@ -507,22 +490,6 @@ class MainActivity : AppCompatActivity() {
         binding.topLiquidGlassBlur.scaleY = 1f
         binding.mapScrimBottom.alpha = collapseFactor
 
-        // Zero-relayout FAB transition using INVISIBLE + clickable flags
-        val fabAlpha = ((collapseFactor - 0.28f) / 0.45f).coerceIn(0f, 1f)
-        val fabScale = 0.78f + 0.22f * fabAlpha
-        binding.fabPinAlarm.alpha = fabAlpha
-        binding.fabPinAlarm.scaleX = fabScale
-        binding.fabPinAlarm.scaleY = fabScale
-        val fabInteractive = fabAlpha > 0.02f
-        val fabVis = if (fabInteractive) View.VISIBLE else View.INVISIBLE
-        if (binding.fabPinAlarm.visibility != fabVis) {
-            binding.fabPinAlarm.visibility = fabVis
-        }
-        if (binding.fabPinAlarm.isClickable != fabInteractive) {
-            binding.fabPinAlarm.isClickable = fabInteractive
-            binding.fabPinAlarm.isFocusable = fabInteractive
-        }
-
         val density = resources.displayMetrics.density
         val measuredSheetTop = binding.scrollDashboard.top
         val sheetTop = if (measuredSheetTop > 0) {
@@ -545,8 +512,9 @@ class MainActivity : AppCompatActivity() {
 
         val aboveHalfRange = (1f - half).coerceAtLeast(0.1f)
         val upperFade = 1f - ((safeSlide - half) / (aboveHalfRange * 0.28f)).coerceIn(0f, 1f)
-        binding.pillLiveRadar.alpha = upperFade
-        val pillVis = if (upperFade <= 0.02f) View.INVISIBLE else View.VISIBLE
+        val showRadarPill = isHeroRadarActive && upperFade > 0.02f
+        binding.pillLiveRadar.alpha = if (isHeroRadarActive) upperFade else 0f
+        val pillVis = if (showRadarPill) View.VISIBLE else View.INVISIBLE
         if (binding.pillLiveRadar.visibility != pillVis) {
             binding.pillLiveRadar.visibility = pillVis
         }
@@ -821,8 +789,8 @@ class MainActivity : AppCompatActivity() {
             lastHeroCameraKey = "default"
             moveHeroCameraWithSheetPadding(
                 map = map,
-                lat = 48.8566,
-                lon = 2.3522,
+                lat = 36.77274,
+                lon = 3.05884,
                 zoom = 12.5,
                 animate = animate
             )
@@ -863,111 +831,23 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun setupRecyclerViews() {
-        alarmAdapter = AlarmAdapter(
-            onToggleActive = { alarm, active ->
-                if (active && !PermissionHelper.hasTrackingLocation(this)) {
-                    pendingArmAlarm = alarm
-                    alarmAdapter.notifyDataSetChanged()
-                    requestFineLocation()
-                    return@AlarmAdapter
-                }
-                viewModel.setAlarmActive(alarm, active) { hasActive ->
-                    if (hasActive && PermissionHelper.hasTrackingLocation(this)) {
-                        PinWakeService.startOrSync(this)
-                        if (active && !GpsEnforcementHelper.isGpsProviderEnabled(this)) {
-                            showGpsEnablePromptIfNeeded(mandatory = true)
-                        } else if (active) {
-                            PermissionHelper.promptMandatoryBackgroundReadinessIfNeeded(this)
-                        }
-                    } else if (!hasActive) {
-                        PinWakeService.stopTracking(this)
-                    }
-                }
-            },
-            onEditClick = { alarm ->
-                openMapPicker(alarmId = alarm.id)
-            },
-            onNavigateClick = { alarm ->
-                NavigationAssistHelper.launchTurnByTurnNavigation(
-                    context = this,
-                    latitude = alarm.latitude,
-                    longitude = alarm.longitude,
-                    label = alarm.title,
-                    alarmId = alarm.id,
-                    radiusMeters = alarm.radiusMeters
-                )
-            },
-            onShareClick = { alarm ->
-                ShareTripHelper.launchShareSheet(
-                    context = this,
-                    text = ShareTripHelper.buildAlarmShareText(this, alarm),
-                    chooserTitle = getString(R.string.share_chooser_title)
-                )
-            },
-            onDeleteClick = { alarm ->
-                viewModel.deleteAlarm(alarm.id) { hasActive ->
-                    if (!hasActive) {
-                        PinWakeService.stopTracking(this)
-                    }
-                }
-            }
-        )
-
-        binding.rvAlarms.apply {
-            layoutManager = LinearLayoutManager(this@MainActivity)
-            adapter = alarmAdapter
-            itemAnimator = DefaultItemAnimator().apply {
-                supportsChangeAnimations = false
-                addDuration = 180L
-                removeDuration = 180L
-                moveDuration = 180L
-            }
-        }
-
-        historyAdapter = TripHistoryAdapter { trip ->
-            val hasPerm = PermissionHelper.hasTrackingLocation(this)
-            viewModel.replayTrip(trip) { rearmedAlarm, hasActive ->
-                if (isDestroyed || isFinishing) return@replayTrip
-                focusedPlaceLockId = rearmedAlarm.id
-                lastHeroCameraKey = null
-                if (!hasPerm) {
-                    viewModel.setAlarmActive(rearmedAlarm, false) {
-                        pendingArmAlarm = rearmedAlarm
-                        requestFineLocation()
-                    }
-                    return@replayTrip
-                }
-                if (hasActive) {
-                    PinWakeService.startOrSync(this)
-                    if (!GpsEnforcementHelper.isGpsProviderEnabled(this)) {
-                        showGpsEnablePromptIfNeeded(mandatory = true)
-                    } else {
-                        PermissionHelper.promptMandatoryBackgroundReadinessIfNeeded(this)
-                    }
-                }
-                Toast.makeText(
-                    this,
-                    getString(R.string.trip_rearmed_toast, rearmedAlarm.title),
-                    Toast.LENGTH_SHORT
-                ).show()
-            }
-        }
-        binding.rvTripHistory.apply {
-            layoutManager = LinearLayoutManager(this@MainActivity)
-            adapter = historyAdapter
-        }
-    }
-
     private fun setupClicks() {
-        binding.fabPinAlarm.setOnClickListener { openMapPicker() }
+        binding.cardPinNewAlarm.setOnClickListener { openMapPicker() }
         binding.btnWhereTo.setOnClickListener { openMapPicker() }
+        binding.btnOpenAlarms.setOnClickListener {
+            TransitionHelper.startActivitySmooth(this, Intent(this, AlarmsActivity::class.java))
+        }
+        binding.btnOpenHistory.setOnClickListener {
+            TransitionHelper.startActivitySmooth(this, Intent(this, TripsHistoryActivity::class.java))
+        }
         setupMapHeroPullGesture()
         attachMapOneSecondHoldDetector()
 
         listOf(
             binding.btnWhereTo,
-            binding.fabPinAlarm,
+            binding.cardPinNewAlarm,
+            binding.btnOpenAlarms,
+            binding.btnOpenHistory,
             binding.btnMyLocationFullMap,
             binding.btnQuickWorkFullMap,
             binding.btnQuickHomeFullMap,
@@ -995,10 +875,6 @@ class MainActivity : AppCompatActivity() {
 
         binding.btnSettings.setOnClickListener {
             openSettings()
-        }
-
-        binding.btnClearHistory.setOnClickListener {
-            viewModel.clearHistory()
         }
 
         binding.cardGpsDisabledBanner.setOnClickListener {
@@ -1273,8 +1149,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun renderState(state: DashboardUiState) {
-        alarmAdapter.submitList(state.alarms)
-        binding.emptyAlarmsCard.visibility = if (state.alarms.isEmpty()) View.VISIBLE else View.GONE
+        binding.tvAlarmsButtonSubtitle.text = if (state.alarms.isEmpty()) {
+            getString(R.string.alarms_button_subtitle_empty)
+        } else {
+            getString(R.string.alarms_button_subtitle_count, state.alarms.size)
+        }
         binding.tvActiveAlarmCount.text = getString(R.string.status_active_count, state.activeCount)
         if (state.activeCount > 0) {
             binding.tvActiveAlarmCount.setBackgroundResource(R.drawable.bg_badge_emerald)
@@ -1288,9 +1167,24 @@ class MainActivity : AppCompatActivity() {
             )
         }
 
-        historyAdapter.submitList(state.recentTrips)
-        binding.sectionHistory.visibility =
-            if (state.recentTrips.isEmpty()) View.GONE else View.VISIBLE
+        val tripCount = state.recentTrips.size
+        binding.tvHistoryButtonSubtitle.text = if (tripCount == 0) {
+            getString(R.string.history_button_subtitle_empty)
+        } else {
+            getString(R.string.history_button_subtitle_count, tripCount)
+        }
+        binding.tvHistoryCountBadge.text = tripCount.toString()
+        if (tripCount > 0) {
+            binding.tvHistoryCountBadge.setBackgroundResource(R.drawable.bg_badge_cyan)
+            binding.tvHistoryCountBadge.setTextColor(
+                ContextCompat.getColor(this, R.color.accent_cyan_glow)
+            )
+        } else {
+            binding.tvHistoryCountBadge.setBackgroundResource(R.drawable.bg_liquid_glass_pill)
+            binding.tvHistoryCountBadge.setTextColor(
+                ContextCompat.getColor(this, R.color.text_secondary)
+            )
+        }
 
         renderTelemetryBanner(state)
         updateHeroMapViewport(state)
@@ -1306,12 +1200,6 @@ class MainActivity : AppCompatActivity() {
             statusView = binding.tvFavWorkStatus,
             favorite = state.workFavorite,
             category = FavoriteCategory.WORK
-        )
-        renderQuickFavorite(
-            card = binding.cardFavStation,
-            statusView = binding.tvFavStationStatus,
-            favorite = state.stationFavorite,
-            category = FavoriteCategory.STATION
         )
         renderFullMapQuickDockStates(state)
     }
@@ -1335,7 +1223,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun renderTelemetryBanner(state: DashboardUiState) {
         val gpsEnabled = GpsEnforcementHelper.isGpsProviderEnabled(this)
-        val offline = GpsEnforcementHelper.isOffline(this)
         val showGpsBanner = !gpsEnabled
         val wasGpsBannerVisible = binding.cardGpsDisabledBanner.visibility == View.VISIBLE
         if (wasGpsBannerVisible != showGpsBanner) {
@@ -1344,94 +1231,26 @@ class MainActivity : AppCompatActivity() {
         binding.cardGpsDisabledBanner.visibility = if (showGpsBanner) View.VISIBLE else View.GONE
 
         val telemetry = state.telemetry
-        if (telemetry.isTracking && state.activeCount > 0) {
-            binding.tvOfflineGpsChip.visibility =
-                if (offline || telemetry.isOfflineMode) View.VISIBLE else View.GONE
-            binding.tvBgLockedChip.visibility = View.VISIBLE
-            binding.cardLiveTelemetry.setBackgroundResource(R.drawable.bg_liquid_glass_card_active)
-            binding.viewTrackingDot.setBackgroundResource(R.drawable.bg_badge_emerald)
+        isHeroRadarActive = telemetry.isTracking && state.activeCount > 0
+        if (isHeroRadarActive) {
             binding.viewHeroRadarDot.setBackgroundResource(R.drawable.bg_badge_emerald)
             startTelemetryDotPulse()
             binding.tvHeroRadarText.text = getString(R.string.hero_live_radar)
             binding.tvHeroRadarText.setTextColor(ContextCompat.getColor(this, R.color.accent_emerald))
-            binding.tvTrackingTarget.text =
-                telemetry.closestAlarmTitle ?: getString(R.string.app_name)
-            binding.tvTrackingSubtitle.text =
-                DistanceFormatter.formatDistanceBadge(this, telemetry.closestDistanceMeters)
-
-            val baseTierText = when (telemetry.pollingTier) {
-                PollingTier.STANDBY -> getString(R.string.status_standby)
-                PollingTier.ECO_30S -> getString(R.string.status_tracking_eco)
-                PollingTier.BALANCED_10S -> getString(R.string.status_tracking_balanced)
-                PollingTier.PRECISION_2S -> getString(R.string.status_tracking_precision)
+            val currentSlide = when (sheetBehavior.state) {
+                BottomSheetBehavior.STATE_COLLAPSED -> 0f
+                BottomSheetBehavior.STATE_EXPANDED -> 1f
+                else -> computedHalfSlideOffset
             }
-            val tierText = if (telemetry.isBatterySaver && telemetry.pollingTier != PollingTier.STANDBY) {
-                getString(R.string.battery_saver_tier_format, baseTierText)
-            } else {
-                baseTierText
-            }
-            binding.tvPollingTierBadge.text = tierText
-            binding.tvPollingTierBadge.setBackgroundResource(R.drawable.bg_badge_emerald)
-            binding.tvPollingTierBadge.setTextColor(
-                ContextCompat.getColor(this, R.color.accent_emerald)
-            )
-            val targetAlarm = state.alarms.firstOrNull { it.id == telemetry.closestAlarmId }
-                ?: state.alarms.firstOrNull { it.isActive }
-            if (targetAlarm != null) {
-                binding.btnShareTripStatus.visibility = View.VISIBLE
-                binding.btnShareTripStatus.setOnClickListener {
-                    val shareText = ShareTripHelper.buildDestinationShareText(
-                        context = this,
-                        title = targetAlarm.title,
-                        latitude = targetAlarm.latitude,
-                        longitude = targetAlarm.longitude,
-                        radiusMeters = targetAlarm.radiusMeters,
-                        distanceMeters = telemetry.closestDistanceMeters
-                    )
-                    ShareTripHelper.launchShareSheet(
-                        context = this,
-                        text = shareText,
-                        chooserTitle = getString(R.string.share_chooser_title)
-                    )
-                }
-            } else {
-                binding.btnShareTripStatus.visibility = View.GONE
-            }
+            updateChromeForSlideOffset(currentSlide)
         } else {
             stopTelemetryDotPulse()
-            binding.tvOfflineGpsChip.visibility =
-                if (offline && state.activeCount > 0) View.VISIBLE else View.GONE
-            binding.tvBgLockedChip.visibility = View.GONE
-            binding.cardLiveTelemetry.setBackgroundResource(R.drawable.bg_liquid_glass_card)
-            binding.viewTrackingDot.setBackgroundResource(R.drawable.bg_badge_cyan)
-            binding.viewHeroRadarDot.setBackgroundResource(R.drawable.bg_badge_cyan)
-            binding.tvHeroRadarText.setText(R.string.status_standby)
-            binding.tvHeroRadarText.setTextColor(ContextCompat.getColor(this, R.color.text_primary))
-            binding.tvTrackingTarget.setText(R.string.status_standby)
-            binding.tvTrackingSubtitle.setText(R.string.app_tagline)
-            binding.tvPollingTierBadge.setText(R.string.status_standby)
-            binding.tvPollingTierBadge.setBackgroundResource(R.drawable.bg_badge_cyan)
-            binding.tvPollingTierBadge.setTextColor(
-                ContextCompat.getColor(this, R.color.accent_cyan_glow)
-            )
-            binding.btnShareTripStatus.visibility = View.GONE
+            binding.pillLiveRadar.alpha = 0f
+            binding.pillLiveRadar.visibility = View.INVISIBLE
         }
     }
 
     private fun startTelemetryDotPulse() {
-        if (trackingDotPulseAnimator?.isRunning != true) {
-            trackingDotPulseAnimator = ObjectAnimator.ofFloat(
-                binding.viewTrackingDot,
-                View.ALPHA,
-                1f,
-                0.35f
-            ).apply {
-                repeatCount = ValueAnimator.INFINITE
-                repeatMode = ValueAnimator.REVERSE
-                duration = 900L
-                start()
-            }
-        }
         if (heroRadarDotPulseAnimator?.isRunning != true) {
             heroRadarDotPulseAnimator = ObjectAnimator.ofFloat(
                 binding.viewHeroRadarDot,
@@ -1448,11 +1267,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun stopTelemetryDotPulse() {
-        trackingDotPulseAnimator?.cancel()
-        trackingDotPulseAnimator = null
         heroRadarDotPulseAnimator?.cancel()
         heroRadarDotPulseAnimator = null
-        binding.viewTrackingDot.alpha = 1f
         binding.viewHeroRadarDot.alpha = 1f
     }
 

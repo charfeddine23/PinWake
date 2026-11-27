@@ -1276,8 +1276,8 @@ class MapPickerActivity : AppCompatActivity() {
         const val EXTRA_SHARED_LABEL = "extra_shared_label"
         const val EXTRA_SHARED_SEARCH_QUERY = "extra_shared_search_query"
 
-        private const val DEFAULT_LAT = 48.8566
-        private const val DEFAULT_LON = 2.3522
+        private const val DEFAULT_LAT = 36.77274
+        private const val DEFAULT_LON = 3.05884
 
         private const val GEOFENCE_SOURCE_ID = "pinwake-geofence-source"
         private const val GEOFENCE_FILL_LAYER_ID = "pinwake-geofence-fill"
