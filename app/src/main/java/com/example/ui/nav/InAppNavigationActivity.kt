@@ -12,6 +12,7 @@ import android.os.Looper
 import android.view.View
 import android.view.WindowManager
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -38,6 +39,7 @@ import com.example.util.NavigationVoiceCoach
 import com.example.util.OpenFreeMapStyles
 import com.example.util.PermissionHelper
 import com.example.util.SafeMapLocationEngine
+import com.example.util.TransitionHelper
 import com.example.util.TravelProfile
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -114,6 +116,12 @@ class InAppNavigationActivity : AppCompatActivity() {
         locationManager = getSystemService(LocationManager::class.java)
         voiceCoach = NavigationVoiceCoach(this)
 
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                TransitionHelper.finishSmooth(this@InAppNavigationActivity)
+            }
+        })
+
         destLat = intent.getDoubleExtra(EXTRA_DEST_LAT, 0.0)
         destLon = intent.getDoubleExtra(EXTRA_DEST_LON, 0.0)
         destLabel = intent.getStringExtra(EXTRA_DEST_LABEL).orEmpty().trim()
@@ -188,8 +196,17 @@ class InAppNavigationActivity : AppCompatActivity() {
     }
 
     private fun setupControls() {
-        binding.btnNavBack.setOnClickListener { finish() }
-        binding.btnEndNavigation.setOnClickListener { finish() }
+        binding.btnNavBack.setOnClickListener { TransitionHelper.finishSmooth(this) }
+        binding.btnEndNavigation.setOnClickListener { TransitionHelper.finishSmooth(this) }
+
+        listOf(
+            binding.btnNavBack,
+            binding.btnEndNavigation,
+            binding.btnToggleProfile,
+            binding.btnToggleVoice,
+            binding.btnRecenterNav,
+            binding.btnNavWakeAlarmToggle
+        ).forEach { TransitionHelper.attachLuxuryPressFeedback(it) }
 
         binding.btnToggleVoice.setOnClickListener {
             voiceCoach.isMuted = !voiceCoach.isMuted
@@ -510,7 +527,12 @@ class InAppNavigationActivity : AppCompatActivity() {
         }
 
         val nextStep = progress.followingStep
-        if (nextStep != null && !progress.hasArrived) {
+        val showNextStep = nextStep != null && !progress.hasArrived
+        val wasNextStepVisible = binding.layoutNextStepStrip.visibility == View.VISIBLE
+        if (wasNextStepVisible != showNextStep) {
+            TransitionHelper.animateLayoutChange(binding.cardManeuverHud, 180L)
+        }
+        if (showNextStep && nextStep != null) {
             binding.layoutNextStepStrip.visibility = View.VISIBLE
             binding.ivNextStepIcon.setImageResource(iconResFor(nextStep.iconType))
             val nextText = InAppNavigationEngine.formatInstruction(this, nextStep, destLabel)
@@ -649,6 +671,11 @@ class InAppNavigationActivity : AppCompatActivity() {
     }
 
     private fun renderRecenterButton() {
+        val showLabel = !isCameraFollowing
+        val wasLabelVisible = binding.tvRecenterLabel.visibility == View.VISIBLE
+        if (wasLabelVisible != showLabel) {
+            TransitionHelper.animateLayoutChange(binding.btnRecenterNav, 160L)
+        }
         if (isCameraFollowing) {
             binding.btnRecenterNav.setBackgroundResource(R.drawable.bg_luxury_glass_pill)
             binding.tvRecenterLabel.visibility = View.GONE

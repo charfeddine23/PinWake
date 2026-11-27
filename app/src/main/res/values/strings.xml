@@ -305,4 +305,11 @@
     <string name="nav_action_uturn">Make a U-turn</string>
     <string name="nav_action_continue">Continue straight</string>
     <string name="nav_maneuver_onto_format">%1$s onto %2$s</string>
+
+    <!-- Settings Quick-Jump Pills & Compact Labels -->
+    <string name="settings_tab_alerts">GPS &amp; Alerts</string>
+    <string name="settings_tab_permissions">Permissions</string>
+    <string name="settings_tab_appearance">Appearance</string>
+    <string name="settings_tab_data">Updates &amp; Data</string>
+    <string name="map_vibrate_short">Vibrate</string>
 </resources>

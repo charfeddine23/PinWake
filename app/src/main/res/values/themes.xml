@@ -26,6 +26,14 @@
         <item name="android:forceDarkAllowed">false</item>
         <item name="android:fontFamily">@font/plus_jakarta_sans</item>
         <item name="fontFamily">@font/plus_jakarta_sans</item>
+        <item name="android:windowAnimationStyle">@style/PinWake.ActivityAnimations</item>
+    </style>
+
+    <style name="PinWake.ActivityAnimations" parent="@android:style/Animation.Activity">
+        <item name="android:activityOpenEnterAnimation">@anim/pinwake_activity_enter</item>
+        <item name="android:activityOpenExitAnimation">@anim/pinwake_activity_exit</item>
+        <item name="android:activityCloseEnterAnimation">@anim/pinwake_activity_close_enter</item>
+        <item name="android:activityCloseExitAnimation">@anim/pinwake_activity_close_exit</item>
     </style>
 
     <style name="Theme.PinWake.Alarm" parent="Theme.PinWake">

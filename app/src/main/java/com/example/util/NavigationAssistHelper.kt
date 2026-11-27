@@ -1,9 +1,7 @@
 package com.example.util
 
-import android.app.ActivityOptions
 import android.content.Context
 import android.content.Intent
-import com.example.R
 import com.example.data.remote.dto.NominatimPlaceDto
 import com.example.ui.nav.InAppNavigationActivity
 
@@ -50,18 +48,8 @@ object NavigationAssistHelper {
             radiusMeters = radiusMeters
         )
         return runCatching {
-            val options = ActivityOptions.makeCustomAnimation(
-                context,
-                R.anim.pinwake_activity_enter,
-                R.anim.pinwake_activity_exit
-            )
-            context.startActivity(intent, options.toBundle())
+            TransitionHelper.startActivitySmooth(context, intent)
             true
-        }.getOrElse {
-            runCatching {
-                context.startActivity(intent)
-                true
-            }.getOrDefault(false)
-        }
+        }.getOrDefault(false)
     }
 }

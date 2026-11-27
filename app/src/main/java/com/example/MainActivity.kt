@@ -4,7 +4,6 @@ import android.Manifest
 import android.animation.ObjectAnimator
 import android.animation.ValueAnimator
 import android.annotation.SuppressLint
-import android.app.ActivityOptions
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -76,6 +75,7 @@ import com.example.util.PermissionHelper
 import com.example.util.PreAlertPreferences
 import com.example.util.SafeMapLocationEngine
 import com.example.util.ShareTripHelper
+import com.example.util.TransitionHelper
 import kotlinx.coroutines.launch
 import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraPosition
@@ -1336,7 +1336,12 @@ class MainActivity : AppCompatActivity() {
     private fun renderTelemetryBanner(state: DashboardUiState) {
         val gpsEnabled = GpsEnforcementHelper.isGpsProviderEnabled(this)
         val offline = GpsEnforcementHelper.isOffline(this)
-        binding.cardGpsDisabledBanner.visibility = if (gpsEnabled) View.GONE else View.VISIBLE
+        val showGpsBanner = !gpsEnabled
+        val wasGpsBannerVisible = binding.cardGpsDisabledBanner.visibility == View.VISIBLE
+        if (wasGpsBannerVisible != showGpsBanner) {
+            TransitionHelper.animateLayoutChange(binding.sheetBodyContainer, 180L)
+        }
+        binding.cardGpsDisabledBanner.visibility = if (showGpsBanner) View.VISIBLE else View.GONE
 
         val telemetry = state.telemetry
         if (telemetry.isTracking && state.activeCount > 0) {
@@ -1574,7 +1579,13 @@ class MainActivity : AppCompatActivity() {
             else -> null
         }
 
+        val wasNavMode = binding.layoutWhereToNavActions.visibility == View.VISIBLE
+        val willBeNavMode = targetAlarm != null
+
         if (targetAlarm == null) {
+            if (wasNavMode != willBeNavMode) {
+                TransitionHelper.animateLayoutChange(binding.btnWhereTo, 200L)
+            }
             selectedQuickNavCategory = null
             stopOnDemandNavAssistUpdates()
             heroMap?.style?.let { style ->
@@ -1603,6 +1614,10 @@ class MainActivity : AppCompatActivity() {
             binding.layoutWhereToNavActions.visibility = View.GONE
             binding.btnWhereTo.setOnClickListener { openMapPicker() }
             return
+        }
+
+        if (wasNavMode != willBeNavMode) {
+            TransitionHelper.animateLayoutChange(binding.btnWhereTo, 200L)
         }
 
         val isHome = targetAlarm.favoriteCategory == FavoriteCategory.HOME
@@ -1788,10 +1803,7 @@ class MainActivity : AppCompatActivity() {
         val dialogBinding = DialogQuickAssignPinBinding.inflate(layoutInflater)
         val dialog = BottomSheetDialog(this)
         dialog.setContentView(dialogBinding.root)
-        dialog.setOnShowListener {
-            dialog.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)
-                ?.setBackgroundColor(Color.TRANSPARENT)
-        }
+        TransitionHelper.configureBottomSheetDialog(dialog)
         dialog.setOnDismissListener {
             if (quickAssignDialog === dialog) {
                 quickAssignDialog = null
@@ -2039,10 +2051,7 @@ class MainActivity : AppCompatActivity() {
         val dialogBinding = DialogInstallUpdateBinding.inflate(layoutInflater)
         val dialog = BottomSheetDialog(this)
         dialog.setContentView(dialogBinding.root)
-        dialog.setOnShowListener {
-            dialog.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)
-                ?.setBackgroundColor(Color.TRANSPARENT)
-        }
+        TransitionHelper.configureBottomSheetDialog(dialog)
         dialog.setOnDismissListener {
             if (installUpdateDialog === dialog) {
                 installUpdateDialog = null
@@ -2120,12 +2129,7 @@ class MainActivity : AppCompatActivity() {
         val intent = Intent(this, SettingsActivity::class.java).apply {
             putExtra(SettingsActivity.EXTRA_SCROLL_TO_UPDATES, scrollToUpdates)
         }
-        val options = ActivityOptions.makeCustomAnimation(
-            this,
-            R.anim.pinwake_activity_enter,
-            R.anim.pinwake_activity_exit
-        )
-        startActivity(intent, options.toBundle())
+        TransitionHelper.startActivitySmooth(this, intent)
     }
 
     private fun requestFineLocation() {
@@ -2182,7 +2186,7 @@ class MainActivity : AppCompatActivity() {
                 putExtra(MapPickerActivity.EXTRA_SHARED_SEARCH_QUERY, rawText.take(120))
             }
         }
-        startActivity(pickerIntent)
+        TransitionHelper.startActivitySmooth(this, pickerIntent)
     }
 
     private fun openMapPicker(
@@ -2193,12 +2197,7 @@ class MainActivity : AppCompatActivity() {
             if (alarmId > 0L) putExtra(MapPickerActivity.EXTRA_ALARM_ID, alarmId)
             putExtra(MapPickerActivity.EXTRA_DEFAULT_CATEGORY, defaultCategory.name)
         }
-        val options = ActivityOptions.makeCustomAnimation(
-            this,
-            R.anim.pinwake_activity_enter,
-            R.anim.pinwake_activity_exit
-        )
-        startActivity(intent, options.toBundle())
+        TransitionHelper.startActivitySmooth(this, intent)
     }
 
     private fun checkGpsOnResume() {

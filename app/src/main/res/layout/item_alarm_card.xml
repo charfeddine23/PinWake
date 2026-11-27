@@ -219,7 +219,7 @@
         </LinearLayout>
     </HorizontalScrollView>
 
-    <!-- Row 3: Symmetrical Non-Overlapping Action Dock (All >= 48dp Touch Targets) -->
+    <!-- Row 3: Ergonomic Action Dock (Primary Navigate + Edit + Share + Delete, All >= 48dp) -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -228,28 +228,61 @@
         android:orientation="horizontal">
 
         <LinearLayout
+            android:id="@+id/btnNavigateAlarm"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1.08"
+            android:background="@drawable/bg_luxury_glass_pill_cyan"
+            android:clickable="true"
+            android:contentDescription="@string/cd_navigate_alarm"
+            android:focusable="true"
+            android:gravity="center"
+            android:orientation="horizontal"
+            android:paddingHorizontal="12dp">
+
+            <ImageView
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_navigation"
+                app:tint="@color/accent_cyan_glow" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="@string/nav_assist_navigate"
+                android:textColor="@color/accent_cyan_glow"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <LinearLayout
             android:id="@+id/btnEditAlarm"
             android:layout_width="0dp"
             android:layout_height="48dp"
+            android:layout_marginStart="8dp"
             android:layout_weight="1"
             android:background="@drawable/bg_luxury_glass_pill"
             android:clickable="true"
             android:focusable="true"
             android:gravity="center"
             android:orientation="horizontal"
-            android:paddingHorizontal="16dp">
+            android:paddingHorizontal="12dp">
 
             <ImageView
-                android:layout_width="16dp"
-                android:layout_height="16dp"
+                android:layout_width="15dp"
+                android:layout_height="15dp"
                 android:contentDescription="@null"
                 android:src="@drawable/ic_edit"
-                app:tint="@color/accent_cyan_glow" />
+                app:tint="@color/text_primary" />
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
+                android:layout_marginStart="6dp"
                 android:ellipsize="end"
                 android:maxLines="1"
                 android:text="@string/action_edit_on_map"
@@ -259,22 +292,10 @@
         </LinearLayout>
 
         <ImageButton
-            android:id="@+id/btnNavigateAlarm"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:layout_marginStart="10dp"
-            android:background="@drawable/bg_luxury_glass_pill_cyan"
-            android:contentDescription="@string/cd_navigate_alarm"
-            android:padding="13dp"
-            android:scaleType="centerInside"
-            android:src="@drawable/ic_navigation"
-            app:tint="@color/accent_cyan_glow" />
-
-        <ImageButton
             android:id="@+id/btnShareAlarm"
             android:layout_width="48dp"
             android:layout_height="48dp"
-            android:layout_marginStart="10dp"
+            android:layout_marginStart="8dp"
             android:background="@drawable/bg_luxury_glass_pill"
             android:contentDescription="@string/cd_share_destination"
             android:padding="13dp"
@@ -286,7 +307,7 @@
             android:id="@+id/btnDeleteAlarm"
             android:layout_width="48dp"
             android:layout_height="48dp"
-            android:layout_marginStart="10dp"
+            android:layout_marginStart="8dp"
             android:background="@drawable/bg_luxury_glass_pill_rose"
             android:contentDescription="@string/cd_delete_alarm"
             android:padding="13dp"

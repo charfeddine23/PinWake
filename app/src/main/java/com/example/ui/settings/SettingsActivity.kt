@@ -1,16 +1,10 @@
 package com.example.ui.settings
 
 import android.Manifest
-import android.annotation.SuppressLint
-import android.content.Intent
-import android.net.Uri
-import android.os.Build
-import android.os.Bundle
-import android.view.MotionEvent
 import android.view.View
-import android.view.animation.OvershootInterpolator
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
@@ -19,6 +13,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updatePadding
+import androidx.core.widget.NestedScrollView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -31,6 +26,10 @@ import com.example.service.PinWakeService
 import com.example.ui.dashboard.DashboardViewModel
 import com.example.ui.dashboard.UpdateCheckEvent
 import com.example.ui.dashboard.UpdateUiState
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.os.Bundle
 import com.example.util.ApkUpdateManager
 import com.example.util.GpsEnforcementHelper
 import com.example.util.LanguageManager
@@ -38,6 +37,7 @@ import com.example.util.OpenFreeMapStyle
 import com.example.util.OpenFreeMapStyles
 import com.example.util.PermissionHelper
 import com.example.util.PreAlertPreferences
+import com.example.util.TransitionHelper
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -120,6 +120,12 @@ class SettingsActivity : AppCompatActivity() {
         binding = ActivitySettingsBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                TransitionHelper.finishSmooth(this@SettingsActivity)
+            }
+        })
+
         applyInsets()
         setupControls()
         syncLanguageUi()
@@ -133,7 +139,10 @@ class SettingsActivity : AppCompatActivity() {
 
         if (intent.getBooleanExtra(EXTRA_SCROLL_TO_UPDATES, false)) {
             binding.scrollSettings.post {
-                binding.scrollSettings.smoothScrollTo(0, binding.cardSettingsUpdateAvailable.top)
+                scrollToSettingsSection(
+                    targetView = binding.sectionSettingsUpdatesData,
+                    activeTab = binding.tabSettingsData
+                )
             }
         }
     }
@@ -156,7 +165,7 @@ class SettingsActivity : AppCompatActivity() {
 
         fun updateScrollTopClearance() {
             val headerH = binding.settingsTopBar.height
-            val minHeader = (72f * density).toInt() + currentTopInset
+            val minHeader = (122f * density).toInt() + currentTopInset
             val targetTop = maxOf(headerH, minHeader) + (6f * density).toInt()
             if (binding.scrollSettings.paddingTop != targetTop) {
                 binding.scrollSettings.updatePadding(top = targetTop)
@@ -180,10 +189,14 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun setupControls() {
-        binding.btnSettingsBack.setOnClickListener { finish() }
+        binding.btnSettingsBack.setOnClickListener { TransitionHelper.finishSmooth(this) }
 
         listOf(
             binding.btnSettingsBack,
+            binding.tabSettingsAlerts,
+            binding.tabSettingsPermissions,
+            binding.tabSettingsAppearance,
+            binding.tabSettingsData,
             binding.optLangEnglish,
             binding.optLangArabic,
             binding.optSettingsMapDark,
@@ -192,6 +205,12 @@ class SettingsActivity : AppCompatActivity() {
             binding.optPreAlert300,
             binding.optPreAlert500,
             binding.optPreAlert1000,
+            binding.btnPermFineLocation,
+            binding.btnPermBackgroundLocation,
+            binding.btnPermNotifications,
+            binding.btnPermFullScreen,
+            binding.btnPermBattery,
+            binding.btnPermDndAccess,
             binding.btnOpenAndroidAppSettings,
             binding.btnSettingsCheckUpdates,
             binding.btnDownloadUpdate,
@@ -199,7 +218,37 @@ class SettingsActivity : AppCompatActivity() {
             binding.btnSettingsClearHistory,
             binding.btnExportBackupJson,
             binding.btnImportBackupJson
-        ).forEach { attachLuxuryPressFeedback(it) }
+        ).forEach { TransitionHelper.attachLuxuryPressFeedback(it) }
+
+        binding.tabSettingsAlerts.setOnClickListener {
+            scrollToSettingsSection(binding.sectionSettingsAlerts, binding.tabSettingsAlerts)
+        }
+        binding.tabSettingsPermissions.setOnClickListener {
+            scrollToSettingsSection(binding.cardSettingsPermissions, binding.tabSettingsPermissions)
+        }
+        binding.tabSettingsAppearance.setOnClickListener {
+            scrollToSettingsSection(binding.sectionSettingsAppearance, binding.tabSettingsAppearance)
+        }
+        binding.tabSettingsData.setOnClickListener {
+            scrollToSettingsSection(binding.sectionSettingsUpdatesData, binding.tabSettingsData)
+        }
+
+        binding.scrollSettings.setOnScrollChangeListener(
+            NestedScrollView.OnScrollChangeListener { _, _, scrollY, _, _ ->
+                val thresholdOffset = (24f * resources.displayMetrics.density).toInt()
+                val activeTab = when {
+                    scrollY + thresholdOffset >= binding.sectionSettingsUpdatesData.top ->
+                        binding.tabSettingsData
+                    scrollY + thresholdOffset >= binding.sectionSettingsAppearance.top ->
+                        binding.tabSettingsAppearance
+                    scrollY + thresholdOffset >= binding.cardSettingsPermissions.top ->
+                        binding.tabSettingsPermissions
+                    else -> binding.tabSettingsAlerts
+                }
+                highlightQuickJumpTab(activeTab)
+            }
+        )
+        highlightQuickJumpTab(binding.tabSettingsAlerts)
 
         // Language
         binding.optLangEnglish.setOnClickListener {
@@ -577,13 +626,46 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
 
+    private fun scrollToSettingsSection(targetView: View, activeTab: TextView) {
+        highlightQuickJumpTab(activeTab)
+        val gapPx = (6f * resources.displayMetrics.density).toInt()
+        val y = (targetView.top - gapPx).coerceAtLeast(0)
+        binding.scrollSettings.smoothScrollTo(0, y)
+    }
+
+    private fun highlightQuickJumpTab(activeTab: TextView) {
+        val tabs = listOf(
+            binding.tabSettingsAlerts,
+            binding.tabSettingsPermissions,
+            binding.tabSettingsAppearance,
+            binding.tabSettingsData
+        )
+        tabs.forEach { tab ->
+            val selected = tab === activeTab
+            if (selected) {
+                tab.setBackgroundResource(R.drawable.bg_luxury_glass_pill_cyan)
+                tab.setTextColor(ContextCompat.getColor(this, R.color.accent_cyan_glow))
+            } else {
+                tab.setBackgroundResource(R.drawable.bg_luxury_glass_pill)
+                tab.setTextColor(ContextCompat.getColor(this, R.color.text_secondary))
+            }
+        }
+    }
+
     private fun renderUpdateState(update: UpdateUiState) {
         val info = update.availableUpdate
+        val wasVisible = binding.cardSettingsUpdateAvailable.visibility == View.VISIBLE
         if (info == null) {
+            if (wasVisible) {
+                TransitionHelper.animateLayoutChange(binding.cardSettingsUpdates, 180L)
+            }
             binding.cardSettingsUpdateAvailable.visibility = View.GONE
             return
         }
 
+        if (!wasVisible) {
+            TransitionHelper.animateLayoutChange(binding.cardSettingsUpdates, 210L)
+        }
         binding.cardSettingsUpdateAvailable.visibility = View.VISIBLE
         binding.tvUpdateTagMono.text = info.tagName
         binding.tvUpdateTitle.text = getString(R.string.update_card_title, info.versionName)
@@ -697,32 +779,6 @@ class SettingsActivity : AppCompatActivity() {
             startActivity(apkUpdateManager.buildInstallApkIntent(apkFile))
         }.onFailure {
             Toast.makeText(this, R.string.update_check_failed, Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    @SuppressLint("ClickableViewAccessibility")
-    private fun attachLuxuryPressFeedback(view: View) {
-        view.setOnTouchListener { target, event ->
-            when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
-                    target.animate().cancel()
-                    target.animate()
-                        .scaleX(0.95f)
-                        .scaleY(0.95f)
-                        .setDuration(85L)
-                        .start()
-                }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    target.animate().cancel()
-                    target.animate()
-                        .scaleX(1f)
-                        .scaleY(1f)
-                        .setDuration(200L)
-                        .setInterpolator(OvershootInterpolator(1.6f))
-                        .start()
-                }
-            }
-            false
         }
     }
 

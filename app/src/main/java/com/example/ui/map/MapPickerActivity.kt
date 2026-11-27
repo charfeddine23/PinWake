@@ -19,6 +19,7 @@ import android.view.animation.OvershootInterpolator
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
@@ -50,6 +51,7 @@ import com.example.util.PermissionHelper
 import com.example.util.PreAlertPreferences
 import com.example.util.SafeMapLocationEngine
 import com.example.util.ShareTripHelper
+import com.example.util.TransitionHelper
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -132,13 +134,13 @@ class MapPickerActivity : AppCompatActivity() {
                 viewModel.saveAndActivateAlarm(pendingSave.first, pendingSave.second, activateNow = true) {
                     PinWakeService.startOrSync(this)
                     PermissionHelper.promptMandatoryBackgroundReadinessIfNeeded(this) {
-                        if (!isDestroyed && !isFinishing) finish()
+                        if (!isDestroyed && !isFinishing) TransitionHelper.finishSmooth(this)
                     }
                 }
             } else {
                 viewModel.saveAndActivateAlarm(pendingSave.first, pendingSave.second, activateNow = false) {
                     Toast.makeText(this, R.string.perm_location_needed_to_arm, Toast.LENGTH_LONG).show()
-                    finish()
+                    TransitionHelper.finishSmooth(this)
                 }
             }
             return@registerForActivityResult
@@ -164,6 +166,24 @@ class MapPickerActivity : AppCompatActivity() {
 
         binding.mapView.onCreate(savedInstanceState)
         locationManager = getSystemService(LocationManager::class.java)
+
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                when {
+                    binding.cardMapStyleMenu.visibility == View.VISIBLE -> {
+                        TransitionHelper.animateLayoutChange(binding.mapRoot, 170L)
+                        binding.cardMapStyleMenu.visibility = View.GONE
+                    }
+                    binding.cardSearchResults.visibility == View.VISIBLE -> {
+                        TransitionHelper.animateLayoutChange(binding.mapRoot, 170L)
+                        viewModel.clearSearchResults()
+                        binding.cardSearchResults.visibility = View.GONE
+                        binding.cardPickerNavAssist.visibility = View.VISIBLE
+                    }
+                    else -> TransitionHelper.finishSmooth(this@MapPickerActivity)
+                }
+            }
+        })
 
         applyInsets()
         setupMap()
@@ -513,9 +533,21 @@ class MapPickerActivity : AppCompatActivity() {
     }
 
     private fun setupControls() {
-        binding.btnMapBack.setOnClickListener { finish() }
+        binding.btnMapBack.setOnClickListener { TransitionHelper.finishSmooth(this) }
+
+        listOf(
+            binding.btnMapBack,
+            binding.fabMapStyle,
+            binding.fabMyLocation,
+            binding.btnPickerToggleRoute,
+            binding.btnPickerNavigate,
+            binding.btnSharePin,
+            binding.rowAlarmRingtone,
+            binding.btnSaveAlarm
+        ).forEach { TransitionHelper.attachLuxuryPressFeedback(it) }
 
         binding.fabMapStyle.setOnClickListener {
+            TransitionHelper.animateLayoutChange(binding.mapRoot, 180L)
             binding.cardMapStyleMenu.visibility =
                 if (binding.cardMapStyleMenu.visibility == View.VISIBLE) View.GONE else View.VISIBLE
         }
@@ -690,12 +722,12 @@ class MapPickerActivity : AppCompatActivity() {
                         GpsEnforcementHelper.showEnableGpsDialog(
                             context = this,
                             mandatoryForActiveTracking = true,
-                            onOpenSettings = { finish() },
-                            onDismissed = { finish() }
+                            onOpenSettings = { TransitionHelper.finishSmooth(this) },
+                            onDismissed = { TransitionHelper.finishSmooth(this) }
                         )
                     } else {
                         PermissionHelper.promptMandatoryBackgroundReadinessIfNeeded(this) {
-                            if (!isDestroyed && !isFinishing) finish()
+                            if (!isDestroyed && !isFinishing) TransitionHelper.finishSmooth(this)
                         }
                     }
                 }
@@ -768,6 +800,10 @@ class MapPickerActivity : AppCompatActivity() {
 
                         searchAdapter.submitList(state.searchResults)
                         val hasSearchResults = state.searchResults.isNotEmpty()
+                        val wasShowingSearch = binding.cardSearchResults.visibility == View.VISIBLE
+                        if (wasShowingSearch != hasSearchResults) {
+                            TransitionHelper.animateLayoutChange(binding.mapRoot, 180L)
+                        }
                         binding.cardSearchResults.visibility =
                             if (hasSearchResults) View.VISIBLE else View.GONE
                         binding.cardPickerNavAssist.visibility =

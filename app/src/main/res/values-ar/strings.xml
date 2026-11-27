@@ -305,4 +305,11 @@
     <string name="nav_action_uturn">استدر للخلف</string>
     <string name="nav_action_continue">استمر للأمام مباشرة</string>
     <string name="nav_maneuver_onto_format">%1$s نحو %2$s</string>
+
+    <!-- تبويبات الوصول السريع في الإعدادات -->
+    <string name="settings_tab_alerts">GPS والتنبيهات</string>
+    <string name="settings_tab_permissions">الأذونات</string>
+    <string name="settings_tab_appearance">المظهر واللغة</string>
+    <string name="settings_tab_data">التحديث والنسخ</string>
+    <string name="map_vibrate_short">اهتزاز</string>
 </resources>
