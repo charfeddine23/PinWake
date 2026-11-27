@@ -287,6 +287,7 @@
     <string name="cd_nav_recenter">إعادة توسيط الخريطة على موقعي</string>
     <string name="cd_nav_back">إغلاق الملاحة</string>
     <string name="cd_navigate_alarm">الملاحة داخل التطبيق</string>
+    <string name="cd_clear_quick_nav">العودة إلى البحث عن وجهة</string>
 
     <!-- تعليمات الانعطاف -->
     <string name="nav_maneuver_arrive">الوصول إلى الوجهة</string>

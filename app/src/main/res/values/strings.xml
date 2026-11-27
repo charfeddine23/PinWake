@@ -287,6 +287,7 @@
     <string name="cd_nav_recenter">Recenter map on current location</string>
     <string name="cd_nav_back">Close navigation</string>
     <string name="cd_navigate_alarm">Navigate inside app</string>
+    <string name="cd_clear_quick_nav">Return to destination search</string>
 
     <!-- Maneuver Instructions -->
     <string name="nav_maneuver_arrive">Arrive at destination</string>

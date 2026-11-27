@@ -10,6 +10,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.PointF
 import android.location.Location
@@ -35,6 +36,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updatePadding
+import androidx.core.widget.ImageViewCompat
 import androidx.core.widget.NestedScrollView
 import androidx.core.widget.doAfterTextChanged
 import androidx.lifecycle.Lifecycle
@@ -118,8 +120,7 @@ class MainActivity : AppCompatActivity() {
     private var onDemandNavIntervalMs: Long = -1L
     private var onDemandUserLocation: Location? = null
     private var isResumedForNavAssist: Boolean = false
-    private var navAssistBarHasTarget: Boolean = false
-    private var currentNavAssistTarget: GeoAlarmEntity? = null
+    private var selectedQuickNavCategory: FavoriteCategory? = null
     private var pendingCenterOnLocation: Boolean = false
     private var pendingArmAlarm: GeoAlarmEntity? = null
     private val mapHoldHandler = Handler(Looper.getMainLooper())
@@ -537,17 +538,7 @@ class MainActivity : AppCompatActivity() {
         val gap = 12f * density
         val barBottom = binding.topFloatingBar.bottom.toFloat()
             .coerceAtLeast(sysTopInset + 68f * density)
-        val assistTop = barBottom + 6f * density
-        val assistHeight = if (navAssistBarHasTarget) {
-            binding.cardNavAssistBar.height.takeIf { it > 0 }?.toFloat() ?: (62f * density)
-        } else {
-            0f
-        }
-        val minRadarTop = if (navAssistBarHasTarget) {
-            assistTop + assistHeight + 8f * density
-        } else {
-            barBottom + 10f * density
-        }
+        val minRadarTop = barBottom + 10f * density
         val halfRadarY = (sheetTop - pillH - gap).coerceAtLeast(minRadarTop)
         binding.pillLiveRadar.translationY =
             minRadarTop + (halfRadarY - minRadarTop) * collapseFactor
@@ -558,24 +549,6 @@ class MainActivity : AppCompatActivity() {
         val pillVis = if (upperFade <= 0.02f) View.INVISIBLE else View.VISIBLE
         if (binding.pillLiveRadar.visibility != pillVis) {
             binding.pillLiveRadar.visibility = pillVis
-        }
-
-        binding.cardNavAssistBar.translationY = assistTop
-        val assistVisible = navAssistBarHasTarget && upperFade > 0.02f
-        binding.cardNavAssistBar.alpha = if (navAssistBarHasTarget) upperFade else 0f
-        val assistTargetVis = when {
-            !navAssistBarHasTarget -> View.GONE
-            assistVisible -> View.VISIBLE
-            else -> View.INVISIBLE
-        }
-        if (binding.cardNavAssistBar.visibility != assistTargetVis) {
-            binding.cardNavAssistBar.visibility = assistTargetVis
-        }
-        if (binding.btnToggleRouteLine.isClickable != assistVisible) {
-            binding.btnToggleRouteLine.isClickable = assistVisible
-            binding.btnToggleRouteLine.isFocusable = assistVisible
-            binding.btnAssistNavigate.isClickable = assistVisible
-            binding.btnAssistNavigate.isFocusable = assistVisible
         }
 
         // Dynamic staggered slide-in for the Full Map quick dock (My Location -> Work -> Home)
@@ -1000,26 +973,16 @@ class MainActivity : AppCompatActivity() {
             binding.btnQuickHomeFullMap,
             binding.btnSettings,
             binding.pillBrandHeader,
-            binding.btnToggleRouteLine,
-            binding.btnAssistNavigate
+            binding.btnWhereToNavigate,
+            binding.btnClearQuickNav
         ).forEach { attachLuxuryPressFeedback(it) }
 
-        binding.btnToggleRouteLine.setOnClickListener {
-            val nextEnabled = !PreAlertPreferences.isNavRouteLineEnabled(this)
-            PreAlertPreferences.setNavRouteLineEnabled(this, nextEnabled)
-            renderNavigationAssist(viewModel.uiState.value)
-        }
-
-        binding.btnAssistNavigate.setOnClickListener {
-            val target = currentNavAssistTarget ?: return@setOnClickListener
-            NavigationAssistHelper.launchTurnByTurnNavigation(
-                context = this,
-                latitude = target.latitude,
-                longitude = target.longitude,
-                label = target.title,
-                alarmId = target.id,
-                radiusMeters = target.radiusMeters
-            )
+        binding.btnClearQuickNav.setOnClickListener {
+            selectedQuickNavCategory = null
+            focusedPlaceLockId = null
+            val currentState = viewModel.uiState.value
+            renderFullMapQuickDockStates(currentState)
+            renderNavigationAssist(currentState)
         }
 
         binding.layoutSheetHandle.setOnClickListener {
@@ -1046,9 +1009,11 @@ class MainActivity : AppCompatActivity() {
         }
 
         binding.btnMyLocationFullMap.setOnClickListener {
+            selectedQuickNavCategory = null
             focusedPlaceLockId = null
-            renderFullMapQuickDockStates(viewModel.uiState.value)
-            renderNavigationAssist(viewModel.uiState.value)
+            val currentState = viewModel.uiState.value
+            renderFullMapQuickDockStates(currentState)
+            renderNavigationAssist(currentState)
             if (hasFineOrCoarseLocation()) {
                 if (!GpsEnforcementHelper.isGpsProviderEnabled(this)) {
                     showGpsEnablePromptIfNeeded(mandatory = false)
@@ -1506,6 +1471,13 @@ class MainActivity : AppCompatActivity() {
                 statusView.setTextColor(ContextCompat.getColor(this, R.color.accent_cyan_glow))
             }
             card.setOnClickListener {
+                if (category == FavoriteCategory.HOME || category == FavoriteCategory.WORK) {
+                    selectedQuickNavCategory = category
+                    focusedPlaceLockId = favorite.id
+                    val currentState = viewModel.uiState.value
+                    renderFullMapQuickDockStates(currentState)
+                    renderNavigationAssist(currentState)
+                }
                 val nextActive = !favorite.isActive
                 if (nextActive && !PermissionHelper.hasTrackingLocation(this)) {
                     pendingArmAlarm = favorite
@@ -1568,8 +1540,9 @@ class MainActivity : AppCompatActivity() {
                 dotView.alpha = 0.9f
             }
 
-            // Directly fly camera to Home / Work in Full Map Mode without toggling/disarming
+            // Select Home / Work as Navigate target in place of "Where are you heading?" and focus camera
             button.setOnClickListener {
+                selectedQuickNavCategory = category
                 focusedPlaceLockId = favorite.id
                 lastHeroCameraKey =
                     "alarm:full:${favorite.id}:${favorite.latitude}:${favorite.longitude}"
@@ -1582,8 +1555,9 @@ class MainActivity : AppCompatActivity() {
                         animate = true
                     )
                 }
-                renderFullMapQuickDockStates(viewModel.uiState.value)
-                renderNavigationAssist(viewModel.uiState.value)
+                val currentState = viewModel.uiState.value
+                renderFullMapQuickDockStates(currentState)
+                renderNavigationAssist(currentState)
             }
 
             button.setOnLongClickListener {
@@ -1594,24 +1568,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun renderNavigationAssist(state: DashboardUiState) {
-        val activeAlarms = state.alarms.filter { it.isActive }
-        val isFullMap = sheetBehavior.state == BottomSheetBehavior.STATE_COLLAPSED
-        val lockedPlace = if (isFullMap && focusedPlaceLockId != null) {
-            state.alarms.firstOrNull { it.id == focusedPlaceLockId }
-        } else {
-            null
+        val targetAlarm = when (selectedQuickNavCategory) {
+            FavoriteCategory.HOME -> state.homeFavorite
+            FavoriteCategory.WORK -> state.workFavorite
+            else -> null
         }
-        val telemetry = state.telemetry
-        val targetAlarm = lockedPlace
-            ?: telemetry.closestAlarmId?.let { id -> activeAlarms.firstOrNull { it.id == id } }
-            ?: activeAlarms.minByOrNull { it.lastDistanceMeters ?: Float.MAX_VALUE }
-            ?: state.alarms.firstOrNull()
-
-        currentNavAssistTarget = targetAlarm
-        val routeEnabled = PreAlertPreferences.isNavRouteLineEnabled(this)
 
         if (targetAlarm == null) {
-            navAssistBarHasTarget = false
+            selectedQuickNavCategory = null
             stopOnDemandNavAssistUpdates()
             heroMap?.style?.let { style ->
                 MapStyleHelper.ensureNavigationRouteLineLayer(
@@ -1626,32 +1590,38 @@ class MainActivity : AppCompatActivity() {
                     belowLayerId = HERO_SAVED_PLACES_HALO_ID
                 )
             }
-            val currentSlide = when (sheetBehavior.state) {
-                BottomSheetBehavior.STATE_COLLAPSED -> 0f
-                BottomSheetBehavior.STATE_EXPANDED -> 1f
-                else -> computedHalfSlideOffset
-            }
-            updateChromeForSlideOffset(currentSlide)
+
+            binding.ivWhereToLeading.setImageResource(R.drawable.ic_search)
+            ImageViewCompat.setImageTintList(
+                binding.ivWhereToLeading,
+                ColorStateList.valueOf(ContextCompat.getColor(this, R.color.accent_cyan_glow))
+            )
+            binding.ivWhereToLeading.contentDescription = getString(R.string.where_to_hint)
+            binding.tvWhereToTitle.setText(R.string.where_to_hint)
+            binding.tvWhereToSubtitle.setText(R.string.where_to_sub)
+            binding.chipWhereToMap.visibility = View.VISIBLE
+            binding.layoutWhereToNavActions.visibility = View.GONE
+            binding.btnWhereTo.setOnClickListener { openMapPicker() }
             return
         }
 
-        navAssistBarHasTarget = true
-        binding.tvNavAssistTitle.text = targetAlarm.title
+        val isHome = targetAlarm.favoriteCategory == FavoriteCategory.HOME
+        binding.ivWhereToLeading.setImageResource(
+            if (isHome) R.drawable.ic_home else R.drawable.ic_work
+        )
+        ImageViewCompat.setImageTintList(
+            binding.ivWhereToLeading,
+            ColorStateList.valueOf(
+                ContextCompat.getColor(
+                    this,
+                    if (isHome) R.color.accent_emerald else R.color.accent_amber
+                )
+            )
+        )
+        binding.ivWhereToLeading.contentDescription = targetAlarm.title
+        binding.tvWhereToTitle.text = targetAlarm.title
 
-        if (routeEnabled) {
-            binding.btnToggleRouteLine.setBackgroundResource(R.drawable.bg_luxury_glass_pill_cyan)
-            val cyan = ContextCompat.getColor(this, R.color.accent_cyan_glow)
-            binding.ivToggleRouteLine.setColorFilter(cyan)
-            binding.tvToggleRouteLine.setTextColor(cyan)
-            binding.tvToggleRouteLine.setText(R.string.nav_assist_route_on)
-        } else {
-            binding.btnToggleRouteLine.setBackgroundResource(R.drawable.bg_luxury_glass_pill)
-            val secondary = ContextCompat.getColor(this, R.color.text_secondary)
-            binding.ivToggleRouteLine.setColorFilter(secondary)
-            binding.tvToggleRouteLine.setTextColor(secondary)
-            binding.tvToggleRouteLine.setText(R.string.nav_assist_route_off)
-        }
-
+        val telemetry = state.telemetry
         val canUseServiceTelemetry = state.activeCount > 0 &&
             telemetry.isTracking &&
             telemetry.closestAlarmId == targetAlarm.id &&
@@ -1660,21 +1630,20 @@ class MainActivity : AppCompatActivity() {
 
         val fromLat: Double?
         val fromLon: Double?
-        val metricsText: String
-        val etaText: String
+        val subtitleText: String
 
         if (canUseServiceTelemetry) {
-            val dist = telemetry.closestDistanceMeters
-            val bearing = telemetry.closestBearingDegrees
             fromLat = telemetry.lastLatitude
             fromLon = telemetry.lastLongitude
-            if (dist != null && bearing != null) {
-                metricsText = NavigationAssistCalculator.formatDistanceAndBearing(this, dist, bearing)
-                etaText = NavigationAssistCalculator.formatEtaCompact(
+            val dist = telemetry.closestDistanceMeters
+            val eta = telemetry.closestEtaSeconds
+            if (dist != null) {
+                val etaStr = NavigationAssistCalculator.formatEtaCompact(
                     context = this,
-                    etaSeconds = telemetry.closestEtaSeconds,
+                    etaSeconds = eta,
                     isLiveSpeed = telemetry.isEtaFromLiveSpeed
                 )
+                subtitleText = "${DistanceFormatter.formatCompactDistance(dist)} · $etaStr"
             } else {
                 val computed = NavigationAssistCalculator.computeMetrics(
                     currentLat = fromLat!!,
@@ -1683,16 +1652,12 @@ class MainActivity : AppCompatActivity() {
                     targetLat = targetAlarm.latitude,
                     targetLon = targetAlarm.longitude
                 )
-                metricsText = NavigationAssistCalculator.formatDistanceAndBearing(
-                    this,
-                    computed.distanceMeters,
-                    computed.bearingDegrees
-                )
-                etaText = NavigationAssistCalculator.formatEtaCompact(
+                val etaStr = NavigationAssistCalculator.formatEtaCompact(
                     context = this,
                     etaSeconds = computed.etaSeconds,
                     isLiveSpeed = computed.isLiveSpeedEta
                 )
+                subtitleText = "${DistanceFormatter.formatCompactDistance(computed.distanceMeters)} · $etaStr"
             }
         } else {
             val bestLoc = onDemandUserLocation
@@ -1707,26 +1672,35 @@ class MainActivity : AppCompatActivity() {
                     targetLat = targetAlarm.latitude,
                     targetLon = targetAlarm.longitude
                 )
-                metricsText = NavigationAssistCalculator.formatDistanceAndBearing(
-                    this,
-                    computed.distanceMeters,
-                    computed.bearingDegrees
-                )
-                etaText = NavigationAssistCalculator.formatEtaCompact(
+                val etaStr = NavigationAssistCalculator.formatEtaCompact(
                     context = this,
                     etaSeconds = computed.etaSeconds,
                     isLiveSpeed = computed.isLiveSpeedEta
                 )
+                subtitleText = "${DistanceFormatter.formatCompactDistance(computed.distanceMeters)} · $etaStr"
             } else {
                 fromLat = null
                 fromLon = null
-                metricsText = getString(R.string.nav_assist_waiting_gps)
-                etaText = getString(R.string.nav_assist_eta_unknown)
+                subtitleText = targetAlarm.address.ifBlank { getString(R.string.nav_assist_waiting_gps) }
             }
         }
 
-        binding.tvNavAssistMetrics.text = metricsText
-        binding.tvNavAssistEta.text = etaText
+        binding.tvWhereToSubtitle.text = subtitleText
+        binding.chipWhereToMap.visibility = View.GONE
+        binding.layoutWhereToNavActions.visibility = View.VISIBLE
+
+        val launchTargetNav = {
+            NavigationAssistHelper.launchTurnByTurnNavigation(
+                context = this,
+                latitude = targetAlarm.latitude,
+                longitude = targetAlarm.longitude,
+                label = targetAlarm.title,
+                alarmId = targetAlarm.id,
+                radiusMeters = targetAlarm.radiusMeters
+            )
+        }
+        binding.btnWhereTo.setOnClickListener { launchTargetNav() }
+        binding.btnWhereToNavigate.setOnClickListener { launchTargetNav() }
 
         heroMap?.style?.let { style ->
             MapStyleHelper.ensureNavigationRouteLineLayer(
@@ -1737,25 +1711,18 @@ class MainActivity : AppCompatActivity() {
                 fromLon = fromLon,
                 toLat = targetAlarm.latitude,
                 toLon = targetAlarm.longitude,
-                visible = routeEnabled,
+                visible = true,
                 belowLayerId = HERO_SAVED_PLACES_HALO_ID
             )
         }
 
-        syncOnDemandNavAssistListener(state, routeEnabled)
-
-        val currentSlide = when (sheetBehavior.state) {
-            BottomSheetBehavior.STATE_COLLAPSED -> 0f
-            BottomSheetBehavior.STATE_EXPANDED -> 1f
-            else -> computedHalfSlideOffset
-        }
-        updateChromeForSlideOffset(currentSlide)
+        syncOnDemandNavAssistListener(state, hasTargetSelected = true)
     }
 
     @SuppressLint("MissingPermission")
-    private fun syncOnDemandNavAssistListener(state: DashboardUiState, routeEnabled: Boolean) {
+    private fun syncOnDemandNavAssistListener(state: DashboardUiState, hasTargetSelected: Boolean) {
         val shouldPollOnDemand = isResumedForNavAssist &&
-            state.alarms.isNotEmpty() &&
+            hasTargetSelected &&
             state.activeCount == 0 &&
             hasFineOrCoarseLocation()
 
@@ -1764,7 +1731,7 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        val desiredIntervalMs = if (routeEnabled) 4_000L else 10_000L
+        val desiredIntervalMs = 4_000L
         if (onDemandNavLocationListener != null && onDemandNavIntervalMs == desiredIntervalMs) {
             return
         }
